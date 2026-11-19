@@ -1,0 +1,51 @@
+version: 1
+
+# Global extensions enabled across all registered projects.
+# Built-in: go, rust, typescript, python, php
+# External (from extensions/pylon-ext-<name> or PATH): golang, js, ruby, rust, php
+extensions:
+  - rust
+  - typescript
+
+# Optional custom protocol template overrides (defaults to protocols/<name>.md, then compiled-in templates).
+protocols:
+  reflect: protocols/reflect.md
+
+# Tracked projects (paths are relative to the Pylons root or absolute).
+projects:
+  baluard-core:
+    path: ../baluard/crates/baluard-core
+    ref: main
+    tier: core
+    extensions:
+      - rust
+
+  baluard-desktop:
+    path: ../baluard/desktop
+    ref: main
+    tier: app
+    extensions:
+      - typescript
+      - js
+
+  example-go-service:
+    path: ../example-go-service
+    ref: main
+    tier: service
+    extensions:
+      - go
+      - golang
+
+  example-php-app:
+    path: ../example-php-app
+    ref: main
+    tier: app
+    extensions:
+      - php
+
+  example-ruby-worker:
+    path: ../example-ruby-worker
+    ref: main
+    tier: worker
+    extensions:
+      - ruby

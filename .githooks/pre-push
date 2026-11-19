@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Pylons pre-push gate: manifest freshness, full-corpus lint, and quirk source
+# validation must pass before leaving the machine.
+# Enable with: git config core.hooksPath .githooks
+
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN="$DIR/bin/pylon"
+
+if [[ ! -x "$BIN" ]]; then
+    echo "pylon: bin/pylon not executable; skipping hook (build: cd cli && go build -o ../bin/pylon ./cmd/pylon)" >&2
+    exit 0
+fi
+
+FAIL=0
+"$BIN" manifest rules --check >/dev/null || FAIL=1
+"$BIN" manifest packages --check >/dev/null || FAIL=1
+if [[ "$FAIL" -ne 0 ]]; then
+    echo "pylon: manifests stale with frontmatter; run: bin/pylon manifest rules && bin/pylon manifest packages" >&2
+    exit 1
+fi
+
+if ! "$BIN" lint --format human; then
+    echo "pylon: corpus lint findings; fix before pushing" >&2
+    exit 1
+fi
+
+if ! "$BIN" review postmortem --check-sources --format human; then
+    echo "pylon: quirk source validation failed; declared code paths missing" >&2
+    exit 1
+fi

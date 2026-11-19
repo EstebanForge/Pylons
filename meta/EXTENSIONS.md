@@ -1,0 +1,66 @@
+---
+title: "Drop-In Extensions and Plugins"
+type: meta
+status: active
+created: 2026-11-19
+updated: 2026-11-19
+---
+
+# Drop-in extensions and plugins
+
+Pylons ships 7 language-agnostic core contract kinds (`file`, `glob`, `symbol`, `route`, `cli`, `event`, `schema`) that require 0 language parsers. When projects need stricter declaration checks, enable built-in language extensions or drop in custom executables.
+
+The formal JSON Schema (version 1) for extension manifests and the stdin/stdout protocol lives at [manifests/extensions.json](../manifests/extensions.json). Inspect it anytime with `pylon extensions schema` and list available extensions with `pylon extensions list`.
+
+## Enabling extensions in `manifests/pylons.yaml`
+
+Enable extensions globally at the top level or per project under `projects.<alias>.extensions`:
+
+```yaml
+version: 1
+extensions:
+  - go
+projects:
+  web-app:
+    path: ../web-app
+    ref: main
+    extensions:
+      - typescript
+```
+
+If an extension is not enabled for a project, its contract kinds fail resolution so projects stay explicit about what they depend on.
+
+## Built-in language extensions
+
+| Extension | Contract kind(s) | Matches |
+|---|---|---|
+| `go` | `go-symbol` | `func`, `type`, `const`, `var` declarations in `<file>::<Symbol>` |
+| `rust` | `rust-item` | `fn`, `struct`, `enum`, `trait`, `type`, `const`, `static`, `mod` items |
+| `typescript` | `ts-export`, `js-export` | `export` declarations (`function`, `const`, `let`, `var`, `class`, `interface`, `type`, `enum`) |
+| `python` | `py-symbol` | Top-level `def` / `async def` / `class` definitions |
+| `php` | `php-symbol` | `function`, `class`, `interface`, `trait`, `enum` declarations |
+
+## Writing external drop-in plugins (`pylon-ext-<name>`)
+
+To support any custom language, schema format, or framework without recompiling `pylon`:
+
+1. Create an executable named `pylon-ext-<name>` and place it in `<pylons-root>/extensions/` or anywhere on `PATH`.
+2. Enable `<name>` in `manifests/pylons.yaml` under `extensions:`.
+3. Use contract kinds prefixed with `<name>-` (for example `<name>-symbol` or `<name>-route`).
+4. Pass `--allow-external-extensions` (or set `PYLON_ALLOW_EXTERNAL_EXTENSIONS=1`) when running `lint` or `contract` against trusted repositories.
+
+### JSON stdin/stdout v1 protocol
+
+`pylon` invokes `pylon-ext-<name>` with a 5-second timeout, writing 1 JSON line to `stdin`:
+
+```json
+{"schema_version": 1, "kind": "proto-message", "id": "auth.proto::AuthRequest", "root": "/path/to/project"}
+```
+
+The executable writes 1 JSON line to `stdout`:
+
+```json
+{"resolved": true, "detail": "proto/auth.proto"}
+```
+
+If resolution fails due to a runtime error, return `{"resolved": false, "detail": "reason", "error": "diagnostic"}`.

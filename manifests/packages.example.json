@@ -1,0 +1,43 @@
+[
+  {
+    "path": "packages/baluard-core.md",
+    "package": "baluard-core",
+    "status": "active"
+  },
+  {
+    "path": "packages/baluard-runtime.md",
+    "package": "baluard-runtime",
+    "status": "active",
+    "depends_on": [
+      "baluard-core"
+    ]
+  },
+  {
+    "path": "packages/baluard-daemon.md",
+    "package": "baluard-daemon",
+    "status": "active",
+    "depends_on": [
+      "baluard-core",
+      "baluard-runtime"
+    ]
+  },
+  {
+    "path": "packages/baluard-cli.md",
+    "package": "baluard-cli",
+    "status": "active",
+    "depends_on": [
+      "baluard-core",
+      "baluard-daemon"
+    ]
+  },
+  {
+    "path": "packages/baluard-desktop.md",
+    "package": "baluard-desktop",
+    "status": "active",
+    "depends_on": [
+      "baluard-core",
+      "baluard-runtime",
+      "baluard-daemon"
+    ]
+  }
+]

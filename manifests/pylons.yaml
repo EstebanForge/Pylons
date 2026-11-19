@@ -1,0 +1,13 @@
+version: 1
+# Global drop-in extensions enabled across tracked projects.
+# Built-in extensions: go, rust, typescript, python, php
+# External extensions: executable `pylon-ext-<name>` on PATH or in extensions/
+extensions: []
+
+projects: {}
+# Example:
+#   core-api:
+#     path: ../core-api
+#     ref: main
+#     tier: core
+#     extensions: [go]

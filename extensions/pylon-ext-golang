@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+import json, pathlib, re, sys
+
+req = json.loads(sys.stdin.read() or "{}")
+raw_id = req.get("id", "")
+root = pathlib.Path(req.get("root", "."))
+if "::" not in raw_id:
+    print(json.dumps({"resolved": False, "detail": "expected <file>::<symbol>"}))
+    sys.exit(0)
+
+rel, sym = raw_id.split("::", 1)
+rel = re.sub(r"^repo://[^/]+/", "", rel)
+if not rel or rel.startswith("/") or ".." in pathlib.PurePosixPath(rel).parts:
+    print(json.dumps({"resolved": False, "detail": f"invalid relative path: {rel}"}))
+    sys.exit(0)
+target = (root / rel).resolve()
+try:
+    target.relative_to(root.resolve())
+except ValueError:
+    print(json.dumps({"resolved": False, "detail": f"path escapes root: {rel}"}))
+    sys.exit(0)
+if not target.is_file():
+    print(json.dumps({"resolved": False, "detail": f"file not found: {rel}"}))
+    sys.exit(0)
+
+text = target.read_text(encoding="utf-8", errors="ignore")
+q = re.escape(sym.split(".")[-1])
+pat = re.compile(
+    rf"(?m)^(?:func\s+(?:\([^)]+\)\s*)?|type\s+|const\s+|var\s+){q}(?:\[[^\]]+\])?\b"
+)
+if pat.search(text):
+    print(json.dumps({"resolved": True, "detail": rel}))
+else:
+    print(json.dumps({"resolved": False, "detail": f"go symbol {sym} not found in {rel}"}))

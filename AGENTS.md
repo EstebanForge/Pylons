@@ -1,0 +1,43 @@
+# Guidelines
+
+Pylons stores shared architectural context, domain knowledge, and decisions. Keep documentation accurate or delete it.
+
+## Path Schemes
+
+Pylons documents reference files with URI schemes, never machine paths.
+
+| Scheme | Names | Behavior |
+|---|---|---|
+| `repo://<alias>/<path>` | Any file inside a project registered in `manifests/pylons.yaml` | Resolved against the project's base branch (`ref:` in `manifests/pylons.yaml` or package frontmatter, else `main`). |
+| `repo://<alias>@<branch>/<path>` | In-flight code on a named branch | Naming only, never resolved against base branch. |
+| `pylon://<path>` | Any Pylons knowledge-base document | Resolved relative to the Pylons root. |
+
+## Rules
+
+1. **Check before coding.** Run `pylon check <paths...>` or scan `plans/` for overlapping contracts.
+2. **Use templates.** Scaffold new documents from `templates/`. Preserve frontmatter fields.
+3. **Define typed contracts.** Contract entries require `kind` and `id`. Built-in kinds: `file`, `glob`, `symbol`, `route`, `cli`, `event`, `schema`. Enabled extensions in `manifests/pylons.yaml` add language-specific kinds.
+4. **Keep decisions immutable.** Never edit accepted ADRs in place. Write a new ADR that supersedes the old decision.
+5. **Archive terminal documents.** Set `status: shipped` (with `artifact:`) or `status: abandoned` and move to `plans/archive/`.
+6. **Use Simplified Technical English (ASD-STE100).** Write direct technical English. Limit procedural sentences to 20 words and descriptive sentences to 25 words. Use active voice and present tense.
+7. **Use closed vocabularies.** Frontmatter `status:` accepts only the values listed in `conventions/vocabulary.md`.
+8. **Honor check grades.** `FORCED` (exit 1) stops work. `ADVISORY` (exit 0) informs and lets work proceed.
+
+## CLI Commands
+
+- `pylon lint [--changed] [--doc-only] [--fix] [--ci] [--format=human|json|sarif]`
+- `pylon contract <plan> [--ci] [--format=human|json|sarif]`
+- `pylon check <paths...> [--stop-block] [--format=human|json|sarif]`
+- `pylon brief [--format=human|json]`
+- `pylon context <paths...> [--preamble] [--format=human|json]`
+- `pylon staleness [--package <pkg>] [--fix] [--format=human|json|sarif]`
+- `pylon review [plan <path> | postmortem [path] [--check-sources] | staleness [--package <pkg>] [--fix]]`
+- `pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>]`
+- `pylon protocol [list|<name>] [--template <path>]`
+- `pylon reflect [--template <path>]`
+- `pylon extensions [list|schema] [--format=human|json]`
+- `pylon map [--type <t>] [--package <p>] [--tag <t>] [--status <s>] [--folder <dir>] [--query <q>] [--limit <n>] [--all]`
+- `pylon search <query> [--limit <n>] [--all]`
+- `pylon manifest [rules|packages] [--check]`
+- `pylon explain <rule_id>`
+- `pylon init [dir]`

@@ -1,0 +1,53 @@
+{
+  "$schema": "./extensions.json",
+  "version": 1,
+  "extensions": [
+    {
+      "schema_version": 1,
+      "name": "php",
+      "description": "PHP 8.4+ symbol resolver (classes, interfaces, traits, enums, functions, constants)",
+      "kinds": ["php-symbol"],
+      "entrypoint": "extensions/pylon-ext-php"
+    },
+    {
+      "schema_version": 1,
+      "name": "js",
+      "description": "JavaScript/TypeScript ES2025+ export resolver",
+      "kinds": ["js-symbol"],
+      "entrypoint": "extensions/pylon-ext-js"
+    },
+    {
+      "schema_version": 1,
+      "name": "ruby",
+      "description": "Ruby 3.4+ class, module, method, and Data.define resolver",
+      "kinds": ["ruby-symbol"],
+      "entrypoint": "extensions/pylon-ext-ruby"
+    },
+    {
+      "schema_version": 1,
+      "name": "rust",
+      "description": "Rust 2024 edition item resolver (fn, struct, enum, trait, mod, macro_rules)",
+      "kinds": ["rust-symbol"],
+      "entrypoint": "extensions/pylon-ext-rust"
+    },
+    {
+      "schema_version": 1,
+      "name": "golang",
+      "description": "Go 1.24+ generic func, type, const, and var resolver",
+      "kinds": ["golang-symbol"],
+      "entrypoint": "extensions/pylon-ext-golang"
+    }
+  ],
+  "example_exchange": {
+    "request": {
+      "schema_version": 1,
+      "kind": "rust-symbol",
+      "id": "src/lib.rs::unlock_vault",
+      "root": "/path/to/baluard/crates/baluard-core"
+    },
+    "response": {
+      "resolved": true,
+      "detail": "src/lib.rs"
+    }
+  }
+}
