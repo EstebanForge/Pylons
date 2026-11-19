@@ -1,0 +1,247 @@
+[
+  {
+    "id": "PYLON001",
+    "name": "frontmatter_invalid",
+    "severity": "error",
+    "description": "Document is missing valid YAML frontmatter or required title/type fields.",
+    "fix_hint": "Add valid YAML frontmatter from templates/."
+  },
+  {
+    "id": "PYLON003",
+    "name": "contract_unresolved",
+    "severity": "error",
+    "description": "Declared contract entry could not be resolved against tracked project source.",
+    "fix_hint": "Update contract id/kind, enable the needed extension in pylons.yaml, or mark pending: true on package exposes."
+  },
+  {
+    "id": "PYLON004",
+    "name": "orphan_document",
+    "severity": "error",
+    "description": "Document has no incoming markdown or frontmatter link.",
+    "fix_hint": "Link the document from a package, plan, or index."
+  },
+  {
+    "id": "PYLON005",
+    "name": "unlinked_domain_term",
+    "severity": "error",
+    "description": "Domain entity term is mentioned without linking to domain/entities/.",
+    "fix_hint": "Link the first mention to the entity document."
+  },
+  {
+    "id": "PYLON006",
+    "name": "ste100_violation",
+    "severity": "error",
+    "description": "Sentence exceeds ASD-STE100 maximum length (25 words descriptive).",
+    "fix_hint": "Split long sentences into short active-voice statements."
+  },
+  {
+    "id": "PYLON007",
+    "name": "status_folder_mismatch",
+    "severity": "error",
+    "description": "Document status does not match its folder.",
+    "fix_hint": "Move the document to the folder matching its status or update status:."
+  },
+  {
+    "id": "PYLON008",
+    "name": "unknown_status",
+    "severity": "error",
+    "description": "Document status is outside the closed vocabulary for its root folder.",
+    "fix_hint": "Use an allowed status from conventions/vocabulary.md."
+  },
+  {
+    "id": "PYLON009",
+    "name": "shipped_plan_no_artifact",
+    "severity": "error",
+    "description": "Shipped plan must declare a non-empty artifact:.",
+    "fix_hint": "Set artifact: to the shipping PR, commit, or file path."
+  },
+  {
+    "id": "PYLON010",
+    "name": "accepted_decision_unnumbered",
+    "severity": "error",
+    "description": "Accepted decision must use a numbered DNNNN-slug.md filename.",
+    "fix_hint": "Rename the file to DNNNN-\u003cslug\u003e.md."
+  },
+  {
+    "id": "PYLON011",
+    "name": "move_target_collision",
+    "severity": "error",
+    "description": "Archive destination already exists for terminal plan.",
+    "fix_hint": "Resolve or remove the duplicate archive file."
+  },
+  {
+    "id": "PYLON012",
+    "name": "broken_internal_link",
+    "severity": "error",
+    "description": "Markdown link points to a missing local document.",
+    "fix_hint": "Fix or remove the broken relative markdown link."
+  },
+  {
+    "id": "PYLON013",
+    "name": "dependency_violation",
+    "severity": "error",
+    "description": "Package depends_on references an unknown package.",
+    "fix_hint": "Add the missing package map or fix depends_on:."
+  },
+  {
+    "id": "PYLON014",
+    "name": "contract_falsifier",
+    "severity": "error",
+    "description": "Accepted or in-progress plan contract.stable entry is missing wrong_if:.",
+    "fix_hint": "Add wrong_if: describing what invalidates the contract."
+  },
+  {
+    "id": "PYLON015",
+    "name": "stale_documentation",
+    "severity": "advisory",
+    "description": "Document updated: date trails recent changes.",
+    "fix_hint": "Review and bump updated:."
+  },
+  {
+    "id": "PYLON016",
+    "name": "accepted_plan_missing_evidence",
+    "severity": "error",
+    "description": "Accepted plan must cite at least one ticket: entry.",
+    "fix_hint": "Add ticket: metadata to the plan frontmatter."
+  },
+  {
+    "id": "PYLON018",
+    "name": "audit_finding_row_invalid",
+    "severity": "error",
+    "description": "Audit findings table row has an unrecognized status.",
+    "fix_hint": "Use open, fixed, rejected, or moved."
+  },
+  {
+    "id": "PYLON019",
+    "name": "supersession_link_broken",
+    "severity": "error",
+    "description": "Document supersedes: target does not exist.",
+    "fix_hint": "Fix the superseded path or slug."
+  },
+  {
+    "id": "PYLON020",
+    "name": "proposal_frontmatter_invalid",
+    "severity": "error",
+    "description": "Plan or proposal lacks valid frontmatter fields.",
+    "fix_hint": "Ensure title, type: plan, and status are set."
+  },
+  {
+    "id": "PYLON021",
+    "name": "proposal_section_missing",
+    "severity": "error",
+    "description": "Plan or proposal is missing a required section heading.",
+    "fix_hint": "Add ## Problem, ## Design, and ## Milestones."
+  },
+  {
+    "id": "PYLON022",
+    "name": "postmortem_section_missing",
+    "severity": "error",
+    "description": "Quirk post-mortem is missing a required section heading.",
+    "fix_hint": "Add ## Symptom, ## Cause, and ## Resolution."
+  },
+  {
+    "id": "PYLON024",
+    "name": "pending_contract_resolved",
+    "severity": "advisory",
+    "description": "Pending package exposes entry already resolves in code.",
+    "fix_hint": "Remove pending: true from the exposes entry."
+  },
+  {
+    "id": "PYLON025",
+    "name": "postmortem_source_not_found",
+    "severity": "error",
+    "description": "Quirk sources: entry does not exist on disk.",
+    "fix_hint": "Fix or remove the missing source path."
+  },
+  {
+    "id": "PYLON026",
+    "name": "reaudit_overdue",
+    "severity": "advisory",
+    "description": "Active audit reaudit: date is in the past.",
+    "fix_hint": "Run a new audit or update reaudit:."
+  },
+  {
+    "id": "PYLON027",
+    "name": "in_progress_plan_no_trace",
+    "severity": "advisory",
+    "description": "In-progress plan has no artifact: and no matching branch.",
+    "fix_hint": "Create a feature branch or set artifact:."
+  },
+  {
+    "id": "PYLON028",
+    "name": "quirk_guard",
+    "severity": "error",
+    "description": "Quirk guard: is invalid or missing after 30 days.",
+    "fix_hint": "Set guard: to lint-rule, convention, test, or accepted-risk."
+  },
+  {
+    "id": "PYLON029",
+    "name": "protected_glob",
+    "severity": "error",
+    "description": "Protected path entry is malformed or matches a queried edit target.",
+    "fix_hint": "Ensure each protected entry has glob, owner, and reason."
+  },
+  {
+    "id": "PYLON030",
+    "name": "investigation_filename_invalid",
+    "severity": "error",
+    "description": "Investigation filename must match YYYY-MM-DD-\u003cslug\u003e.md.",
+    "fix_hint": "Rename the investigation file to YYYY-MM-DD-\u003cslug\u003e.md."
+  },
+  {
+    "id": "PYLON031",
+    "name": "investigation_closure_invalid",
+    "severity": "error",
+    "description": "Closed investigation must include ## Root Cause and ## Resolution.",
+    "fix_hint": "Add ## Root Cause and ## Resolution sections."
+  },
+  {
+    "id": "PYLON032",
+    "name": "inert_contract_glob",
+    "severity": "error",
+    "description": "Plan editing or unstable glob matches zero files.",
+    "fix_hint": "Fix or remove the inert glob pattern."
+  },
+  {
+    "id": "PYLON033",
+    "name": "path_mention_style",
+    "severity": "error",
+    "description": "Document contains a raw machine path instead of repo:// or pylon:// URI.",
+    "fix_hint": "Replace machine paths with repo://\u003calias\u003e/\u003cpath\u003e or pylon://\u003cpath\u003e."
+  },
+  {
+    "id": "PYLON034",
+    "name": "folder_entry_agents",
+    "severity": "advisory",
+    "description": "Zone folder has documents but no AGENTS.md entry point.",
+    "fix_hint": "Add an AGENTS.md guide in the zone folder."
+  },
+  {
+    "id": "PYLON035",
+    "name": "contract_verified_by",
+    "severity": "error",
+    "description": "Contract verified_by: or falsified_by: test symbol did not resolve.",
+    "fix_hint": "Update the test file::symbol reference."
+  },
+  {
+    "id": "PYLON036",
+    "name": "quirk_contract",
+    "severity": "error",
+    "description": "Quirk contracts: entry is missing kind or id.",
+    "fix_hint": "Specify both kind and id on each quirk contract."
+  },
+  {
+    "id": "PYLON037",
+    "name": "stale_branch_mention",
+    "severity": "advisory",
+    "description": "Branch qualifier in repo://alias@branch/ does not exist locally.",
+    "fix_hint": "Update or remove the stale branch qualifier."
+  },
+  {
+    "id": "PYLON038",
+    "name": "plan_filename_invalid",
+    "severity": "error",
+    "description": "Plan or proposal filename must start with a valid type prefix.",
+    "fix_hint": "Prefix filename with feature-, refactor-, chore-, docs-, or perf-."
+  }
+]

@@ -1,0 +1,43 @@
+[
+  {
+    "path": "packages/ledger-core.md",
+    "package": "ledger-core",
+    "status": "active"
+  },
+  {
+    "path": "packages/ledger-runtime.md",
+    "package": "ledger-runtime",
+    "status": "active",
+    "depends_on": [
+      "ledger-core"
+    ]
+  },
+  {
+    "path": "packages/ledger-daemon.md",
+    "package": "ledger-daemon",
+    "status": "active",
+    "depends_on": [
+      "ledger-core",
+      "ledger-runtime"
+    ]
+  },
+  {
+    "path": "packages/ledger-cli.md",
+    "package": "ledger-cli",
+    "status": "active",
+    "depends_on": [
+      "ledger-core",
+      "ledger-daemon"
+    ]
+  },
+  {
+    "path": "packages/ledger-desktop.md",
+    "package": "ledger-desktop",
+    "status": "active",
+    "depends_on": [
+      "ledger-core",
+      "ledger-runtime",
+      "ledger-daemon"
+    ]
+  }
+]

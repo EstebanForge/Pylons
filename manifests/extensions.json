@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pylons.local/schemas/extensions.json",
+  "version": 1,
+  "title": "Pylons Extensions Protocol and Manifest Schema",
+  "description": "Defines the v1 stdin/stdout JSON protocol and optional manifest for drop-in pylon-ext-<name> plugins.",
+  "type": "object",
+  "$defs": {
+    "manifest": {
+      "type": "object",
+      "required": ["schema_version", "name", "kinds"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "description": { "type": "string" },
+        "kinds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }
+        },
+        "entrypoint": { "type": "string" }
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": ["schema_version", "kind", "id", "root"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 },
+        "root": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string" }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["resolved"],
+      "additionalProperties": false,
+      "properties": {
+        "resolved": { "type": "boolean" },
+        "detail": { "type": "string" },
+        "error": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Pylons pre-commit gate: regenerate manifests, lint changed docs, review staged
+# proposals and quirks. Enable with: git config core.hooksPath .githooks
+
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN="$DIR/bin/pylon"
+
+if [[ ! -x "$BIN" ]]; then
+    echo "pylon: bin/pylon not executable; skipping hook (build: cd cli && go build -o ../bin/pylon ./cmd/pylon)" >&2
+    exit 0
+fi
+
+# Commit-time convenience: auto-stage manifest drift. Push time blocks instead.
+"$BIN" manifest rules >/dev/null
+"$BIN" manifest packages >/dev/null
+if ! git -C "$DIR" diff --exit-code manifests/rules.json manifests/packages.json >/dev/null 2>&1; then
+    git -C "$DIR" add manifests/rules.json manifests/packages.json
+    echo "pylon: auto-staged regenerated manifests"
+fi
+
+if ! "$BIN" lint --changed --format human; then
+    echo "pylon: lint findings on changed docs; fix before committing" >&2
+    exit 1
+fi
+
+while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    [[ "$f" == "proposals/README.md" || "$f" == "proposals/AGENTS.md" ]] && continue
+    if [[ "$f" =~ ^proposals/.*\.md$ && -f "$DIR/$f" ]]; then
+        if ! "$BIN" review plan "$f" --format human; then
+            echo "pylon: plan review findings in $f; fix structure before committing" >&2
+            exit 1
+        fi
+    fi
+done < <(git -C "$DIR" diff --cached --name-only --diff-filter=ACMR)
+
+while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    [[ "$f" == "quirks/README.md" || "$f" == "quirks/AGENTS.md" ]] && continue
+    if [[ "$f" =~ ^quirks/.*\.md$ && -f "$DIR/$f" ]]; then
+        if ! "$BIN" review postmortem "$f" --check-sources --format human; then
+            echo "pylon: postmortem review findings in $f; verify source paths before committing" >&2
+            exit 1
+        fi
+    fi
+done < <(git -C "$DIR" diff --cached --name-only --diff-filter=ACMR)
