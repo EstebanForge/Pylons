@@ -50,6 +50,7 @@ Usage:
   pylon search <query>   [--limit <n>] [--all] [--format=human|json] [--json] [--pylons <path>]
   pylon manifest [rules|packages] [--check] [--pylons <path>]
   pylon explain <rule_id>
+  pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]
   pylon install         [--pylons <path>]
   pylon init [dir]
 
@@ -110,6 +111,11 @@ func run(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
+	}
+
+	// aroma owns its own flag surface; route it before the shared parser.
+	if args[0] == "aroma" {
+		return cmdAroma(args[1:])
 	}
 
 	format := report.FormatHuman
