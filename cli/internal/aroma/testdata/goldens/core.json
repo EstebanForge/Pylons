@@ -1,0 +1,765 @@
+{
+  "_generated_from": {
+    "reference": "https://github.com/L9Labs/aroma-typescript",
+    "commit": "7a4224a4cc73f4bff954e3e9ebc078aae5a7d509",
+    "generator": "scripts/gengoldens.ts"
+  },
+  "listing4Tokens": [
+    {
+      "text": "view",
+      "local": true,
+      "features": [
+        "P\u001f#VAR\u001f1\u001f#instanceof#",
+        "P\u001f#VAR\u001f1\u001f(#)",
+        "P\u001f#VAR\u001f1\u001fif##",
+        "S\u001f#VAR\u001fViewGroup",
+        "T\u001f#VAR",
+        "U\u001f1:#instanceof#\u001f2:(#)#"
+      ]
+    },
+    {
+      "text": "ViewGroup",
+      "local": false,
+      "features": [
+        "P\u001fViewGroup\u001f1\u001f(#)",
+        "P\u001fViewGroup\u001f1\u001fif##",
+        "P\u001fViewGroup\u001f2\u001f#instanceof#",
+        "S\u001f#VAR\u001fViewGroup",
+        "S\u001fViewGroup\u001f#VAR",
+        "T\u001fViewGroup"
+      ]
+    },
+    {
+      "text": "i",
+      "local": true,
+      "features": [
+        "P\u001f#VAR\u001f1\u001f#;#;#",
+        "P\u001f#VAR\u001f1\u001f#=#",
+        "P\u001f#VAR\u001f1\u001fint#",
+        "S\u001f#VAR\u001f0",
+        "S\u001fViewGroup\u001f#VAR",
+        "T\u001f#VAR",
+        "U\u001f1:#=#\u001f1:#<#"
+      ]
+    },
+    {
+      "text": "0",
+      "local": false,
+      "features": [
+        "P\u001f0\u001f1\u001f#;#;#",
+        "P\u001f0\u001f1\u001fint#",
+        "P\u001f0\u001f2\u001f#=#",
+        "S\u001f#VAR\u001f0",
+        "S\u001f0\u001f#VAR",
+        "T\u001f0"
+      ]
+    },
+    {
+      "text": "i",
+      "local": true,
+      "features": [
+        "P\u001f#VAR\u001f1\u001f#<#",
+        "P\u001f#VAR\u001f1\u001ffor(#)#",
+        "P\u001f#VAR\u001f2\u001f#;#;#",
+        "S\u001f#VAR\u001fViewGroup",
+        "S\u001f0\u001f#VAR",
+        "T\u001f#VAR",
+        "U\u001f1:#<#\u001f1:#++",
+        "U\u001f1:#=#\u001f1:#<#"
+      ]
+    },
+    {
+      "text": "ViewGroup",
+      "local": false,
+      "features": [
+        "P\u001fViewGroup\u001f1\u001f#.#",
+        "P\u001fViewGroup\u001f1\u001f(#)",
+        "P\u001fViewGroup\u001f1\u001f(#)#",
+        "S\u001f#VAR\u001fViewGroup",
+        "S\u001fViewGroup\u001f#VAR",
+        "T\u001fViewGroup"
+      ]
+    },
+    {
+      "text": "view",
+      "local": true,
+      "features": [
+        "P\u001f#VAR\u001f1\u001f#.#",
+        "P\u001f#VAR\u001f1\u001f(#)",
+        "P\u001f#VAR\u001f2\u001f(#)#",
+        "S\u001f#VAR\u001fgetChildCount",
+        "S\u001fViewGroup\u001f#VAR",
+        "T\u001f#VAR",
+        "U\u001f1:#instanceof#\u001f2:(#)#",
+        "U\u001f2:(#)#\u001f2:(#)#"
+      ]
+    },
+    {
+      "text": "getChildCount",
+      "local": false,
+      "features": [
+        "P\u001fgetChildCount\u001f1\u001f#()",
+        "P\u001fgetChildCount\u001f2\u001f#.#",
+        "P\u001fgetChildCount\u001f2\u001f#<#",
+        "S\u001f#VAR\u001fgetChildCount",
+        "S\u001fgetChildCount\u001f#VAR",
+        "T\u001fgetChildCount"
+      ]
+    },
+    {
+      "text": "i",
+      "local": true,
+      "features": [
+        "P\u001f#VAR\u001f1\u001f#++",
+        "P\u001f#VAR\u001f1\u001ffor(#)#",
+        "P\u001f#VAR\u001f3\u001f#;#;#",
+        "S\u001f#VAR\u001fView",
+        "S\u001fgetChildCount\u001f#VAR",
+        "T\u001f#VAR",
+        "U\u001f1:#++\u001f2:#(#)",
+        "U\u001f1:#<#\u001f1:#++"
+      ]
+    },
+    {
+      "text": "View",
+      "local": false,
+      "features": [
+        "P\u001fView\u001f1\u001f##",
+        "P\u001fView\u001f1\u001f#;",
+        "P\u001fView\u001f1\u001f{#}",
+        "S\u001f#VAR\u001fView",
+        "S\u001fView\u001f#VAR",
+        "T\u001fView"
+      ]
+    },
+    {
+      "text": "innerView",
+      "local": true,
+      "features": [
+        "P\u001f#VAR\u001f1\u001f#;",
+        "P\u001f#VAR\u001f1\u001f#=#",
+        "P\u001f#VAR\u001f2\u001f##",
+        "S\u001f#VAR\u001fViewGroup",
+        "S\u001fView\u001f#VAR",
+        "T\u001f#VAR"
+      ]
+    },
+    {
+      "text": "ViewGroup",
+      "local": false,
+      "features": [
+        "P\u001fViewGroup\u001f1\u001f#.#",
+        "P\u001fViewGroup\u001f1\u001f(#)",
+        "P\u001fViewGroup\u001f1\u001f(#)#",
+        "S\u001f#VAR\u001fViewGroup",
+        "S\u001fViewGroup\u001f#VAR",
+        "T\u001fViewGroup"
+      ]
+    },
+    {
+      "text": "view",
+      "local": true,
+      "features": [
+        "P\u001f#VAR\u001f1\u001f#.#",
+        "P\u001f#VAR\u001f1\u001f(#)",
+        "P\u001f#VAR\u001f2\u001f(#)#",
+        "S\u001f#VAR\u001fgetChildAt",
+        "S\u001fViewGroup\u001f#VAR",
+        "T\u001f#VAR",
+        "U\u001f2:(#)#\u001f2:(#)#"
+      ]
+    },
+    {
+      "text": "getChildAt",
+      "local": false,
+      "features": [
+        "P\u001fgetChildAt\u001f1\u001f#(#)",
+        "P\u001fgetChildAt\u001f2\u001f#.#",
+        "P\u001fgetChildAt\u001f2\u001f#=#",
+        "S\u001f#VAR\u001fgetChildAt",
+        "S\u001fgetChildAt\u001f#VAR",
+        "T\u001fgetChildAt"
+      ]
+    },
+    {
+      "text": "i",
+      "local": true,
+      "features": [
+        "P\u001f#VAR\u001f2\u001f#(#)",
+        "P\u001f#VAR\u001f2\u001f#.#",
+        "P\u001f#VAR\u001f2\u001f#=#",
+        "S\u001fgetChildAt\u001f#VAR",
+        "T\u001f#VAR",
+        "U\u001f1:#++\u001f2:#(#)"
+      ]
+    }
+  ],
+  "search": {
+    "swap": [
+      {
+        "method": {
+          "path": "m2.toy",
+          "name": "m2",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 5
+        },
+        "similarity": 0.6521739130434783,
+        "matchedLines": [
+          2,
+          3,
+          4
+        ]
+      }
+    ],
+    "rerank": [
+      {
+        "method": {
+          "path": "triple.toy",
+          "name": "triple",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 4
+        },
+        "similarity": 0.5909090909090909,
+        "matchedLines": [
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "method": {
+          "path": "pair.toy",
+          "name": "pair",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 3
+        },
+        "similarity": 0.36363636363636365,
+        "matchedLines": [
+          2,
+          3
+        ]
+      }
+    ]
+  },
+  "recommend": {
+    "families": [
+      {
+        "method": {
+          "path": "x1.toy",
+          "name": "x1",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 6
+        },
+        "members": [
+          {
+            "path": "x1.toy",
+            "name": "x1",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          {
+            "path": "x2.toy",
+            "name": "x2",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          {
+            "path": "x3.toy",
+            "name": "x3",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          }
+        ],
+        "similarity": 0.8,
+        "lines": [
+          {
+            "line": 2,
+            "text": "[ [ open ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 3,
+            "text": "[ [ read ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 4,
+            "text": "[ [ flush ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 5,
+            "text": "[ [ close ( ) ] ; ]",
+            "role": "added"
+          }
+        ],
+        "code": "[ [ open ( ) ] ; ]\n[ [ read ( ) ] ; ]\n[ [ flush ( ) ] ; ]\n[ [ close ( ) ] ; ]"
+      },
+      {
+        "method": {
+          "path": "y1.toy",
+          "name": "y1",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 6
+        },
+        "members": [
+          {
+            "path": "y1.toy",
+            "name": "y1",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          {
+            "path": "y2.toy",
+            "name": "y2",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          {
+            "path": "y3.toy",
+            "name": "y3",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          }
+        ],
+        "similarity": 0.8,
+        "lines": [
+          {
+            "line": 2,
+            "text": "[ [ open ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 3,
+            "text": "[ [ read ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 4,
+            "text": "[ [ log ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 5,
+            "text": "[ [ retry ( ) ] ; ]",
+            "role": "added"
+          }
+        ],
+        "code": "[ [ open ( ) ] ; ]\n[ [ read ( ) ] ; ]\n[ [ log ( ) ] ; ]\n[ [ retry ( ) ] ; ]"
+      }
+    ],
+    "familiesMinSupport1": [
+      {
+        "method": {
+          "path": "x1.toy",
+          "name": "x1",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 6
+        },
+        "members": [
+          {
+            "path": "x1.toy",
+            "name": "x1",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          {
+            "path": "x2.toy",
+            "name": "x2",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          {
+            "path": "x3.toy",
+            "name": "x3",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          }
+        ],
+        "similarity": 0.8,
+        "lines": [
+          {
+            "line": 2,
+            "text": "[ [ open ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 3,
+            "text": "[ [ read ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 4,
+            "text": "[ [ flush ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 5,
+            "text": "[ [ close ( ) ] ; ]",
+            "role": "added"
+          }
+        ],
+        "code": "[ [ open ( ) ] ; ]\n[ [ read ( ) ] ; ]\n[ [ flush ( ) ] ; ]\n[ [ close ( ) ] ; ]"
+      },
+      {
+        "method": {
+          "path": "x3.toy",
+          "name": "x3",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 6
+        },
+        "members": [
+          {
+            "path": "x3.toy",
+            "name": "x3",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          }
+        ],
+        "similarity": 0.8,
+        "lines": [
+          {
+            "line": 2,
+            "text": "[ [ open ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 3,
+            "text": "[ [ read ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 4,
+            "text": "[ [ flush ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 5,
+            "text": "[ [ close ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 6,
+            "text": "[ [ x3_only ( ) ] ; ]",
+            "role": "added"
+          }
+        ],
+        "code": "[ [ open ( ) ] ; ]\n[ [ read ( ) ] ; ]\n[ [ flush ( ) ] ; ]\n[ [ close ( ) ] ; ]\n[ [ x3_only ( ) ] ; ]"
+      },
+      {
+        "method": {
+          "path": "y1.toy",
+          "name": "y1",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 6
+        },
+        "members": [
+          {
+            "path": "y1.toy",
+            "name": "y1",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          {
+            "path": "y2.toy",
+            "name": "y2",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          {
+            "path": "y3.toy",
+            "name": "y3",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          }
+        ],
+        "similarity": 0.8,
+        "lines": [
+          {
+            "line": 2,
+            "text": "[ [ open ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 3,
+            "text": "[ [ read ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 4,
+            "text": "[ [ log ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 5,
+            "text": "[ [ retry ( ) ] ; ]",
+            "role": "added"
+          }
+        ],
+        "code": "[ [ open ( ) ] ; ]\n[ [ read ( ) ] ; ]\n[ [ log ( ) ] ; ]\n[ [ retry ( ) ] ; ]"
+      },
+      {
+        "method": {
+          "path": "y3.toy",
+          "name": "y3",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 6
+        },
+        "members": [
+          {
+            "path": "y3.toy",
+            "name": "y3",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          }
+        ],
+        "similarity": 0.8,
+        "lines": [
+          {
+            "line": 2,
+            "text": "[ [ open ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 3,
+            "text": "[ [ read ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 4,
+            "text": "[ [ log ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 5,
+            "text": "[ [ retry ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 6,
+            "text": "[ [ y3_only ( ) ] ; ]",
+            "role": "added"
+          }
+        ],
+        "code": "[ [ open ( ) ] ; ]\n[ [ read ( ) ] ; ]\n[ [ log ( ) ] ; ]\n[ [ retry ( ) ] ; ]\n[ [ y3_only ( ) ] ; ]"
+      }
+    ],
+    "single": [
+      {
+        "method": {
+          "path": "one_more.toy",
+          "name": "one_more",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 4
+        },
+        "members": [
+          {
+            "path": "one_more.toy",
+            "name": "one_more",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 4
+          }
+        ],
+        "similarity": 0.8,
+        "lines": [
+          {
+            "line": 2,
+            "text": "[ [ open ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 3,
+            "text": "[ [ read ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 4,
+            "text": "[ [ x ( ) ] ; ]",
+            "role": "added"
+          }
+        ],
+        "code": "[ [ open ( ) ] ; ]\n[ [ read ( ) ] ; ]\n[ [ x ( ) ] ; ]"
+      }
+    ],
+    "apart": [],
+    "mixed": [
+      {
+        "method": {
+          "path": "whole.toy",
+          "name": "whole",
+          "language": "toy",
+          "startLine": 2,
+          "endLine": 8
+        },
+        "members": [
+          {
+            "path": "whole.toy",
+            "name": "whole",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 8
+          },
+          {
+            "path": "partial.toy",
+            "name": "partial",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 7
+          }
+        ],
+        "similarity": 0.8125,
+        "lines": [
+          {
+            "line": 2,
+            "text": "[ [ a ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 3,
+            "text": "[ [ b ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 4,
+            "text": "[ [ c ( ) ] ; ]",
+            "role": "query"
+          },
+          {
+            "line": 5,
+            "text": "[ [ x ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 6,
+            "text": "[ [ y ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 7,
+            "text": "[ [ z ( ) ] ; ]",
+            "role": "added"
+          },
+          {
+            "line": 8,
+            "text": "[ [ w ( ) ] ; ]",
+            "role": "added"
+          }
+        ],
+        "code": "[ [ a ( ) ] ; ]\n[ [ b ( ) ] ; ]\n[ [ c ( ) ] ; ]\n[ [ x ( ) ] ; ]\n[ [ y ( ) ] ; ]\n[ [ z ( ) ] ; ]\n[ [ w ( ) ] ; ]"
+      }
+    ]
+  },
+  "lines": [
+    {
+      "size": 10,
+      "origin": {
+        "path": "x1.toy",
+        "name": "x1",
+        "language": "toy",
+        "startLine": 2,
+        "endLine": 6
+      },
+      "lines": [
+        2,
+        3
+      ],
+      "results": [
+        {
+          "method": {
+            "path": "x2.toy",
+            "name": "x2",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          "similarity": 1,
+          "matchedLines": [
+            2,
+            3
+          ]
+        },
+        {
+          "method": {
+            "path": "x3.toy",
+            "name": "x3",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          "similarity": 1,
+          "matchedLines": [
+            2,
+            3
+          ]
+        },
+        {
+          "method": {
+            "path": "y1.toy",
+            "name": "y1",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          "similarity": 1,
+          "matchedLines": [
+            2,
+            3
+          ]
+        },
+        {
+          "method": {
+            "path": "y2.toy",
+            "name": "y2",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          "similarity": 1,
+          "matchedLines": [
+            2,
+            3
+          ]
+        },
+        {
+          "method": {
+            "path": "y3.toy",
+            "name": "y3",
+            "language": "toy",
+            "startLine": 2,
+            "endLine": 6
+          },
+          "similarity": 1,
+          "matchedLines": [
+            2,
+            3
+          ]
+        }
+      ]
+    }
+  ]
+}

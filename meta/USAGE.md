@@ -31,6 +31,7 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 | `pylon contract <plan>` | Validate 1 plan's `contract.stable` entries against tracked projects. |
 | `pylon map` | Filterable corpus overview ranked by BM25 (`--type`, `--package`, `--tag`, `--status`, `--folder`, `--query`, `--limit`, `--all`). |
 | `pylon search <query>` | Full-text BM25 search across non-archived docs (`--limit`, `--all`). |
+| `pylon aroma search\|recommend` | Structural code similarity: methods resembling changed lines, a snippet, or a diff, plus the code they share (`--lines`, `--snippet`, `--diff`, `--min`, `--json`). Corpus is registered projects by default, else `--corpus`. Advisory; never gates. |
 | `pylon staleness` | Flag `packages/*.md` older than 90 days (`--package`, `--fix`). |
 | `pylon review plan <path>` | Check proposal/plan structure and STE-100 compliance. |
 | `pylon review postmortem [path]` | Check quirk sections and `sources:` existence (`--check-sources`). |

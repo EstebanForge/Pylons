@@ -293,6 +293,10 @@ The cards above cover the systems with commands and grades. The rest of the ledg
 | `meta/` | Documentation about Pylons itself: manifesto, feature guide, roadmap, changelog, CLI manual. Start at [`meta/INDEX.md`](meta/INDEX.md). | Everyone |
 | `manifests/` | Compiled JSON artifacts the CLI emits and CI checks. | Tooling |
 
+### 3.6 Structural code search
+
+`pylon aroma` answers a question the map cannot: which functions already do something like this, and what code do they carry with them? It indexes the corpus into featurized parse trees, finds the methods that structurally resemble a query, then clusters them and returns the code they share, with each line labeled. The query is the changed lines of a diff, a snippet, or a file range. Zero model calls, deterministic, advisory. The algorithm is the Aroma paper (OOPSLA 2019), ported from its reference implementation and pinned by differential goldens; the design record lives in the archive.
+
 ## 4. The loop
 
 The features only pay off if the loop closes: plan, build, check, ship, write back.
@@ -346,10 +350,10 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `context --preamble` | Emits `context` plus the cache-friendly architecture preamble. | Agent prompt boot | Clean output |
 | `map` | Projects corpus front matter as filterable one-line discovery records ranked by BM25. | Discovering docs before reading them | Usage errors exit 2 |
 | `search <query>` | Full-text BM25 search across non-archived documents. | Finding docs by content | Usage errors exit 2 |
+| `aroma search\|recommend` | Structural code similarity over featurized parse trees: methods resembling the query, then the code its results share. Query from `--lines path:a-b`, `--snippet <file|->`, or `--diff <file|->`; corpus is registered projects by default, else `--corpus`. Zero model calls. | Exploring unfamiliar code, orienting on a diff | No indexable files in the corpus (exit 2 on usage) |
 | `lint` | Validates frontmatter, lifecycle statuses, links, the dependency graph, and STE-100 prose. | Before commit / PR | Frontmatter, links, lifecycle errors |
 | `lint --fix` | Auto-relocates misplaced docs and heals single-depth broken links. | Fixing lint errors | Unfixable errors |
 | `lint --changed` | Pre-commit fast path: validates staged git files only. | Git pre-commit gate | Errors in staged files |
-| `lint --stats` | Emits STE-100 suppression and violation report. Report-only. | Style audit | Always exits 0 |
 | `lint --ci` | Strict mode: exits 1 on any finding, including advisories. | CI pipelines | Any finding |
 | `contract <plan>` | Resolves a plan's `contract.stable` definitions against tracked repositories. | Pre-release verification | Unresolved contracts |
 | `staleness [--package <pkg>]` | Flags package documents older than the age limit. | Release preparation | Stale documentation |
@@ -401,6 +405,15 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--status <st>` | Filters documents by status. | `map` |
 | `--limit <n>` | Caps result count. | `map`, `search` |
 | `--all` | Includes archive subtrees and non-corpus directories in results. | `map`, `search` |
+| `--corpus <dir>` | Adds a corpus root for indexing; repeatable. Default is the ledger's registered projects, else the working directory. | `aroma` |
+| `--lines <path>:a-b` | Builds the query from file lines; comma-separated ranges and repeats allowed. | `aroma` |
+| `--snippet <file\|->` | Builds one query from a snippet file or stdin. | `aroma` |
+| `--diff <file\|->` | One query per unified-diff hunk, from the added lines of the checked-out files. | `aroma` |
+| `--min <float>` | Results must be more similar than this. Search defaults 0.71, recommend 0.65. | `aroma` |
+| `--min-support <n>` | Fewest methods behind a recommendation. 2 by default; 1 reproduces the paper's behavior. | `aroma` |
+| `--min-query-size <n>` | Drops queries with fewer features. Default 0. | `aroma` |
+| `--include-tests` | Keeps `_test.go` files in the corpus. | `aroma` |
+| `--lang <id>` | Forces the language front end. Only `go` ships today. | `aroma` |
 
 ### 5.3 Exit codes
 
