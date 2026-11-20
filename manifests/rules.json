@@ -243,5 +243,68 @@
     "severity": "error",
     "description": "Plan or proposal filename must start with a valid type prefix.",
     "fix_hint": "Prefix filename with feature-, refactor-, chore-, docs-, or perf-."
+  },
+  {
+    "id": "PYLON039",
+    "name": "term_no_avoid",
+    "severity": "advisory",
+    "description": "Domain entity declares no avoid: anti-terms.",
+    "fix_hint": "Add avoid: entries naming the wrong near-synonyms beside the term."
+  },
+  {
+    "id": "PYLON040",
+    "name": "contract_unproven",
+    "severity": "advisory",
+    "description": "Provable contract entry carries no verified_by: or falsified_by: proof pointer.",
+    "fix_hint": "Add verified_by: naming the table test or QA check that proves the contract."
+  },
+  {
+    "id": "PYLON041",
+    "name": "postmortem_field_token",
+    "severity": "error",
+    "description": "Post-mortem field uses a token outside its closed vocabulary.",
+    "fix_hint": "Use an allowed token from conventions/vocabulary.md."
+  },
+  {
+    "id": "PYLON042",
+    "name": "ratchet_regression",
+    "severity": "error",
+    "description": "Advisory count for a package or zone rose above the committed baseline.",
+    "fix_hint": "Fix the new advisories, or re-baseline with pylon review ratchet --update after review."
+  },
+  {
+    "id": "PYLON043",
+    "name": "import_undeclared",
+    "severity": "advisory",
+    "description": "A file imports another registered project the owning package does not declare in depends_on.",
+    "fix_hint": "Declare the dependency in depends_on: or remove the import."
+  },
+  {
+    "id": "PYLON044",
+    "name": "ripple_open",
+    "severity": "advisory",
+    "description": "The target surface is referenced by other ledger artifacts that must move in the same change.",
+    "fix_hint": "Update the listed artifacts in the same session, or accept the stale neighbors knowingly."
+  },
+  {
+    "id": "PYLON045",
+    "name": "slice_incomplete",
+    "severity": "advisory",
+    "description": "A slice plan lacks a behavior contract or the test surface that proves it.",
+    "fix_hint": "Declare contracts on every layer the slice touches: behavior plus a test file or glob."
+  },
+  {
+    "id": "PYLON046",
+    "name": "contract_no_scenario",
+    "severity": "advisory",
+    "description": "A slice plan's behavior contract has no covering declared scenario.",
+    "fix_hint": "Add a scenario entry with given/when/expect and covers naming the contract id."
+  },
+  {
+    "id": "PYLON047",
+    "name": "merge_danger",
+    "severity": "error",
+    "description": "The pull request body lacks a valid merge danger line, or the derived minimum door outranks the author door.",
+    "fix_hint": "Add 'Merge danger: \u003cone-way|two-way\u003e | blast radius: \u003cscope\u003e' to the body (conventions/pr-template.md)."
   }
 ]

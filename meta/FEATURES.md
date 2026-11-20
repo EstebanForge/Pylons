@@ -81,7 +81,8 @@ Every card answers in the same order: **What** names the feature, **The pain** n
 - **What**: The canonical vocabulary of the platform: entities, nouns, and verbs, defined once in the domain zone.
 - **The pain**: "Membership", "plan", "tier", and "account" all sound interchangeable. Teams and agents mix them, and you get class names, database fields, and route parameters that name the same idea 3 different ways.
 - **How it works**: One term per concept. Documentation, plans, and reviews use the canonical term, so a `Membership` in the docs is the same `Membership` in the schema.
-- **Guard**: The closed value sets live in `conventions/vocabulary.md`. The roadmap item `avoid-lists` adds an anti-name guard beside each term.
+- **How it works**: Each entity declares `avoid:` anti-terms: the near-synonyms that must not name the concept. Documentation, reviews, and generated code stay on the canonical term.
+- **Guard**: The closed value sets live in `conventions/vocabulary.md`. An entity with an empty `avoid:` list fires `PYLON039`.
 
 #### Transaction flows (`flows/`)
 
@@ -114,7 +115,7 @@ Every incident has 2 costs: the outage and the relearning. The features in this 
 
 - **What**: A ledger of verified incidents and integration traps, each with its root cause and its fix.
 - **The pain**: Platform bugs get fixed, forgotten, and reintroduced months later by a different person or a fresh agent with no memory of the first round. The team pays for the same bug repeatedly.
-- **How it works**: Each quirk carries mandatory sections: Symptom, Cause, Resolution. A `sources:` list anchors it to the exact files involved, and a `guard:` field declares its verification within 30 days (`PYLON028`).
+- **How it works**: Each quirk carries mandatory sections: Symptom, Cause, Resolution. A `sources:` list anchors it to the exact files involved, and a `guard:` field declares its verification within 30 days (`PYLON028`). Two closed-token signals round out the record: `ai_authored_contributed:` (yes|no|unknown) and `volume_pressure:` (review|test|rollout|observability|none). A human declares them; the engine never infers them (`PYLON041`).
 - **For agents**: When an agent touches a file listed in a quirk's `sources:`, `pylon context` injects the guardrail automatically. The trap costs one write-up, then it defends itself.
 - **Guard**: `pylon review postmortem --check-sources` fails when an anchored file no longer exists, so dead quirks surface immediately.
 
@@ -148,7 +149,7 @@ An agent with the wrong context ships the wrong thing fast. These features feed 
 
 - **What**: A compact summary at session start: the pylon root, the registered projects, the enabled extensions, and the corpus size.
 - **The pain**: Engineers and agents start work blind. Nobody knows whether the clone they are about to trust is registered, configured, or stale.
-- **How it works**: One command at boot. It never blocks: it reports what it sees and exits 0, and a missing or broken configuration surfaces on stderr instead of failing your session.
+- **How it works**: One command at boot. It never blocks: it reports what it sees and exits 0, and a missing or broken configuration surfaces on stderr instead of failing your session. When the last `pylon sync --detached` background fetch failed, brief prints `FETCH-FAILED <time>` so the failure is never silent.
 - **For agents**: The counts tell an agent the ledger is wired before it plans against it. Deeper state lives one command away in `map` and `check`.
 
 #### Point-of-work context (`pylon context`)
@@ -171,6 +172,22 @@ An agent with the wrong context ships the wrong thing fast. These features feed 
 - **The pain**: A ledger of hundreds of documents is useless without discovery. People re-ask answered questions and re-write conventions that already exist.
 - **How it works**: `map` walks document front matter at runtime and caps human output at a token budget with a footer that says how much it hid. `--json` is never truncated. `--all` includes the archive subtrees.
 - **For agents**: A whole-corpus overview in one cheap read, so agents retrieve existing solutions instead of scanning file trees or guessing.
+
+#### Vertical slices (`slice: true`)
+
+- **What**: An opt-in plan flavor where one capability is the whole task, with declared scenarios as its acceptance criteria.
+- **The pain**: A task that spans layers drifts: the route ships, the test never does, and the plan says done. Scope creep wins by default.
+- **How it works**: A slice plan declares a behavior contract and a test surface (`PYLON045`), plus `given`/`when`/`expect` scenarios whose `covers:` names the contract ids they prove (`PYLON046`). The rules gate only accepted and in-progress plans; a scenario without all three parts proves nothing. Scenarios run in the mapped repo's QA suite; the engine only checks the declared coverage.
+- **For agents**: `pylon context --slice <plan>` loads the slice and nothing else: its contracts with resolution state, linked quirks, and linked domain terms. Import edges surface as `PYLON043`: one advisory per undeclared target per package, where `depends_on:` names any package that owns the imported alias and sibling components stay internal. `pylon check` names every artifact that must move with the touched surface (`PYLON044`), matching glob contracts too and anchoring the finding to a real document.
+- **Guard**: All slice rules are advisory. The ratchet budget excludes `PYLON043` because its count moves with sibling repos; everything else feeds `pylon review ratchet`.
+- **Fail loud**: A plan document whose plan frontmatter cannot parse fires a FORCED `PYLON001` instead of silently losing its collisions and ripple.
+
+#### The merge danger line (`pylon review merge-danger`)
+
+- **What**: One required line in every pull request body, classifying the blast radius before review starts: `Merge danger: <one-way|two-way> | blast radius: <scope in one phrase>`.
+- **The pain**: The merge decision is where production breakage gets decided, and nothing forced the classification. Reviewers skimmed past irreversible changes.
+- **How it works**: The closed door vocabulary has two doors: `one-way` (migrations, backfills, irreversible writes, production contract changes) and `two-way` (easy revert). The gate validates the line and derives the minimum door from each project's own diff, so the pylon can live outside the code it judges: a `schema` contract change forces `one-way`, and a derived `one-way` may never be downgraded. A `one-way` door pairs with a breaking commit subject or a `#major` token in the diff, or a `Data migration:` note at a line start in the body. A diff the gate cannot read (shallow clone, missing base) surfaces an advisory instead of passing silently. CI runs `pylon review merge-danger --body <file|-> [--base <ref>]` before merge.
+- **Guard**: Convention `conv.merge-danger-line` (`PYLON047`); blocking findings exit 1.
 
 ### 3.4 Proof, not promises
 
@@ -201,6 +218,34 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 - **The pain**: Linters that cry wolf get ignored by humans and halt agents on trivia. Warning fatigue kills signal.
 - **How it works**: Findings carry exactly 2 grades. `FORCED` exits 1: structural failure, broken contract, active collision, protected path. `ADVISORY` exits 0: context, style notes, optional guidance.
 - **For agents**: The stopping rule is mechanical: halt on `FORCED`, read and proceed on `ADVISORY`. No false-positive deadlocks. CI fails only on the real ones.
+
+#### Remediation on every finding
+
+- **What**: Every finding renders a `fix:` line sourced from the rule catalog.
+- **The pain**: A rule ID names what broke, not what to do next. Humans and agents re-derive the same fix every time.
+- **How it works**: The rendered `fix:` line and `pylon explain` read the same catalog hint. The json and sarif feeds carry a remediation field too.
+- **Guard**: Explicit remediations always win; unknown rules render no hint.
+
+#### Proof pointers (`verified_by:` / `falsified_by:`)
+
+- **What**: Stable contracts of provable kinds demand a pointer to the test that proves or falsifies them.
+- **The pain**: A stable contract with no test is a promise nobody plans to keep, and nothing says so until the code drifts.
+- **How it works**: `symbol`, `route`, `cli`, `event`, `schema`, and their language-prefixed variants (`go-symbol`, `ts-export`) demand `verified_by:` or `falsified_by:` on accepted and in-progress plans (`PYLON040`). Resolution of the pointer stays `PYLON035`.
+- **Guard**: `pylon review ratchet` holds the advisory count at the baseline.
+
+#### Advisory ratchet (`pylon review ratchet`)
+
+- **What**: A committed advisory budget per package and per zone, stored in `manifests/ratchet.json`.
+- **The pain**: Advisories never block, so their count grows forever. Review debt is invisible until it is normal.
+- **How it works**: `pylon review ratchet` compares today's advisory counts against the baseline. A rise is `FORCED` (`PYLON042`) and names the files behind it. `--update` re-baselines after review; a human commits the new budget.
+- **Guard**: Clock-driven advisories (stale packages, audit dates, plan branches) sit outside the budget, so the gate never fails with zero edits.
+
+#### Rework rate (`pylon review rework`)
+
+- **What**: A per-project count of `fix:` and `refactor:` commits that touch paths a `feat:` commit changed.
+- **The pain**: A hotspot repaired 5 times reads as 5 fixes in the log. Each one looks like progress; the map never moves.
+- **How it works**: `pylon review rework` builds hot paths from feat commits in the window, orders commits newest first, and counts later fix and refactor commits that touch them. Hub files (lockfiles, changelogs) never count as hot. Report-only; exit 0.
+- **Guard**: None. The number informs retro and planning; nothing gates on it.
 
 #### Corpus health (`pylon lint`)
 
@@ -297,6 +342,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `check <paths...>` | Intersects target paths with `contract.editing`, `contract.unstable`, and `protected:` globs. Evaluates `wrong_if` falsifiers. | Before editing code | Any `FORCED` collision or protected path |
 | `check --stop-block` | Renders `FORCED` check findings as structured agent stop blocks. | Agent session gate before writing code | Any `FORCED` collision |
 | `context <paths...>` | Emits token-efficient architectural context: contracts, collisions, quirk guardrails, conventions. | Before file edits | Clean output |
+| `context --slice <plan>` | Prints only one plan's contracts with resolution state, linked quirks, and linked domain terms. | Starting a slice task | Missing plan exits 2 |
 | `context --preamble` | Emits `context` plus the cache-friendly architecture preamble. | Agent prompt boot | Clean output |
 | `map` | Projects corpus front matter as filterable one-line discovery records ranked by BM25. | Discovering docs before reading them | Usage errors exit 2 |
 | `search <query>` | Full-text BM25 search across non-archived documents. | Finding docs by content | Usage errors exit 2 |
@@ -311,12 +357,14 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `review plan <path>` | Validates plan or proposal structure and STE-100 compliance. | Proposal drafting | Invalid schema |
 | `review postmortem [path]` | Validates quirk structure (Symptom, Cause, Resolution) and guard types. | Post-mortem authoring | Missing required sections |
 | `review postmortem --check-sources` | Confirms every file in a quirk's `sources:` array exists in the mapped repos. | Post-mortem validation | Missing source files |
+| `review ratchet [--update]` | Counts advisories per package and zone against the committed `manifests/ratchet.json` baseline. Rising counts block. | CI or pre-push | Advisory count above baseline |
+| `review rework [--window] [--package]` | Counts `fix:` and `refactor:` commits touching paths a `feat:` commit changed, per registered project. Report-only. | Retro and planning | Never (skips unreadable projects) |
 | `review-brief <plan>` | Assembles a self-contained review packet for fresh-context reviewers. | Peer review | Plan errors |
 | `review-brief --validate <file>` | Stage-1 validation: verifies review completeness and empty evaluations. | Review submission | Incomplete reviews |
 | `review-brief --validate-resolutions <f>` | Stage-2 validation: verifies every finding was resolved before merge. | Pre-merge verification | Unresolved findings |
 | `manifest [packages\|rules]` | Compiles machine-readable JSON manifests. | Tooling build | Schema failure |
 | `manifest --check` | Verifies the committed manifests match the compiled catalogs without writing. | CI verification | Catalog drift |
-| `protocol [list\|<name>]` | Lists or renders shipped CLI protocols (for example `pylon reflect`). | Session rituals | Unknown protocol |
+| `protocol [list\|<name>]` | Lists or renders shipped CLI protocols (`pylon reflect`, `pylon protocol agent`). | Session rituals | Unknown protocol |
 | `extensions [list\|schema]` | Lists built-in language extensions and the custom-extension schema. | Enabling code extraction | Unknown extension |
 | `explain <rule_id>` | Prints rule name, severity, auto-fixability, description, and fix hint. | Fixing lint failures | Unknown rule ID |
 | `install [--pylons <path>] [--force]` | Writes `.githooks/`, enables `core.hooksPath`, repairs mode bits. Idempotent. | One-time ledger wiring | Nested pylon, hook conflict, missing binary |
@@ -337,7 +385,9 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--stats` | Emits the STE-100 suppression and violation report. Report-only; exits 0. | `lint` |
 | `--check-sources` | Verifies that all paths declared in quirk `sources:` exist. | `review postmortem` |
 | `--check` | Verifies the committed manifests match the compiled catalogs without writing. | `manifest` |
-| `--package <pkg>` | Scopes execution to a single package. | `staleness`, `review staleness`, `map` |
+| `--package <pkg>` | Scopes execution to a single package. | `staleness`, `review staleness`, `review rework`, `map` |
+| `--update` | Rewrites the advisory baseline from a fresh lint run. | `review ratchet` |
+| `--window <period>` | History window for rework counting: `90d`, `12w`, `1y`, or bare days. | `review rework` |
 | `--pylons <path>` | Explicit path to the ledger, bypassing auto-discovery. | All ledger commands |
 | `--stdout` | Prints the generated review brief to stdout instead of writing a file. | `review-brief` |
 | `--validate <file>` | Validates that a returned review packet contains required evaluations. | `review-brief` |
@@ -357,6 +407,6 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | Code | Meaning | Action required |
 |---|---|---|
 | `0` | Success or advisory-only findings. | Proceed with the workflow. |
-| `1` | Blocking finding (`FORCED` collision, broken contract, lint error). | Fix the violation or coordinate with the conflicting plan owner. |
-| `2` | Usage error (unknown command, invalid flag, missing argument). | Check syntax via `pylon --help`. |
+| `1` | Blocking finding (`FORCED` collision, broken contract, lint error, ratchet regression). | Fix the violation or coordinate with the conflicting plan owner. |
+| `2` | Usage or runtime setup error (unknown command, invalid flag or window, unreadable baseline, unresolvable package filter). | Check syntax via `pylon --help`. |
 | `3` | Environment failure (no `manifests/pylons.yaml` found). | Run from the ledger root or pass `--pylons <path>`. |

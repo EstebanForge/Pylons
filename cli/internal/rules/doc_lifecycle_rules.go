@@ -72,10 +72,24 @@ func scanLifecycleRules(kbRoot string, docs []corpusDoc, cfg config.Config, hasC
 			out = append(out, checkAuditDoc(d)...)
 		case "quirks":
 			out = append(out, postmortemFindings(kbRoot, d.rel, d.content, cfg, hasCode)...)
+		case "domain":
+			if !strings.Contains(d.rel, "/archive/") && d.meta.Type == "domain-entity" && !avoidListed(d.meta.Avoid) {
+				out = append(out, advFinding("PYLON039", d.rel, "domain entity has no avoid: anti-terms; misuse has no name"))
+			}
 		}
 	}
 	out = append(out, CheckStaleness(kbRoot, "", false)...)
 	return out
+}
+
+// avoidListed reports whether the avoid list carries any non-blank entry.
+func avoidListed(avoid resolve.StringOrList) bool {
+	for _, v := range avoid {
+		if strings.TrimSpace(v) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func checkAuditDoc(d corpusDoc) []report.Finding {

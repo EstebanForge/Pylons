@@ -9,6 +9,7 @@ owners:
 components: []
 source_of_truth: ""
 relationships: []
+avoid: []
 description: ""
 tags: [domain]
 ---
@@ -22,3 +23,7 @@ One-sentence canonical definition of this domain entity.
 ## Invariants
 
 - Key state rules and ownership boundaries.
+
+## Avoid
+
+Wrong near-synonyms that must not name this entity (list them in avoid:).

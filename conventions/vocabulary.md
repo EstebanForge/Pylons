@@ -64,6 +64,8 @@ These fields accept values only from the sets below. No lint rule validates them
 | Field | Documents | Allowed values |
 |---|---|---|
 | `level:` | conventions | `MUST`, `SHOULD` |
+| `ai_authored_contributed:` | quirks | `yes`, `no`, `unknown` (validated by `PYLON041`) |
+| `volume_pressure:` | quirks | `review`, `test`, `rollout`, `observability`, `none` (validated by `PYLON041`) |
 | `remediation:` | audits | `open`, `in-progress`, `complete`, `rejected` |
 | `severity:` | investigations, audits | `critical`, `high`, `medium`, `low` |
 | `reproducible:` | investigations | `always`, `intermittent`, `environmental` |

@@ -39,6 +39,16 @@ func scanPlanAndQuirkRules(kbRoot string, docs []corpusDoc, cfg config.Config, o
 		var pf resolve.PlanFrontMatter
 		if resolve.ParsePlanFrontMatter(d.content, &pf) && pf.Type == "plan" {
 			out = append(out, checkPlanEvidenceAndFalsifiers(kbRoot, d.rel, pf, cfg, opts)...)
+			out = append(out, checkSlicePlan(pf, d.rel)...)
+			out = append(out, checkScenarioCoverage(pf, d.rel)...)
+		} else if strings.HasPrefix(d.content, "---\n") {
+			// A plan doc whose plan frontmatter cannot parse must
+			// fail loudly: silently dropping it would skip every
+			// plan rule, collision check, and ripple.
+			var probe resolve.DocMeta
+			if resolve.ParseDocMeta(d.content, &probe) && probe.Type == "plan" {
+				out = append(out, errFinding("PYLON001", d.rel, 1, "plan frontmatter cannot parse; plan rules, collisions, and ripple are skipped for this document"))
+			}
 		}
 
 		var pkg resolve.PackageFrontMatter
@@ -65,6 +75,10 @@ func checkPlanEvidenceAndFalsifiers(kbRoot, rel string, pf resolve.PlanFrontMatt
 			if strings.TrimSpace(wrongIf) == "" {
 				id, _ := entry["id"].(string)
 				out = append(out, errFinding("PYLON014", rel, 1, "contract.stable entry "+id+" missing wrong_if: falsifier"))
+			}
+			if provableContractKind(entry) && !hasProofPointer(entry) {
+				id, _ := entry["id"].(string)
+				out = append(out, advFinding("PYLON040", rel, "contract.stable entry "+id+" carries no verified_by: or falsified_by: proof pointer"))
 			}
 			if opts.HasCode {
 				for _, field := range []string{"verified_by", "falsified_by"} {
@@ -121,6 +135,37 @@ func checkPlanEvidenceAndFalsifiers(kbRoot, rel string, pf resolve.PlanFrontMatt
 		}
 	}
 	return out
+}
+
+// provableKinds are the contract kinds whose proof is a test in the
+// mapped repo; language-prefixed external kinds (go-symbol, ts-export)
+// count by their suffix after the last dash, so two-dash kinds split
+// correctly.
+var provableKinds = map[string]bool{
+	"symbol": true, "route": true, "cli": true, "event": true, "schema": true,
+	// Built-in extension kinds: ts-export, js-export, rust-item.
+	"export": true, "item": true,
+}
+
+// provableContractKind reports whether the entry's kind belongs to the
+// provable set, ignoring a language-extension prefix.
+func provableContractKind(entry map[string]any) bool {
+	kind, _ := entry["kind"].(string)
+	if dash := strings.LastIndex(kind, "-"); dash >= 0 {
+		return provableKinds[kind[dash+1:]]
+	}
+	return provableKinds[kind]
+}
+
+// hasProofPointer reports whether the entry names a proving or
+// falsifying test. Resolution of the pointer itself is PYLON035.
+func hasProofPointer(entry map[string]any) bool {
+	for _, field := range []string{"verified_by", "falsified_by"} {
+		if ref, _ := entry[field].(string); strings.TrimSpace(ref) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func checkPackageExtended(kbRoot, rel string, pkg resolve.PackageFrontMatter, cfg config.Config, opts LintOptions) []report.Finding {

@@ -54,6 +54,15 @@ var Catalog = map[string]RuleSpec{
 	"PYLON036": {ID: "PYLON036", Name: "quirk_contract", Severity: "error", Description: "Quirk contracts: entry is missing kind or id.", FixHint: "Specify both kind and id on each quirk contract."},
 	"PYLON037": {ID: "PYLON037", Name: "stale_branch_mention", Severity: "advisory", Description: "Branch qualifier in repo://alias@branch/ does not exist locally.", FixHint: "Update or remove the stale branch qualifier."},
 	"PYLON038": {ID: "PYLON038", Name: "plan_filename_invalid", Severity: "error", Description: "Plan or proposal filename must start with a valid type prefix.", FixHint: "Prefix filename with feature-, refactor-, chore-, docs-, or perf-."},
+	"PYLON039": {ID: "PYLON039", Name: "term_no_avoid", Severity: "advisory", Description: "Domain entity declares no avoid: anti-terms.", FixHint: "Add avoid: entries naming the wrong near-synonyms beside the term."},
+	"PYLON040": {ID: "PYLON040", Name: "contract_unproven", Severity: "advisory", Description: "Provable contract entry carries no verified_by: or falsified_by: proof pointer.", FixHint: "Add verified_by: naming the table test or QA check that proves the contract."},
+	"PYLON041": {ID: "PYLON041", Name: "postmortem_field_token", Severity: "error", Description: "Post-mortem field uses a token outside its closed vocabulary.", FixHint: "Use an allowed token from conventions/vocabulary.md."},
+	"PYLON042": {ID: "PYLON042", Name: "ratchet_regression", Severity: "error", Description: "Advisory count for a package or zone rose above the committed baseline.", FixHint: "Fix the new advisories, or re-baseline with pylon review ratchet --update after review."},
+	"PYLON043": {ID: "PYLON043", Name: "import_undeclared", Severity: "advisory", Description: "A file imports another registered project the owning package does not declare in depends_on.", FixHint: "Declare the dependency in depends_on: or remove the import."},
+	"PYLON044": {ID: "PYLON044", Name: "ripple_open", Severity: "advisory", Description: "The target surface is referenced by other ledger artifacts that must move in the same change.", FixHint: "Update the listed artifacts in the same session, or accept the stale neighbors knowingly."},
+	"PYLON045": {ID: "PYLON045", Name: "slice_incomplete", Severity: "advisory", Description: "A slice plan lacks a behavior contract or the test surface that proves it.", FixHint: "Declare contracts on every layer the slice touches: behavior plus a test file or glob."},
+	"PYLON046": {ID: "PYLON046", Name: "contract_no_scenario", Severity: "advisory", Description: "A slice plan's behavior contract has no covering declared scenario.", FixHint: "Add a scenario entry with given/when/expect and covers naming the contract id."},
+	"PYLON047": {ID: "PYLON047", Name: "merge_danger", Severity: "error", Description: "The pull request body lacks a valid merge danger line, or the derived minimum door outranks the author door.", FixHint: "Add 'Merge danger: <one-way|two-way> | blast radius: <scope>' to the body (conventions/pr-template.md)."},
 }
 
 // AllRules returns the sorted rule catalog.

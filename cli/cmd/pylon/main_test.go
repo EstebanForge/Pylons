@@ -36,3 +36,24 @@ func TestRunInitLintExplain(t *testing.T) {
 		t.Fatalf("--aiur returned %d, want 0", code)
 	}
 }
+
+func TestMergeDangerFlagPath(t *testing.T) {
+	// The gate accepts --body and --base through the CLI flag path,
+	// not only through the Go API.
+	dir := t.TempDir()
+	if code := run([]string{"init", dir}); code != 0 {
+		t.Fatalf("init returned %d, want 0", code)
+	}
+	body := filepath.Join(dir, "body.md")
+	if err := os.WriteFile(body, []byte("Merge danger: two-way | blast radius: docs\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code := run([]string{"review", "merge-danger", "--body", body, "--base", "origin/main", "--pylons", dir}); code != 0 {
+		t.Fatalf("merge-danger with --base returned %d, want 0", code)
+	}
+	// The value-flags parse even when --base names a nonexistent
+	// ref: the gate fails open loudly with the advisory.
+	if code := run([]string{"review", "merge-danger", "--body", body, "--base", "no-such-ref", "--pylons", dir}); code != 0 {
+		t.Fatalf("merge-danger with a broken --base returned %d, want 0 (advisory)", code)
+	}
+}

@@ -6,14 +6,15 @@ package protocols
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
 
 func TestListAndRenderEmbeddedReflect(t *testing.T) {
 	names := List("")
-	if len(names) == 0 || names[0] != "reflect" {
-		t.Fatalf("expected reflect in embedded protocols, got %v", names)
+	if len(names) != 2 || names[0] != "agent" || names[1] != "reflect" {
+		t.Fatalf("expected [agent reflect] in embedded protocols, got %v", names)
 	}
 
 	out, err := Render("reflect", Data{
@@ -47,8 +48,8 @@ func TestRenderKBProtocolsDirTakesPrecedence(t *testing.T) {
 	}
 
 	names := List(kb)
-	if len(names) != 2 || names[0] != "custom" || names[1] != "reflect" {
-		t.Fatalf("expected [custom reflect], got %v", names)
+	if len(names) != 3 || names[0] != "agent" || names[1] != "custom" || names[2] != "reflect" {
+		t.Fatalf("expected [agent custom reflect], got %v", names)
 	}
 	out, err := Render("reflect", Data{Root: kb}, "")
 	if err != nil {
@@ -80,5 +81,28 @@ func TestRenderUnknownProtocolFails(t *testing.T) {
 	}
 	if _, err := Render("../../etc/passwd", Data{Root: t.TempDir()}, ""); err == nil {
 		t.Fatal("expected error for traversal protocol name")
+	}
+}
+
+func TestListAndRenderEmbeddedAgent(t *testing.T) {
+	names := List("")
+	if !slices.Contains(names, "agent") {
+		t.Fatalf("expected agent in embedded protocols, got %v", names)
+	}
+	out, err := Render("agent", Data{
+		Root:       "/tmp/kb",
+		Bin:        "pylon",
+		Extensions: []string{"go"},
+		Projects: []ProjectInfo{
+			{Alias: "svc", Ref: "main"},
+		},
+	}, "")
+	if err != nil {
+		t.Fatalf("Render(agent) failed: %v", err)
+	}
+	for _, want := range []string{"Agent Session Loop", "/tmp/kb", "svc", "go", "pylon check", "lint --changed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected rendered agent protocol to contain %q", want)
+		}
 	}
 }

@@ -12,6 +12,8 @@ target_release: ""
 components: []
 links: []
 description: ""
+slice: false
+scenarios: []
 tags: []
 contract:
   stable: []

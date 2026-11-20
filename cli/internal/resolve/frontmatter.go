@@ -64,12 +64,22 @@ type DocMeta struct {
 	Guard      string       `yaml:"guard"`
 	Sources    []string     `yaml:"sources"`
 	Ticket     []any        `yaml:"ticket"`
+	Avoid      StringOrList `yaml:"avoid"`
+	// Post-mortem signals, human-declared; the engine never infers them.
+	AIAuthoredContributed string `yaml:"ai_authored_contributed"`
+	VolumePressure        string `yaml:"volume_pressure"`
 }
 
 // PlanFrontMatter holds plan-specific frontmatter fields.
 type PlanFrontMatter struct {
-	DocMeta  `yaml:",inline"`
-	Contract struct {
+	DocMeta `yaml:",inline"`
+	// Slice marks the opt-in vertical-slice flavor: one capability
+	// built end to end as the task boundary.
+	Slice bool `yaml:"slice"`
+	// Scenarios are declared given/when/expect examples; covers names
+	// the contract ids each example proves.
+	Scenarios []map[string]any `yaml:"scenarios"`
+	Contract  struct {
 		Stable   []map[string]any `yaml:"stable"`
 		Unstable []any            `yaml:"unstable"`
 		Editing  []any            `yaml:"editing"`

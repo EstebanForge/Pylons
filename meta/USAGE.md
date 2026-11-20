@@ -26,15 +26,20 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 | `pylon brief` | Non-blocking session summary (always exits 0). |
 | `pylon check <paths...>` | Intersect target paths with `contract.editing`, `contract.unstable`, and `protected:` globs. |
 | `pylon context <paths...>` | Emit architectural slice for target files (`--preamble` adds workspace header). |
-| `pylon lint` | Validate frontmatter, folder lifecycle, links, STE-100, and contracts (`--changed`, `--doc-only`, `--fix`, `--ci`). macOS AppleDouble `._*` docs are skipped when `.gitignore` covers them; otherwise they fail with a fix hint. |
+| `pylon context --slice <plan>` | Print only one plan's contracts with resolution state, linked quirks, and linked domain terms (`--json` supported). |
+| `pylon lint` | Validate frontmatter, folder lifecycle, links, STE-100, and contracts (`--changed`, `--doc-only`, `--fix`, `--ci`). Findings render a remediation line from the rule catalog. macOS AppleDouble `._*` docs are skipped when `.gitignore` covers them; otherwise they fail with a fix hint. |
 | `pylon contract <plan>` | Validate 1 plan's `contract.stable` entries against tracked projects. |
 | `pylon map` | Filterable corpus overview ranked by BM25 (`--type`, `--package`, `--tag`, `--status`, `--folder`, `--query`, `--limit`, `--all`). |
 | `pylon search <query>` | Full-text BM25 search across non-archived docs (`--limit`, `--all`). |
 | `pylon staleness` | Flag `packages/*.md` older than 90 days (`--package`, `--fix`). |
 | `pylon review plan <path>` | Check proposal/plan structure and STE-100 compliance. |
 | `pylon review postmortem [path]` | Check quirk sections and `sources:` existence (`--check-sources`). |
+| `pylon review ratchet` | Compare advisory counts per package/zone against `manifests/ratchet.json`; rising counts block (`--update` re-baselines after review). |
+| `pylon review rework` | Count `fix:`/`refactor:` commits touching paths a `feat:` commit changed, per registered project, report-only (`--window`, `--package`). |
+| `pylon review merge-danger` | Gate one `Merge danger:` body line against the closed door vocabulary and the diff's derived minimum door (`--body <file|->`, `--base <ref>`; blocking on missing, invalid, duplicate, or downgraded lines). |
+| `pylon sync --detached` | Start a detached background fetch when the last one is over an hour old, then fast-forward onto `origin/main` on a clean tree; never blocks. |
 | `pylon review-brief <plan>` | Generate `.pylon-review-brief.md` or validate review packets (`--validate`, `--validate-resolutions`). |
-| `pylon protocol [list|<name>]` | List or render CLI protocols (`pylon reflect` is shorthand for `pylon protocol reflect`). |
+| `pylon protocol [list|<name>]` | List or render CLI protocols (`pylon reflect` is the hygiene pass; `pylon protocol agent` is the session loop). |
 | `pylon manifest [rules|packages]` | Generate or `--check` `manifests/rules.json` and `manifests/packages.json`. |
 | `pylon explain <rule_id>` | Print rule description and fix hint for any `PYLON*` rule. |
 | `pylon install` | Write `.githooks/` and enable `core.hooksPath`; idempotent. Refuses a pylon below the repository root, refuses to replace another tool's `core.hooksPath` unless `--force`, and reports hooks that drifted from the shipped assets. |

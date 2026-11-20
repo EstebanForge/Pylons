@@ -4,6 +4,8 @@
 package main
 
 import (
+	"time"
+
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +22,7 @@ import (
 	"github.com/estebanforge/pylons/cli/internal/report"
 	"github.com/estebanforge/pylons/cli/internal/resolve"
 	"github.com/estebanforge/pylons/cli/internal/rules"
+	"github.com/estebanforge/pylons/cli/internal/sync"
 	"github.com/estebanforge/pylons/cli/internal/version"
 )
 
@@ -35,6 +38,10 @@ Usage:
   pylon review plan <path> [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review postmortem [path] [--check-sources] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review staleness [--package <pkg>] [--fix] [--format=human|json|sarif] [--json] [--pylons <path>]
+  pylon review ratchet   [--update] [--format=human|json|sarif] [--json] [--pylons <path>]
+  pylon review rework    [--window <period>] [--package <pkg>] [--json] [--pylons <path>]
+  pylon review merge-danger --body <file|-> [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
+  pylon sync             [--detached] [--pylons <path>]
   pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>] [--format=human|json] [--pylons <path>]
   pylon protocol [list|<name>] [--template <path>] [--pylons <path>]
   pylon reflect          [--template <path>] [--pylons <path>]
@@ -106,12 +113,12 @@ func run(args []string) int {
 	}
 
 	format := report.FormatHuman
-	docOnly, changed, fix, ci := false, false, false, false
+	docOnly, changed, fix, ci, syncDetached := false, false, false, false, false
 	checkManifest, stopBlock, preamble, checkSources := false, false, false, false
 	rbStdout, mapAll := false, false
 	allowExternal := os.Getenv("PYLON_ALLOW_EXTERNAL_EXTENSIONS") == "1"
-	forceHooks := false
-	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl := "", "", "", "", "", ""
+	forceHooks, ratchetUpdate := false, false
+	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild := "", "", "", "", "", "", "", "", "", ""
 	mapType, mapTag, mapStatus, mapFolder, mapQuery := "", "", "", "", ""
 	limit := 0
 	var rest []string
@@ -159,9 +166,13 @@ func run(args []string) int {
 			allowExternal = true
 		case arg == "--force":
 			forceHooks = true
+		case arg == "--update":
+			ratchetUpdate = true
+		case arg == "--detached":
+			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
-		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--base" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit":
+		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "pylon: flag %s requires a value\n", arg)
 				return 2
@@ -183,6 +194,14 @@ func run(args []string) int {
 				rbValidateRes = val
 			case "--template":
 				protoTmpl = val
+			case "--window":
+				reworkWindow = val
+			case "--slice":
+				slicePlan = val
+			case "--body":
+				mergeBody = val
+			case "--fetch-child":
+				syncChild = val
 			case "--type":
 				mapType = val
 			case "--tag":
@@ -252,6 +271,12 @@ func run(args []string) int {
 		return cmdInstall(findPylonsRoot(pylonsPath), forceHooks)
 	}
 
+	// The detached fetch child must never depend on a KB lookup: it
+	// runs with the parent's cwd and its own gitDir argument.
+	if cmd == "sync" && syncChild != "" {
+		return sync.FetchChild(syncChild)
+	}
+
 	kbRoot := findPylonsRoot(pylonsPath)
 	if kbRoot == "" {
 		if cmd == "brief" {
@@ -290,6 +315,7 @@ func run(args []string) int {
 			return 2
 		}
 		findings := rules.Check(kbRoot, rest)
+		rules.Remediate(findings)
 		if stopBlock && format == report.FormatHuman {
 			if err := report.RenderStopBlocks(os.Stdout, findings); err != nil {
 				return 2
@@ -303,6 +329,17 @@ func run(args []string) int {
 		return 0
 
 	case "context":
+		if slicePlan != "" {
+			if len(rest) != 0 {
+				fmt.Fprintln(os.Stderr, "pylon: context --slice takes a plan, not paths")
+				return 2
+			}
+			if format == report.FormatSARIF {
+				fmt.Fprintln(os.Stderr, "pylon: format sarif is not supported for slice context")
+				return 2
+			}
+			return cmdSliceContext(kbRoot, slicePlan, allowExternal, format)
+		}
 		if len(rest) == 0 {
 			fmt.Fprintln(os.Stderr, "pylon: context requires <paths...>")
 			return 2
@@ -312,6 +349,7 @@ func run(args []string) int {
 			fmt.Printf("=== Pylons Context (%s | projects: %d | extensions: %v) ===\n", kbRoot, len(cfg.Projects), cfg.Extensions)
 		}
 		findings := rules.Check(kbRoot, rest)
+		rules.Remediate(findings)
 		if err := report.Render(os.Stdout, format, findings); err != nil {
 			return 2
 		}
@@ -323,7 +361,7 @@ func run(args []string) int {
 
 	case "review":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "pylon: review requires subcommand: plan | postmortem | staleness")
+			fmt.Fprintln(os.Stderr, "pylon: review requires subcommand: plan | postmortem | staleness | ratchet | rework | merge-danger")
 			return 2
 		}
 		switch rest[0] {
@@ -341,10 +379,48 @@ func run(args []string) int {
 			return renderFindings(rules.ReviewPostmortem(kbRoot, target, checkSources), format, ci)
 		case "staleness":
 			return renderFindings(rules.CheckStaleness(kbRoot, pkgArg, fix), format, ci)
+		case "ratchet":
+			findings, err := rules.RunRatchet(kbRoot, rules.RatchetOptions{Update: ratchetUpdate, AllowExternal: allowExternal})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "pylon: ratchet: %v\n", err)
+				return 2
+			}
+			return renderFindings(findings, format, ci)
+		case "rework":
+			return cmdReworkRate(kbRoot, pkgArg, reworkWindow, format)
+		case "merge-danger":
+			return cmdMergeDanger(kbRoot, mergeBody, diffBase, format, ci)
 		default:
 			fmt.Fprintf(os.Stderr, "pylon: unknown review subcommand %s\n", rest[0])
 			return 2
 		}
+
+	case "sync":
+		if !syncDetached {
+			fmt.Fprintln(os.Stderr, "pylon: sync requires --detached (fetches never block a session)")
+			return 2
+		}
+		res, err := sync.Run(kbRoot)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: sync: %v\n", err)
+			return 1
+		}
+		if format == report.FormatJSON {
+			_ = json.NewEncoder(os.Stdout).Encode(res)
+			return 0
+		}
+		if res.FetchStarted {
+			fmt.Println("detached fetch started; rerun shortly to apply")
+		}
+		if res.FastForwarded {
+			fmt.Println("fast-forwarded onto origin/main")
+		}
+		if res.Diverged {
+			fmt.Printf("behind origin/main by %d commit(s); the tree diverged, nothing was applied\n", res.Behind)
+		} else if res.Behind > 0 {
+			fmt.Printf("behind origin/main by %d commit(s); tree is dirty, clean it to apply\n", res.Behind)
+		}
+		return 0
 
 	case "review-brief":
 		planArg := ""
@@ -375,16 +451,24 @@ func run(args []string) int {
 	case "brief":
 		cfg := loadConfigOrWarn(kbRoot)
 		docs := scanDocs(kbRoot, false)
+		fetchFailedAt, fetchOK, _ := sync.Status(kbRoot)
 		if format == report.FormatJSON {
-			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
+			doc := map[string]any{
 				"root":       kbRoot,
 				"projects":   len(cfg.Projects),
 				"extensions": cfg.Extensions,
 				"documents":  len(docs),
-			})
+			}
+			if !fetchOK {
+				doc["fetch_failed"] = fetchFailedAt.UTC().Format(time.RFC3339)
+			}
+			_ = json.NewEncoder(os.Stdout).Encode(doc)
 			return 0
 		}
 		fmt.Printf("Pylons: %s | projects: %d | extensions: %d | docs: %d\n", kbRoot, len(cfg.Projects), len(cfg.Extensions), len(docs))
+		if !fetchOK {
+			fmt.Printf("FETCH-FAILED %s\n", fetchFailedAt.UTC().Format(time.RFC3339))
+		}
 		return 0
 
 	case "map":
@@ -420,7 +504,86 @@ func run(args []string) int {
 	}
 }
 
+func cmdSliceContext(kbRoot, planArg string, allowExternal bool, format report.Format) int {
+	rep, err := rules.SliceContext(kbRoot, planArg, allowExternal)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: context: %v\n", err)
+		return 2
+	}
+	if format == report.FormatJSON {
+		if err := json.NewEncoder(os.Stdout).Encode(rep); err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: context: encode report: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+	fmt.Printf("=== Slice %s (%s | components: %v) ===\n", rep.Title, rep.Plan, rep.Components)
+	for _, c := range rep.Contracts {
+		state := "unresolved"
+		if c.Status != "stable" {
+			state = c.Status
+		} else if c.Resolved {
+			state = "resolved"
+		}
+		detail := ""
+		if c.Detail != "" {
+			detail = " (" + c.Detail + ")"
+		}
+		fmt.Printf("  [%s] %s %s: %s%s\n", c.Status, c.Kind, c.ID, state, detail)
+	}
+	for _, q := range rep.Quirks {
+		fmt.Printf("  quirk: %s\n", q)
+	}
+	for _, term := range rep.Terms {
+		fmt.Printf("  term: %s\n", term)
+	}
+	return 0
+}
+
+func cmdMergeDanger(kbRoot, bodyPath, base string, format report.Format, ci bool) int {
+	if bodyPath == "" {
+		fmt.Fprintln(os.Stderr, "pylon: merge-danger requires --body <file|->")
+		return 2
+	}
+	findings, err := rules.MergeDanger(kbRoot, rules.MergeDangerOptions{Body: bodyPath, Base: base})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: merge-danger: %v\n", err)
+		return 2
+	}
+	return renderFindings(findings, format, ci)
+}
+
+func cmdReworkRate(kbRoot, pkgFilter, window string, format report.Format) int {
+	if format == report.FormatSARIF {
+		fmt.Fprintln(os.Stderr, "pylon: format sarif is not supported for rework")
+		return 2
+	}
+	if err := rules.ValidateWindow(window); err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: rework: %v\n", err)
+		return 2
+	}
+	reports, err := rules.ReworkRate(kbRoot, pkgFilter, window)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: rework: %v\n", err)
+		return 2
+	}
+	if reports == nil {
+		reports = []rules.ReworkReport{}
+	}
+	if format == report.FormatJSON {
+		_ = json.NewEncoder(os.Stdout).Encode(reports)
+		return 0
+	}
+	for _, r := range reports {
+		fmt.Printf("%s: fix rework %d/%d, refactor rework %d/%d (hot paths %d, window %s)\n",
+			r.Project, r.ReworkFix, r.Fix, r.ReworkRefactor, r.Refactor, r.HotPaths, r.Window)
+	}
+	fmt.Printf("rework-rate: %d projects, report-only\n", len(reports))
+	return 0
+}
+
 func renderFindings(findings []report.Finding, format report.Format, ci bool) int {
+	rules.Remediate(findings)
 	if err := report.Render(os.Stdout, format, findings); err != nil {
 		fmt.Fprintf(os.Stderr, "pylon: render failed: %v\n", err)
 		return 2
