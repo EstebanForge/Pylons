@@ -282,3 +282,28 @@ func handle(rows []string) error {
 		t.Fatalf("recommendation = %+v", recommendations[0].Method)
 	}
 }
+
+func TestSelectorFieldAndLiteralKeyAreNotLocals(t *testing.T) {
+	source := "package p\n\ntype cfg struct{ size int }\n\nfunc write(items []string) int {\n\tn := 3\n\tc := cfg{size: n}\n\treturn c.size + len(items)\n}\n"
+	methods := aroma.GoLanguage.ParseMethods(source, "p.go")
+	if len(methods) != 1 {
+		t.Fatalf("methods = %d", len(methods))
+	}
+	var locals []string
+	feats := aroma.Featurize(methods[0].Body, aroma.FeaturizeOptions{})
+	for _, entry := range feats {
+		if entry.Token.Local {
+			locals = append(locals, entry.Token.Text)
+		}
+	}
+	// n and items are locals; the field name size and the literal key size
+	// must not read as locals even though a local named size could exist.
+	for _, name := range locals {
+		if name == "size" {
+			t.Fatalf("field name read as a local: %v", locals)
+		}
+	}
+	if !slices.Contains(locals, "n") || !slices.Contains(locals, "items") {
+		t.Fatalf("missing locals: %v", locals)
+	}
+}
