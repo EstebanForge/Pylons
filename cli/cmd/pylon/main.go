@@ -34,6 +34,7 @@ Usage:
   pylon check <paths...> [--stop-block] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon brief            [--format=human|json] [--json] [--pylons <path>]
   pylon context <paths...> [--preamble] [--format=human|json] [--json] [--pylons <path>]
+  pylon context --diff-since <ref> [--manifest] [--format=human|json] [--json] [--pylons <path>]
   pylon staleness        [--package <pkg>] [--fix] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review plan <path> [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review postmortem [path] [--check-sources] [--format=human|json|sarif] [--json] [--pylons <path>]
@@ -41,6 +42,7 @@ Usage:
   pylon review ratchet   [--update] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review rework    [--window <period>] [--package <pkg>] [--json] [--pylons <path>]
   pylon review merge-danger --body <file|-> [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
+  pylon review release-surface --pinned-releases <dir> [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon sync             [--detached] [--pylons <path>]
   pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>] [--format=human|json] [--pylons <path>]
   pylon protocol [list|<name>] [--template <path>] [--pylons <path>]
@@ -125,6 +127,8 @@ func run(args []string) int {
 	allowExternal := os.Getenv("PYLON_ALLOW_EXTERNAL_EXTENSIONS") == "1"
 	forceHooks, ratchetUpdate := false, false
 	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild := "", "", "", "", "", "", "", "", "", ""
+	pinnedReleases, sessionSince := "", ""
+	sessionManifest := false
 	mapType, mapTag, mapStatus, mapFolder, mapQuery := "", "", "", "", ""
 	limit := 0
 	var rest []string
@@ -174,11 +178,13 @@ func run(args []string) int {
 			forceHooks = true
 		case arg == "--update":
 			ratchetUpdate = true
+		case arg == "--manifest":
+			sessionManifest = true
 		case arg == "--detached":
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
-		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child":
+		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "pylon: flag %s requires a value\n", arg)
 				return 2
@@ -206,6 +212,10 @@ func run(args []string) int {
 				slicePlan = val
 			case "--body":
 				mergeBody = val
+			case "--pinned-releases":
+				pinnedReleases = val
+			case "--diff-since":
+				sessionSince = val
 			case "--fetch-child":
 				syncChild = val
 			case "--type":
@@ -335,6 +345,13 @@ func run(args []string) int {
 		return 0
 
 	case "context":
+		if sessionSince != "" {
+			if slicePlan != "" || len(rest) != 0 {
+				fmt.Fprintln(os.Stderr, "pylon: context --diff-since takes no other target")
+				return 2
+			}
+			return cmdCapture(kbRoot, sessionSince, sessionManifest, format)
+		}
 		if slicePlan != "" {
 			if len(rest) != 0 {
 				fmt.Fprintln(os.Stderr, "pylon: context --slice takes a plan, not paths")
@@ -367,7 +384,7 @@ func run(args []string) int {
 
 	case "review":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "pylon: review requires subcommand: plan | postmortem | staleness | ratchet | rework | merge-danger")
+			fmt.Fprintln(os.Stderr, "pylon: review requires subcommand: plan | postmortem | staleness | ratchet | rework | merge-danger | release-surface")
 			return 2
 		}
 		switch rest[0] {
@@ -396,6 +413,24 @@ func run(args []string) int {
 			return cmdReworkRate(kbRoot, pkgArg, reworkWindow, format)
 		case "merge-danger":
 			return cmdMergeDanger(kbRoot, mergeBody, diffBase, format, ci)
+		case "release-surface":
+			if pinnedReleases == "" {
+				fmt.Fprintln(os.Stderr, "pylon: review release-surface requires --pinned-releases <dir>")
+				return 2
+			}
+			findings, err := rules.ReleaseSurface(kbRoot, rules.ReleaseSurfaceOptions{PinnedDir: pinnedReleases, Base: diffBase})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "pylon: review release-surface: %v\n", err)
+				return 1
+			}
+			rules.Remediate(findings)
+			if err := report.Render(os.Stdout, format, findings); err != nil {
+				return 2
+			}
+			if report.HasBlocking(findings) {
+				return 1
+			}
+			return 0
 		default:
 			fmt.Fprintf(os.Stderr, "pylon: unknown review subcommand %s\n", rest[0])
 			return 2
@@ -972,4 +1007,29 @@ func loadConfigOrWarn(kbRoot string) config.Config {
 		fmt.Fprintf(os.Stderr, "pylon: warning: invalid manifests/pylons.yaml: %v\n", err)
 	}
 	return cfg
+}
+
+func cmdCapture(kbRoot, since string, emitManifest bool, format report.Format) int {
+	manifest, err := rules.SessionCapture(kbRoot, since)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: context: %v\n", err)
+		return 2
+	}
+	// --manifest emits the manifest document itself: JSON form, exit 0.
+	if emitManifest || format == report.FormatJSON {
+		if err := json.NewEncoder(os.Stdout).Encode(manifest); err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: context: encode manifest: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+	fmt.Printf("=== Session capture since %s (%d declared surfaces) ===\n", manifest.Since, manifest.Examined)
+	if len(manifest.Surfaces) == 0 {
+		fmt.Println("  no stale surfaces; declared docs moved with the code")
+		return 0
+	}
+	for _, s := range manifest.Surfaces {
+		fmt.Printf("  [%s] %s %s in %s: doc %s did not move with the code\n", s.Kind, s.Alias, s.Path, s.Alias, s.Doc)
+	}
+	return 0
 }

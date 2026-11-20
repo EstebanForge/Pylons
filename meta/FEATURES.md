@@ -351,6 +351,8 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `map` | Projects corpus front matter as filterable one-line discovery records ranked by BM25. | Discovering docs before reading them | Usage errors exit 2 |
 | `search <query>` | Full-text BM25 search across non-archived documents. | Finding docs by content | Usage errors exit 2 |
 | `aroma search\|recommend` | Structural code similarity over featurized parse trees: methods resembling the query, then the code its results share. Query from `--lines path:a-b`, `--snippet <file|->`, or `--diff <file|->` (one query per method the lines touch); corpus is registered projects by default, else `--corpus`. Zero model calls. | Exploring unfamiliar code, orienting on a diff | Never; usage, unreadable corpus, or an empty corpus exit 2 |
+| `review release-surface` | Pinned-release diff: block when a pinned deployment consumes a symbol, route, or cli surface removed or changed against its pinned tag; lockfiles under `--pinned-releases <dir>`, `--base <ref>` overrides pinning. | Release review, version-bump CI | Removed or changed consumed surfaces, unknown pin aliases, missing tags |
+| `context --diff-since <ref>` | Session capture: surfaces the diff touched whose docs did not move in the same commit set; `--manifest` emits the JSON document. | Session close, doc-drift checks | Never; usage errors exit 2 |
 | `lint` | Validates frontmatter, lifecycle statuses, links, the dependency graph, and STE-100 prose. | Before commit / PR | Frontmatter, links, lifecycle errors |
 | `lint --fix` | Auto-relocates misplaced docs and heals single-depth broken links. | Fixing lint errors | Unfixable errors |
 | `lint --changed` | Pre-commit fast path: validates staged git files only. | Git pre-commit gate | Errors in staged files |
@@ -414,6 +416,9 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--min-query-size <n>` | Drops queries with fewer features. Default 0. | `aroma` |
 | `--include-tests` | Keeps `_test.go` files in the corpus. | `aroma` |
 | `--lang <id>` | Picks the language front end for stdin snippets. Only `go` ships today. | `aroma` |
+| `--pinned-releases <dir>` | Deployment directory holding `<alias> <version>` lockfiles; the pinned version resolves to a release tag. | `review release-surface` |
+| `--diff-since <ref>` | Compares history since the ref against declared surfaces. | `context` |
+| `--manifest` | Emits the session-capture manifest as JSON. | `context --diff-since` |
 
 ### 5.3 Exit codes
 
