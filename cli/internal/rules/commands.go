@@ -83,10 +83,10 @@ func CheckStaleness(kbRoot, pkgFilter string, fix bool) []report.Finding {
 		if err != nil {
 			continue
 		}
-		daysOld := int(time.Since(updated).Hours() / 24)
-		if time.Since(updated) > stalenessMaxDays*24*time.Hour {
+		daysOld := int(time.Since(updated) / (24 * time.Hour))
+		if daysOld > stalenessMaxDays {
 			if fix {
-				patched := updatedLineRe.ReplaceAllString(content, "${1}"+today+"${2}")
+				patched := patchUpdatedFrontMatter(content, today)
 				if patched != content {
 					if err := os.WriteFile(p, []byte(patched), 0o644); err == nil {
 						fmt.Fprintf(os.Stderr, "staleness --fix: updated %s (%s -> %s)\n", filepath.ToSlash(filepath.Join("packages", e.Name())), rawDate, today)
@@ -105,6 +105,30 @@ func CheckStaleness(kbRoot, pkgFilter string, fix bool) []report.Finding {
 		}
 	}
 	return findings
+}
+
+// patchUpdatedFrontMatter rewrites updated: only inside frontmatter, so
+// example blocks in body text are never corrupted by staleness --fix.
+func patchUpdatedFrontMatter(content, today string) string {
+	front := resolve.ExtractFrontMatter(content)
+	if front == "" {
+		return content
+	}
+	patchedFront := updatedLineRe.ReplaceAllString(front, "${1}"+today+"${2}")
+	if patchedFront == front {
+		return content
+	}
+	return strings.Replace(content, front, patchedFront, 1)
+}
+
+// hasHeading matches an exact trimmed heading line, not a substring.
+func hasHeading(content, heading string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == heading {
+			return true
+		}
+	}
+	return false
 }
 
 // ReviewPlan validates a plan or proposal document's structure and STE-100 compliance.
@@ -154,7 +178,7 @@ func ReviewPostmortem(kbRoot, quirkArg string, checkSources bool) []report.Findi
 		qDir := filepath.Join(kbRoot, "quirks")
 		entries, err := os.ReadDir(qDir)
 		if err != nil {
-			return nil
+			return findings
 		}
 		var junk []string
 		for _, e := range entries {
@@ -198,7 +222,7 @@ func postmortemFindings(kbRoot, rel, content string, cfg config.Config, checkSou
 	var fm resolve.DocMeta
 	_ = resolve.ParseDocMeta(content, &fm)
 	for _, sec := range []string{"## Symptom", "## Cause", "## Resolution"} {
-		if !strings.Contains(content, sec) {
+		if !hasHeading(content, sec) {
 			findings = append(findings, errFinding("PYLON022", rel, 1, fmt.Sprintf("postmortem missing required section %q", sec)))
 		}
 	}

@@ -93,6 +93,9 @@ func NewRegistryWithOptions(opts RegistryOptions) *Registry {
 
 // Resolve resolves kind+id against projectRoot.
 func (r *Registry) Resolve(projectRoot string, kind Kind, id string) Verdict {
+	if msg := refErr(projectRoot, r.ref); msg != "" {
+		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: msg}
+	}
 	if fn, ok := r.kinds[kind]; ok {
 		return fn(projectRoot, r.ref, kind, id)
 	}
@@ -136,6 +139,7 @@ func SafeJoin(root, rel string) (string, bool) {
 }
 
 // MatchGlob matches target against pattern, supporting ** across path segments.
+// Trailing /** requires at least one segment under it (a/** never matches bare a).
 func MatchGlob(pattern, target string) bool {
 	pattern = filepath.ToSlash(strings.TrimPrefix(filepath.Clean(pattern), "/"))
 	target = filepath.ToSlash(strings.TrimPrefix(filepath.Clean(target), "/"))
@@ -144,41 +148,64 @@ func MatchGlob(pattern, target string) bool {
 	}
 	patSegs := strings.Split(pattern, "/")
 	tgtSegs := strings.Split(target, "/")
-	return matchSegments(patSegs, tgtSegs)
-}
-
-func matchSegments(pat, tgt []string) bool {
-	for len(pat) > 0 {
-		if pat[0] == "**" {
-			for len(pat) > 1 && pat[1] == "**" {
-				pat = pat[1:]
-			}
-			if len(pat) == 1 {
-				return true
-			}
-			for i := 0; i <= len(tgt); i++ {
-				if matchSegments(pat[1:], tgt[i:]) {
-					return true
+	memo := make(map[[2]int]bool)
+	var m func(pi, ti int) bool
+	m = func(pi, ti int) bool {
+		key := [2]int{pi, ti}
+		if v, ok := memo[key]; ok {
+			return v
+		}
+		var res bool
+		if pi == len(patSegs) {
+			res = ti == len(tgtSegs)
+		} else if patSegs[pi] == "**" {
+			litBefore := false
+			for k := 0; k < pi; k++ {
+				if patSegs[k] != "**" {
+					litBefore = true
+					break
 				}
 			}
-			return false
+			if pi == len(patSegs)-1 {
+				// a/** covers a's contents only; bare ** covers everything.
+				if litBefore {
+					res = ti < len(tgtSegs)
+				} else {
+					res = true
+				}
+			} else {
+				res = false
+				for i := ti; i <= len(tgtSegs); i++ {
+					if m(pi+1, i) {
+						res = true
+						break
+					}
+				}
+			}
+		} else if ti == len(tgtSegs) {
+			res = false
+		} else {
+			ok, err := filepath.Match(patSegs[pi], tgtSegs[ti])
+			if err != nil || !ok {
+				res = false
+			} else {
+				res = m(pi+1, ti+1)
+			}
 		}
-		if len(tgt) == 0 {
-			return false
-		}
-		ok, err := filepath.Match(pat[0], tgt[0])
-		if err != nil || !ok {
-			return false
-		}
-		pat = pat[1:]
-		tgt = tgt[1:]
+		memo[key] = res
+		return res
 	}
-	return len(tgt) == 0
+	return m(0, 0)
 }
 
 // gitCallTimeout bounds each git subprocess so a wedged checkout (locked
 // index, hung NFS mount) cannot freeze gate hooks or installers.
 const gitCallTimeout = 10 * time.Second
+
+const (
+	maxGrepFileBytes    = 2 * 1024 * 1024
+	maxProjectFileBytes = 4 * 1024 * 1024
+)
 
 // GitRun runs git -C <dir> with args and returns stdout.
 func GitRun(dir string, stdin io.Reader, args ...string) ([]byte, error) {
@@ -186,7 +213,29 @@ func GitRun(dir string, stdin io.Reader, args ...string) ([]byte, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
 	cmd.Stdin = stdin
+	// A grandchild holding the stdout pipe must not block ReadAll forever.
+	cmd.WaitDelay = time.Second
 	return cmd.Output()
+}
+
+// refErr reports why a configured ref is unusable, or "" when it resolves.
+// A configured-but-missing ref must fail closed, never fall back to the
+// working tree silently.
+func refErr(root, ref string) string {
+	if ref == "" {
+		return ""
+	}
+	if strings.HasPrefix(ref, "-") {
+		return "invalid ref " + ref
+	}
+	if !hasGitRepo(root) {
+		// Worktree-only project: there is no git to fail closed on.
+		return ""
+	}
+	if _, err := GitRun(root, nil, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err != nil {
+		return "configured ref " + ref + " not resolvable"
+	}
+	return ""
 }
 
 // ReadProjectFile reads rel from git ref when ref != "" and root is a git repo,
@@ -208,7 +257,16 @@ func ReadProjectFile(root, ref, rel string) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	data, err := os.ReadFile(target)
+	f, err := os.Open(target)
+	if err != nil {
+		return nil, false
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, false
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxProjectFileBytes))
 	if err != nil {
 		return nil, false
 	}
@@ -221,15 +279,15 @@ func StatProjectFile(root, ref, rel string) bool {
 		return false
 	}
 	if ref != "" && hasGitRepo(root) && refExists(root, ref) {
-		_, err := GitRun(root, nil, "cat-file", "-e", ref+":"+rel)
-		return err == nil
+		out, err := GitRun(root, nil, "cat-file", "-t", ref+":"+rel)
+		return err == nil && strings.TrimSpace(string(out)) == "blob"
 	}
 	target, ok := SafeJoin(root, rel)
 	if !ok {
 		return false
 	}
 	info, err := os.Stat(target)
-	return err == nil && !info.IsDir()
+	return err == nil && info.Mode().IsRegular()
 }
 
 func hasGitRepo(root string) bool {
@@ -238,8 +296,7 @@ func hasGitRepo(root string) bool {
 }
 
 func refExists(root, ref string) bool {
-	_, err := GitRun(root, nil, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
-	return err == nil
+	return ref != "" && refErr(root, ref) == ""
 }
 
 func resolveFile(projectRoot, ref string, kind Kind, id string) Verdict {
@@ -256,9 +313,9 @@ func resolveGlob(projectRoot, ref string, kind Kind, id string) Verdict {
 		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "invalid glob path"}
 	}
 	if ref != "" && hasGitRepo(projectRoot) && refExists(projectRoot, ref) {
-		out, err := GitRun(projectRoot, nil, "ls-tree", "-r", "--name-only", ref)
+		out, err := GitRun(projectRoot, nil, "ls-tree", "-r", "--name-only", "-z", ref)
 		if err == nil {
-			for _, line := range strings.Split(string(out), "\n") {
+			for _, line := range strings.Split(string(out), "\x00") {
 				line = strings.TrimSpace(line)
 				if line != "" && MatchGlob(relPat, line) {
 					return Verdict{Kind: kind, ID: id, Resolved: true, Detail: line}
@@ -331,46 +388,67 @@ func isWordByte(b byte) bool {
 	return b == '_' || (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
-func resolveRoute(projectRoot, _ string, kind Kind, id string) Verdict {
+func resolveRoute(projectRoot, ref string, kind Kind, id string) Verdict {
 	parts := strings.Fields(id)
 	if len(parts) < 2 {
 		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "expected METHOD /path"}
 	}
-	if match := grepProject(projectRoot, parts[1]); match != "" {
+	if match := grepTarget(projectRoot, ref, parts[1]); match != "" {
 		return Verdict{Kind: kind, ID: id, Resolved: true, Detail: match}
 	}
 	return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "route path not found"}
 }
 
-func resolveCLI(projectRoot, _ string, kind Kind, id string) Verdict {
+func resolveCLI(projectRoot, ref string, kind Kind, id string) Verdict {
 	fields := strings.Fields(id)
 	if len(fields) == 0 {
 		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "empty cli command"}
 	}
-	if match := grepProject(projectRoot, fields[len(fields)-1]); match != "" {
+	if match := grepTarget(projectRoot, ref, fields[len(fields)-1]); match != "" {
 		return Verdict{Kind: kind, ID: id, Resolved: true, Detail: match}
 	}
 	return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "cli command not found"}
 }
 
-func resolveEvent(projectRoot, _ string, kind Kind, id string) Verdict {
+func resolveEvent(projectRoot, ref string, kind Kind, id string) Verdict {
 	if id == "" {
 		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "empty event name"}
 	}
-	if match := grepProject(projectRoot, id); match != "" {
+	if match := grepTarget(projectRoot, ref, id); match != "" {
 		return Verdict{Kind: kind, ID: id, Resolved: true, Detail: match}
 	}
 	return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "event not found"}
 }
 
-func resolveSchema(projectRoot, _ string, kind Kind, id string) Verdict {
+func resolveSchema(projectRoot, ref string, kind Kind, id string) Verdict {
 	if id == "" {
 		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "empty schema name"}
 	}
-	if match := grepProject(projectRoot, id); match != "" {
+	if match := grepTarget(projectRoot, ref, id); match != "" {
 		return Verdict{Kind: kind, ID: id, Resolved: true, Detail: match}
 	}
 	return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "schema not found"}
+}
+
+// grepTarget searches the configured ref via git grep so route/cli/event/schema
+// contracts honor repo:// base refs instead of silently reading the worktree.
+func grepTarget(root, ref, needle string) string {
+	if ref != "" && hasGitRepo(root) {
+		out, err := GitRun(root, nil, "grep", "-I", "--fixed-strings", "-m", "1", "-e", needle, ref)
+		if err != nil {
+			return ""
+		}
+		// Output lines look like <ref>:<path>:<line>:<text>.
+		line := strings.TrimSpace(string(out))
+		if idx := strings.Index(line, ref+":"); idx >= 0 {
+			rest := line[idx+len(ref)+1:]
+			if end := strings.IndexByte(rest, ':'); end > 0 {
+				return rest[:end]
+			}
+		}
+		return ""
+	}
+	return grepProject(root, needle)
 }
 
 func stripRepoPrefix(raw string) (string, bool) {
@@ -404,12 +482,21 @@ func grepProject(root, needle string) string {
 			}
 			return nil
 		}
-		info, err := d.Info()
-		if err != nil || info.Size() > 2*1024*1024 {
+		// lstat type: a symlink or FIFO must never be opened for reading.
+		if !d.Type().IsRegular() {
 			return nil
 		}
-		data, err := os.ReadFile(p)
+		info, err := d.Info()
+		if err != nil || info.Size() > maxGrepFileBytes {
+			return nil
+		}
+		f, err := os.Open(p)
 		if err != nil {
+			return nil
+		}
+		data, err := io.ReadAll(io.LimitReader(f, maxGrepFileBytes+1))
+		closeErr := f.Close()
+		if err != nil || closeErr != nil {
 			return nil
 		}
 		if strings.Contains(string(data), needle) {

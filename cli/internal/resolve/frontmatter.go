@@ -85,8 +85,16 @@ type PackageFrontMatter struct {
 	Protected []any            `yaml:"protected"`
 }
 
+// normalizeDoc normalizes a BOM prefix and CRLF line endings so fence
+// detection works on Windows checkouts (autocrlf) too.
+func normalizeDoc(content string) string {
+	content = strings.TrimPrefix(content, "\uFEFF")
+	return strings.ReplaceAll(content, "\r\n", "\n")
+}
+
 // ExtractFrontMatter returns the YAML text between leading `---` fences.
 func ExtractFrontMatter(content string) string {
+	content = normalizeDoc(content)
 	const fence = "---"
 	if !strings.HasPrefix(content, fence+"\n") && content != fence {
 		return ""
@@ -105,7 +113,9 @@ func ExtractFrontMatter(content string) string {
 }
 
 // WithoutFrontMatter returns content with its leading YAML frontmatter removed.
+// The body is returned with normalized line endings.
 func WithoutFrontMatter(content string) string {
+	content = normalizeDoc(content)
 	const fence = "---"
 	if !strings.HasPrefix(content, fence+"\n") && content != fence {
 		return content

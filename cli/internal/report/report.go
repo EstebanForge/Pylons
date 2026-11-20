@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
 
 type Format string
@@ -66,6 +67,7 @@ func Render(w io.Writer, format Format, findings []Finding) error {
 		return renderSARIF(w, findings)
 	default:
 		for _, f := range findings {
+			f.RuleID, f.Severity, f.Grade, f.File, f.Message = cleanText(f.RuleID), cleanText(f.Severity), cleanText(f.Grade), cleanText(f.File), cleanText(f.Message)
 			grade := f.Grade
 			if grade == "" {
 				if f.Severity == SeverityError {
@@ -88,9 +90,24 @@ func Render(w io.Writer, format Format, findings []Finding) error {
 	}
 }
 
+// cleanText strips control characters (including ANSI escapes) so hostile
+// finding text cannot repaint the terminal.
+func cleanText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 && r != '\n' && r != '\t' {
+			return -1
+		}
+		if r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
+}
+
 // RenderStopBlocks renders FORCED findings as structured agent stop blocks.
 func RenderStopBlocks(w io.Writer, findings []Finding) error {
 	for _, f := range findings {
+		f.RuleID, f.File, f.Message = cleanText(f.RuleID), cleanText(f.File), cleanText(f.Message)
 		if f.Severity == SeverityError {
 			if _, err := fmt.Fprintf(w, "=== PYLON STOP BLOCK [%s] ===\nFile: %s\nReason: %s\nAction: Stop and resolve before editing.\n=== END STOP BLOCK ===\n", f.RuleID, f.File, f.Message); err != nil {
 				return err

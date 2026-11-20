@@ -21,6 +21,7 @@ var (
 	invFilenameRe  = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md$`)
 	planFilenameRe = regexp.MustCompile(`^(?:feature|feat|refactor|chore|docs|perf)-[a-z0-9-]+\.md$`)
 	auditRowStatus = map[string]bool{"open": true, "fixed": true, "rejected": true, "moved": true}
+	reauditDateRe  = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 )
 
 func parseYAMLFrontMatter(content string, dst any) bool {
@@ -79,16 +80,17 @@ func scanLifecycleRules(kbRoot string, docs []corpusDoc, cfg config.Config, hasC
 
 func checkAuditDoc(d corpusDoc) []report.Finding {
 	var out []report.Finding
-	if d.meta.Status == "active" && strings.TrimSpace(d.meta.Reaudit) != "" {
-		if due, err := time.Parse("2006-01-02", strings.TrimSpace(d.meta.Reaudit)); err == nil && time.Now().After(due) {
-			out = append(out, report.Finding{
-				RuleID:   "PYLON026",
-				Severity: report.SeverityAdvisory,
-				Grade:    report.GradeAdvisory,
-				File:     d.rel,
-				Line:     1,
-				Message:  "active audit reaudit date " + d.meta.Reaudit + " is overdue",
-			})
+	if d.meta.Status == "active" {
+		raw := strings.TrimSpace(d.meta.Reaudit)
+		if raw != "" {
+			// String compare keeps the due day itself unflagged regardless
+			// of local time zone; time.Parse-based checks flagged it early.
+			switch {
+			case !reauditDateRe.MatchString(raw):
+				out = append(out, advFinding("PYLON026", d.rel, "unparsable reaudit date "+raw+" (want YYYY-MM-DD)"))
+			case raw < time.Now().Format("2006-01-02"):
+				out = append(out, advFinding("PYLON026", d.rel, "active audit reaudit date "+raw+" is overdue"))
+			}
 		}
 	}
 	for idx, line := range strings.Split(d.content, "\n") {

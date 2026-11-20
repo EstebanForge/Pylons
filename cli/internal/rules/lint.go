@@ -4,6 +4,7 @@
 package rules
 
 import (
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -95,6 +96,10 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 			junk = append(junk, rel)
 			return nil
 		}
+		// lstat type: a doc symlink pointing outside the KB is never read.
+		if !d.Type().IsRegular() {
+			return nil
+		}
 		if changedSet != nil && !changedSet[rel] {
 			return nil
 		}
@@ -103,11 +108,10 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 			return nil
 		}
 
-		rawBytes, readErr := os.ReadFile(p)
+		content, readErr := readBounded(p)
 		if readErr != nil {
 			return nil
 		}
-		content := string(rawBytes)
 		if opts.Fix {
 			if moved := tryFixFolderMismatch(kbRoot, rel, content); moved != "" {
 				rel = moved
@@ -136,6 +140,22 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 	findings = append(findings, scanPlanAndQuirkRules(kbRoot, docs, cfg, opts)...)
 	findings = append(findings, scanLifecycleRules(kbRoot, docs, cfg, opts.HasCode)...)
 	return findings
+}
+
+// maxDocBytes caps one corpus read; a runaway doc cannot exhaust memory.
+const maxDocBytes = 4 * 1024 * 1024
+
+func readBounded(p string) (string, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxDocBytes))
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func stagedMarkdownFiles(kbRoot string) map[string]bool {
@@ -473,7 +493,12 @@ func resolveProjectTarget(kbRoot, id string, components []string, cfg config.Con
 			return comp, p, cfg.ProjectExtensions(comp), cfg.ProjectRef(comp), ""
 		}
 	}
-	return "", "", nil, "", ""
+	// Unmatched contracts must not skip silently: a typo in components:
+	// would otherwise disable the whole contract.
+	if len(components) > 0 {
+		return "", "", nil, "", "components do not map to a registered project"
+	}
+	return "", "", nil, "", "no project: use repo:// or set components:"
 }
 
 func isBoolTrue(v any) bool {
@@ -502,6 +527,17 @@ func IgnoredByGit(kbRoot string, rels []string) map[string]bool {
 		}
 	}
 	return ignored
+}
+
+func advFinding(ruleID, file string, msg string) report.Finding {
+	return report.Finding{
+		RuleID:   ruleID,
+		Severity: report.SeverityAdvisory,
+		Grade:    report.GradeAdvisory,
+		File:     file,
+		Line:     1,
+		Message:  msg,
+	}
 }
 
 func errFinding(ruleID, file string, line int, msg string) report.Finding {

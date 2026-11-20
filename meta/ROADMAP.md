@@ -127,6 +127,67 @@ External agentic-memory products auto-capture session context and regenerate doc
 - **Consumer**: Per-package trend, report-only. Never a gate.
 - **Objective**: Distinguish genuine rework from new work and planned refactoring. The industry saw churn rise with AI assistance; this shows whether mapped packages do.
 
+### import-boundary-lint
+- **Change**: `pylon lint` gains an import-boundary rule backed by the enabled language extensions.
+- **Deterministic Mechanism**: Each language extension extracts per-file import edges (packages or modules) by regex or AST. For a file inside registered package A that imports package B, the rule compares B against A's declared `depends_on:`. A plan contract on the edge also covers it. Parse only. No runtime, no build.
+- **Enforcement**: `IMPORT_UNDECLARED` (error): an import edge whose target package is not declared. The grade lands advisory-first. Flip per platform once maps are clean, then ratchet the count.
+- **Consumer**: `pylon lint` and CI. The undeclared edge dies at lint time, before staging.
+- **Objective**: Package boundaries become checkable. The most common opaque-behavior cause, the wrong cross-package import, is caught deterministically.
+
+### ripple-report
+- **Command**: `pylon check <paths...>` gains a ripple section after the collision findings.
+- **Deterministic Mechanism**: For every contract touched by the target paths, list the artifacts that declare or consume it. Exact set intersection over indexed fields: plan contracts, package `exposes:`, quirk `contracts:` and `sources:`, and domain terms.
+- **Enforcement**: `RIPPLE_OPEN` (advisory): one finding with the artifact count and list. It informs; it never gates.
+- **Consumer**: An agent editing a mapped surface sees which documents must move in the same session. Sessions stop shipping a surface change with stale neighbors.
+- **Objective**: The documented surface stays in lockstep with code. The "what else references this" question gets a deterministic answer.
+
+### finding-remediation
+- **Change**: Every lint finding can carry a remediation line sourced from the rule catalog hint.
+- **Deterministic Mechanism**: `human` renders one remediation sentence under the finding. `json` and `sarif` gain a `remediation` field. `--stop-block` stays unchanged. Rules without a hint render nothing.
+- **Consumer**: An agent fixes from the finding itself, with no second `pylon explain` lookup. `pylon explain` keeps the full rule text.
+- **Objective**: Every finding answers "how do I fix this" at first contact. Loop time per finding drops.
+
+### proof-pointers
+- **Change**: Plan and package contract entries of kind `symbol`, `route`, `cli`, `event`, and `schema` may carry `verified_by:`. The pointer names the table test or QA check in the mapped repo that proves the entry.
+- **Deterministic Mechanism**: Lint resolves the pointer by set membership, never by running it. It stays offline like every check.
+- **Enforcement**: `CONTRACT_UNPROVEN` (advisory): a contract entry without a `verified_by:` pointer. It feeds the `advisory-ratchet` baseline.
+- **Consumer**: `brief` reports the count of contracts missing proof. Reviewers see which promises carry their own falsifier.
+- **Objective**: Every declared surface carries its proof obligation. No promise without a proof path.
+
+### avoid-lists
+- **Change**: The domain-entity template gains an `avoid:` frontmatter list of anti-terms beside each defined term.
+- **Deterministic Mechanism**: Entities without entries are flagged. The list content stays freeform prose, so no model or corpus scan runs.
+- **Enforcement**: `TERM_NO_AVOID` (advisory): a domain entity with an empty or missing `avoid:` list.
+- **Consumer**: Domain prose gains a wrong-name guard: misuse has a name beside the term it protects. The closed vocabulary stays the registry.
+- **Objective**: A term is defined not only by what it means, but by what it must not be called.
+
+### agent-protocol
+- **Command**: `pylon protocol agent`
+- **Change**: One canonical agent protocol under `protocols/`, compiled into the binary with the same embed mechanism as `pylon reflect`.
+- **Deterministic Mechanism**: Pure static prose with a fixed loop order. Orient (`brief`, `map`). Check ground (`check`, `context`). Slice work to one plan. Record discoveries (`quirks`, contracts). Gate (`lint`). No runtime state.
+- **Consumer**: `pylon protocol agent` prints the loop an agent follows in a mapped platform. README, USAGE, and MANIFESTO link it instead of restating it.
+- **Objective**: The session loop ships with the binary. One command onboards any agent to the platform's working discipline.
+
+### slice-plans
+- **Change**: Plans gain a slice flavor: one capability built end to end as a single shippable unit. Layers: schema, state, route, test. Opt-in per plan; ordinary plans stay unchanged.
+- **Deterministic Mechanism**: A slice plan declares contracts across every layer it touches. Layers: schemas, routes, events, code symbols, tests as a file glob. `pylon check` verifies each against ground with the existing machinery. No new execution. Slices ship one at a time. The first slice carries the platform skeleton; later slices flesh it out.
+- **Enforcement**: `SLICE_INCOMPLETE` (advisory): a test surface without a behavior contract, or the reverse. The finding feeds the `advisory-ratchet` baseline.
+- **Consumer**: An agent takes one slice plan as the whole task. The plan's contract set is the task boundary, so no scope creep and no partial layers.
+- **Objective**: The slice is the smallest independently verifiable increment. Specs and implementations stay adjacent, so generated code is born against a contract.
+
+### scenario-coverage
+- **Change**: Slice plans gain exact scenarios: given/when/expect examples declared as data, one per behavior.
+- **Deterministic Mechanism**: Scenarios are frontmatter entries or a body table with exact tokens. Coverage check: every behavior contract in the plan appears in at least one scenario. The check intersects contract ids with scenario references, exact set intersection. Scenarios run in the mapped repo's QA suite through `verified_by:`, never inside the engine.
+- **Enforcement**: `CONTRACT_NO_SCENARIO` (advisory, ratchet-fed): a behavior contract without a covering scenario.
+- **Consumer**: The scenario list doubles as the slice's acceptance criteria. A human or an agent implements until every scenario is provable in the QA suite.
+- **Objective**: The union of scenarios is the specification. Coverage makes "every registered surface has an example" a check, not a hope.
+
+### slice-context
+- **Command**: `pylon context --slice <plan>`
+- **Deterministic Mechanism**: Print only the plan's contracts, their resolved code surfaces, linked quirks, and linked domain terms. The smallest context that completes the slice. Nothing else loads.
+- **Consumer**: An agent orients on one slice in one command. Large platforms keep per-task context small by construction, not by prompt discipline.
+- **Objective**: Small context per slice ships as a tool. The pattern becomes native instead of manual.
+
 ## Explicitly Not Adopted
 
 - **Hosted context runtime.** The agent harness owns sessions. No external portal dependency.

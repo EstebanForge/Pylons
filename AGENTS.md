@@ -10,7 +10,7 @@ Pylons documents reference files with URI schemes, never machine paths.
 |---|---|---|
 | `repo://<alias>/<path>` | Any file inside a project registered in `manifests/pylons.yaml` | Resolved against the project's base branch (`ref:` in `manifests/pylons.yaml` or package frontmatter, else `main`). |
 | `repo://<alias>@<branch>/<path>` | In-flight code on a named branch | Naming only, never resolved against base branch. |
-| `pylon://<path>` | Any Pylons knowledge-base document | Resolved relative to the Pylons root. |
+| `pylon://<path>` | Any Pylons document | Resolved relative to the Pylons root. |
 
 ## Rules
 

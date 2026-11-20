@@ -2,7 +2,7 @@
 
 > Power Overwhelming!
 
-Pylons is a map of a software platform, plus a checker that keeps the map honest. That is the whole idea. Everything else is detail stacked on those 2 halves.
+Pylons is a plain-text ledger & map of your platform, checked against the code to keep the map honest. That is the whole idea. Everything else is detail stacked on those 2 halves.
 
 The map is a library of plain text files: Markdown with structured front matter, kept under version control beside the code it describes. It records what every package does, what depends on what, which interfaces are safe to build on, which decisions were already made and why, and which bugs nearly ate someone's weekend.
 
@@ -21,11 +21,11 @@ The trouble shows up where they touch. 4 failures come back again and again, and
 
 AI coding agents poured gas on all 4. An agent writes in minutes what a human writes in days, and it wakes up knowing nothing about your system. Left to guess, it invents a pattern that already exists 3 files over, or leans on an interface somebody is halfway through rewriting.
 
-Pylons attacks the root cause. It gives any tracked project or multi-repo platform a shared memory, and a deterministic lie detector for that memory.
+Pylons attacks the root cause. It gives any tracked project or multi-repo platform a shared memory, and a deterministic lie detector for that memory. That is the pitch: engineering standards that check themselves.
 
-## What lives in the library
+## What lives in a pylon
 
-The knowledge base is organized by rate of change. Slow-moving knowledge sits apart from fast-moving knowledge, so nothing fights over the same files.
+A pylon is organized by rate of change. Slow-moving knowledge sits apart from fast-moving knowledge, so nothing fights over the same files.
 
 | Zone | Folder | Holds |
 |---|---|---|
@@ -73,10 +73,16 @@ Every session starts by reading the map (`pylon brief`, `pylon map`) instead of 
 
 ## Quick start
 
-1. Register tracked repositories and extensions in `manifests/pylons.yaml`.
-2. Build the CLI: `cd cli && go build -o ../bin/pylon ./cmd/pylon`.
-3. Enable the shipped gates: `bin/pylon install` (writes `.githooks/` and sets `core.hooksPath`; `pylon init` does this automatically inside a git repo).
-4. Run `bin/pylon brief` at session start, `bin/pylon check <paths...>` before edits, and `bin/pylon lint` before commits.
+1. Install a pylon into your project: a plain-text map of your platform, a deterministic checker that fails when the map drifts from the code, and gate hooks that enforce it, tracked in its own git repository (downloads the `pylon` binary, unpacks the pylon into `pylons/`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh | bash
+```
+
+2. Register tracked repositories and extensions in `pylons/manifests/pylons.yaml`.
+3. Run `pylons/bin/pylon brief` at session start, `pylons/bin/pylon check <paths...>` before edits, and `pylons/bin/pylon lint` before commits.
+
+Prefer to build from source, or want the pylon to live inside this repository instead of a fresh install? See [meta/INSTALL.md](meta/INSTALL.md).
 
 See [meta/INDEX.md](meta/INDEX.md) for installation, usage, drop-in extensions, and design philosophy. Planned work lives in the [roadmap](meta/ROADMAP.md); shipped work lands in the [changelog](meta/CHANGELOG.md).
 

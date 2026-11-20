@@ -3,19 +3,40 @@ title: "Installing and Setting Up Pylons"
 type: meta
 status: active
 created: 2026-11-19
-updated: 2026-11-19
+updated: 2026-11-20
 ---
 
 # Installing and Setting Up Pylons
 
-Pylons has two parts: the knowledge-base directory (Markdown + `manifests/pylons.yaml`) and the `pylon` Go CLI binary.
+Pylons has two parts: the pylon itself (a directory of Markdown, `manifests/pylons.yaml`, and gate hooks) and the `pylon` Go CLI binary.
 
 ## 1. Prerequisites
 
-- Go 1.24+ (tested with Go 1.27) to build `pylon` from `cli/`.
+- One of: the one-line installer (needs `curl` or `wget`, plus `git`), Go 1.24+ (tested with Go 1.27) to build `pylon` from `cli/`, or a release tarball from the [GitHub releases](https://github.com/EstebanForge/Pylons/releases).
 - Git (optional, used for `--changed` staged-file checks and `@branch` validation).
 
-## 2. Build the `pylon` CLI
+## 2. Install the `pylon` CLI and a Pylon
+
+The installer places a ready-to-use pylon in `./pylons`: the `pylon` binary in `bin/`, the skeleton, a fresh git repository, and wired gate hooks. It never writes outside that directory.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh | bash
+```
+
+Variants:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh | bash -s -- my-kb          # custom directory
+curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh | PYLONS_VERSION=v0.1.0 bash  # pinned version
+```
+
+The installer needs `bash`, `curl` or `wget`, and a sha256 tool. Minimal containers without `bash` cannot run it; download the release tarballs manually there.
+
+Released binaries are cross-built per platform (linux and macOS in amd64 and arm64; Windows amd64 only) with symbols and DWARF tables stripped (`-ldflags "-s -w"`, `CGO_ENABLED=0`, `-trimpath`). Every release carries `checksums.txt`; the installer verifies it before unpacking.
+
+To install manually instead, download `pylons-vX.Y.Z-<os>-<arch>.tar.gz` and `pylons-kb-vX.Y.Z.tar.gz` from a release, unpack both into one directory, run `git init`, then `./bin/pylon install --pylons .`.
+
+## 3. Build the `pylon` CLI from Source
 
 Build the binary into `bin/pylon` or install it onto your `PATH`:
 
@@ -32,17 +53,17 @@ cd pylons/cli
 go install ./cmd/pylon
 ```
 
-## 3. Initialize a Pylons Workspace
+## 4. Initialize a Pylons Workspace
 
-If starting a fresh ledger directory, run:
+If starting a fresh pylon, run:
 
 ```bash
 pylon init /path/to/my-ledger
 ```
 
-If cloning this repository directly, `manifests/pylons.yaml`, `templates/`, `conventions/vocabulary.md`, and `protocols/` are already in place.
+If cloning this repository directly, `manifests/pylons.yaml`, `templates/`, `conventions/vocabulary.md`, and `protocols/` are already in place. Section 2's installer produces the same shape without the clone.
 
-## 4. Register Tracked Projects in `manifests/pylons.yaml`
+## 5. Register Tracked Projects in `manifests/pylons.yaml`
 
 Add each project or repository you want Pylons to track in `manifests/pylons.yaml`:
 
@@ -62,7 +83,7 @@ projects:
 - `ref`: Default base branch for the project (defaults to `main`).
 - `extensions`: Language or custom extensions enabled globally or per project.
 
-## 5. Wire Pre-Commit and CI Gates
+## 6. Wire Pre-Commit and CI Gates
 
 The repo ships gate hooks in `.githooks/`. Enable them once per clone:
 

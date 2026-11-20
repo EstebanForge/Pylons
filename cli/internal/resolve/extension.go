@@ -65,7 +65,12 @@ func ListExtensions(enabled []string, extDir string) []ExtensionInfo {
 			}
 		}
 	}
-	slices.SortFunc(out, func(a, b ExtensionInfo) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(out, func(a, b ExtensionInfo) int {
+		if c := strings.Compare(a.Name, b.Name); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Source, b.Source)
+	})
 	return out
 }
 
@@ -182,9 +187,13 @@ type extResponse struct {
 }
 
 func (r *Registry) tryExternalExtension(projectRoot string, kind Kind, id string) (Verdict, bool) {
-	prefix, _, _ := strings.Cut(string(kind), "-")
+	prefix, _, hasDash := strings.Cut(string(kind), "-")
+	if !hasDash || prefix == "" {
+		// No extension namespace in the kind: never pick an arbitrary binary.
+		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "invalid contract kind"}, true
+	}
 	for _, name := range r.enabledExtensions {
-		if prefix != "" && name != prefix && name != string(kind) {
+		if name != prefix && name != string(kind) {
 			continue
 		}
 		bin := r.findExternalBinary(name)
@@ -200,8 +209,10 @@ func (r *Registry) tryExternalExtension(projectRoot string, kind Kind, id string
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		cmd := exec.CommandContext(ctx, bin)
-		cmd.Env = []string{"PATH=" + os.Getenv("PATH")}
+		cmd.Env = extEnv()
 		cmd.Stdin = bytes.NewReader(append(reqBytes, '\n'))
+		// A grandchild holding the stdout pipe must not block ReadAll forever.
+		cmd.WaitDelay = time.Second
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			cancel()
@@ -226,16 +237,32 @@ func (r *Registry) tryExternalExtension(projectRoot string, kind Kind, id string
 	return Verdict{}, false
 }
 
-func (r *Registry) findExternalBinary(name string) string {
-	exeName := "pylon-ext-" + name
-	if r.extDir != "" {
-		candidate := filepath.Join(r.extDir, exeName)
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
-			return candidate
+func extEnv() []string {
+	env := []string{"PATH=" + os.Getenv("PATH")}
+	// Windows child processes fail without these.
+	for _, key := range []string{"SystemRoot", "COMSPEC", "windir"} {
+		if v := os.Getenv(key); v != "" {
+			env = append(env, key+"="+v)
 		}
 	}
-	if p, err := exec.LookPath(exeName); err == nil {
-		return p
+	return env
+}
+
+func (r *Registry) findExternalBinary(name string) string {
+	if strings.ContainsAny(name, "/\\") {
+		return ""
+	}
+	exeName := "pylon-ext-" + name
+	for _, candidate := range []string{exeName, exeName + ".exe"} {
+		if r.extDir != "" {
+			p := filepath.Join(r.extDir, candidate)
+			if info, err := os.Stat(p); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+				return p
+			}
+		}
+		if p, err := exec.LookPath(candidate); err == nil {
+			return p
+		}
 	}
 	return ""
 }

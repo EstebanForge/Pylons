@@ -4,9 +4,12 @@
 package resolve
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 )
+
+var regexpDriveLetter = regexp.MustCompile(`^[A-Za-z]:`)
 
 // URI represents a parsed repo:// or pylon:// reference.
 type URI struct {
@@ -51,5 +54,17 @@ func isSafeRelPath(p string) bool {
 	if p == "" || strings.HasPrefix(p, "/") || strings.Contains(p, "//") || strings.Contains(p, "\\") {
 		return false
 	}
-	return !slices.Contains(strings.Split(p, "/"), "..")
+	if strings.HasSuffix(p, "/") {
+		return false
+	}
+	segs := strings.Split(p, "/")
+	if regexpDriveLetter.MatchString(segs[0]) {
+		return false
+	}
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return !slices.Contains(segs, "..") && !slices.Contains(segs, ".")
 }

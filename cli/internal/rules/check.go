@@ -54,6 +54,9 @@ func Check(kbRoot string, targets []string) []report.Finding {
 		if strings.Contains(rel, "/archive/") || strings.HasPrefix(rel, "templates/") {
 			return nil
 		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
 		data, err := os.ReadFile(p)
 		if err != nil {
 			return nil

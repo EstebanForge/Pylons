@@ -55,7 +55,7 @@ func TestEnsureHooksFreshRepo(t *testing.T) {
 	root := gitInit(t)
 	stubBinary(t, root)
 
-	res, err := EnsureHooks(root)
+	res, err := EnsureHooks(root, false)
 	if err != nil {
 		t.Fatalf("EnsureHooks: %v", err)
 	}
@@ -95,15 +95,15 @@ func TestEnsureHooksNoOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := EnsureHooks(root)
+	res, err := EnsureHooks(root, false)
 	if err != nil {
 		t.Fatalf("EnsureHooks: %v", err)
 	}
 	if res.WroteHooks == nil || len(res.WroteHooks) != 1 || res.WroteHooks[0] != "pre-push" {
 		t.Errorf("WroteHooks = %v, want [pre-push]", res.WroteHooks)
 	}
-	if len(res.SkippedHooks) != 1 || res.SkippedHooks[0] != "pre-commit" {
-		t.Errorf("SkippedHooks = %v, want [pre-commit]", res.SkippedHooks)
+	if len(res.DriftedHooks) != 1 || res.DriftedHooks[0] != "pre-commit" {
+		t.Errorf("DriftedHooks = %v, want [pre-commit]", res.DriftedHooks)
 	}
 	b, err := os.ReadFile(keep)
 	if err != nil || string(b) != "KEEP" {
@@ -118,7 +118,7 @@ func TestEnsureHooksHooksPathAlreadySet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := EnsureHooks(root)
+	res, err := EnsureHooks(root, false)
 	if err != nil {
 		t.Fatalf("EnsureHooks: %v", err)
 	}
@@ -129,14 +129,14 @@ func TestEnsureHooksHooksPathAlreadySet(t *testing.T) {
 
 func TestEnsureHooksNoRepo(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := EnsureHooks(dir); err == nil {
+	if _, err := EnsureHooks(dir, false); err == nil {
 		t.Fatal("EnsureHooks outside a git repo: want error, got nil")
 	}
 }
 
 func TestEnsureHooksBinaryMissing(t *testing.T) {
 	root := gitInit(t)
-	res, err := EnsureHooks(root)
+	res, err := EnsureHooks(root, false)
 	if err != nil {
 		t.Fatalf("EnsureHooks: %v", err)
 	}
