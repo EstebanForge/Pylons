@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
 # Pylons pre-push gate: manifest freshness, full-corpus lint, and quirk source
 # validation must pass before leaving the machine.
-# Enable with: git config core.hooksPath .githooks
+# Enable with: pylon install (or git config core.hooksPath .githooks)
 
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BIN="$DIR/bin/pylon"
 
-if [[ ! -x "$BIN" ]]; then
-    echo "pylon: bin/pylon not executable; skipping hook (build: cd cli && go build -o ../bin/pylon ./cmd/pylon)" >&2
-    exit 0
+find_bin() {
+    local cand
+    for cand in "$DIR/bin/pylon" "$DIR/bin/pylon.exe"; do
+        [[ -x "$cand" ]] && { printf '%s\n' "$cand"; return 0; }
+    done
+    command -v pylon 2>/dev/null
+}
+
+if ! BIN="$(find_bin)"; then
+    if [[ "${PYLON_HOOKS_OPTIONAL:-0}" == "1" ]]; then
+        echo "pylon: PYLON_HOOKS_OPTIONAL=1; skipping pre-push gate" >&2
+        exit 0
+    fi
+    echo "pylon: no pylon binary found; the push gate cannot run (build: cd cli && go build -o ../bin/pylon ./cmd/pylon; opt out: PYLON_HOOKS_OPTIONAL=1)" >&2
+    exit 1
 fi
 
 FAIL=0
@@ -21,9 +32,17 @@ if [[ "$FAIL" -ne 0 ]]; then
     exit 1
 fi
 
-if ! "$BIN" lint --format human; then
-    echo "pylon: corpus lint findings; fix before pushing" >&2
-    exit 1
+set +e
+"$BIN" lint --format human
+code=$?
+set -e
+if [[ "$code" -ne 0 ]]; then
+	if [[ "$code" -eq 3 ]]; then
+		echo "pylon: no manifests/pylons.yaml; the KB is broken; fix before pushing" >&2
+	else
+		echo "pylon: corpus lint findings; fix before pushing" >&2
+	fi
+	exit 1
 fi
 
 if ! "$BIN" review postmortem --check-sources --format human; then

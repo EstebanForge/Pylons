@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -19,9 +20,10 @@ import (
 	"github.com/estebanforge/pylons/cli/internal/report"
 	"github.com/estebanforge/pylons/cli/internal/resolve"
 	"github.com/estebanforge/pylons/cli/internal/rules"
+	"github.com/estebanforge/pylons/cli/internal/version"
 )
 
-const usage = `pylon validates and queries a Pylons knowledge base.
+const usage = `pylon validates and queries a Pylons pylon: the plain-text map of a platform, checked against its code.
 
 Usage:
   pylon lint             [--changed] [--doc-only] [--fix] [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
@@ -108,6 +110,7 @@ func run(args []string) int {
 	checkManifest, stopBlock, preamble, checkSources := false, false, false, false
 	rbStdout, mapAll := false, false
 	allowExternal := os.Getenv("PYLON_ALLOW_EXTERNAL_EXTENSIONS") == "1"
+	forceHooks := false
 	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl := "", "", "", "", "", ""
 	mapType, mapTag, mapStatus, mapFolder, mapQuery := "", "", "", "", ""
 	limit := 0
@@ -121,8 +124,11 @@ func run(args []string) int {
 			break
 		}
 		switch {
+		case arg == "--version":
+			fmt.Printf("pylon %s\n", version.Version)
+			return 0
 		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(os.Stderr, usage)
+			fmt.Fprintln(os.Stdout, usage)
 			return 0
 		case arg == "--aiur":
 			fmt.Print(aiurArt)
@@ -151,6 +157,8 @@ func run(args []string) int {
 			mapAll = true
 		case arg == "--allow-external-extensions":
 			allowExternal = true
+		case arg == "--force":
+			forceHooks = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
 		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--base" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit":
@@ -209,6 +217,14 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "pylon: unknown format %q (expected human, json, or sarif)\n", format)
 		return 2
 	}
+	// Only findings-producing commands can render SARIF.
+	switch cmd {
+	case "map", "search", "brief", "extensions", "protocol", "manifest", "install", "init", "review-brief":
+		if format == report.FormatSARIF {
+			fmt.Fprintf(os.Stderr, "pylon: format sarif is not supported for %s\n", cmd)
+			return 2
+		}
+	}
 
 	if cmd == "explain" {
 		if len(rest) != 1 {
@@ -233,14 +249,14 @@ func run(args []string) int {
 	}
 
 	if cmd == "install" {
-		return cmdInstall(findPylonsRoot(pylonsPath))
+		return cmdInstall(findPylonsRoot(pylonsPath), forceHooks)
 	}
 
 	kbRoot := findPylonsRoot(pylonsPath)
 	if kbRoot == "" {
 		if cmd == "brief" {
-			fmt.Println("pylon brief: no manifests/pylons.yaml found")
-			return 0
+			fmt.Fprintln(os.Stderr, "pylon brief: no manifests/pylons.yaml found")
+			return 3
 		}
 		fmt.Fprintln(os.Stderr, "pylon: could not locate manifests/pylons.yaml")
 		return 3
@@ -420,7 +436,7 @@ var scaffoldDirs = []string{"packages", "packages/archive", "proposals", "plans/
 func cmdInit(dir string) int {
 	cfgPath := filepath.Join(dir, "manifests", "pylons.yaml")
 	if _, err := os.Stat(cfgPath); err == nil {
-		fmt.Printf("pylon init: %s already exists\n", cfgPath)
+		fmt.Printf("pylon init: %s already exists (run pylon install to wire gate hooks)\n", cfgPath)
 		return 0
 	}
 	for _, sub := range scaffoldDirs {
@@ -434,29 +450,42 @@ func cmdInit(dir string) int {
 		return 1
 	}
 	seedFiles := map[string]string{
-		"AGENTS.md":                 "# Guidelines\n\nPylons knowledge base. See `conventions/vocabulary.md`.\n",
+		"AGENTS.md":                 "# Guidelines\n\nA pylon: the plain-text map of this platform. See `conventions/vocabulary.md`.\n",
 		"conventions/AGENTS.md":     "---\ntitle: \"Conventions\"\ntype: reference\nstatus: active\n---\n\n# Conventions\n",
 		"conventions/vocabulary.md": "---\ntitle: \"Vocabulary\"\ntype: convention\nstatus: accepted\n---\n\n# Vocabulary\n\nClosed frontmatter status values.\n",
 	}
 	for rel, body := range seedFiles {
 		dst := filepath.Join(dir, filepath.FromSlash(rel))
 		if _, err := os.Stat(dst); os.IsNotExist(err) {
-			_ = os.WriteFile(dst, []byte(body), 0o644)
+			if err := os.WriteFile(dst, []byte(body), 0o644); err != nil {
+				fmt.Fprintf(os.Stderr, "pylon init: %v\n", err)
+				return 1
+			}
 		}
 	}
 	giPath := filepath.Join(dir, ".gitignore")
 	if _, err := os.Stat(giPath); os.IsNotExist(err) {
-		_ = os.WriteFile(giPath, []byte("._*\n.DS_Store\n/bin/\n"), 0o644)
+		if err := os.WriteFile(giPath, []byte("._*\n.DS_Store\n/bin/\n"), 0o644); err != nil {
+			fmt.Fprintf(os.Stderr, "pylon init: %v\n", err)
+			return 1
+		}
 	}
 	for _, sub := range scaffoldDirs {
 		path := filepath.Join(dir, sub)
 		entries, err := os.ReadDir(path)
 		if err == nil && len(entries) == 0 {
-			_ = os.WriteFile(filepath.Join(path, ".gitkeep"), nil, 0o644)
+			if err := os.WriteFile(filepath.Join(path, ".gitkeep"), nil, 0o644); err != nil {
+				fmt.Fprintf(os.Stderr, "pylon init: %v\n", err)
+				return 1
+			}
 		}
 	}
-	if res, err := install.EnsureHooks(dir); err != nil {
-		fmt.Printf("pylon init: not a git repository; run pylon install after git init\n")
+	if res, err := install.EnsureHooks(dir, false); err != nil {
+		if errors.Is(err, install.ErrNotGit) {
+			fmt.Printf("pylon init: not a git repository; run pylon install after git init\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "pylon init: hooks not wired: %v\n", err)
+		}
 	} else if len(res.WroteHooks) > 0 {
 		fmt.Printf("pylon init: wired gate hooks (core.hooksPath .githooks)\n")
 	}
@@ -464,12 +493,12 @@ func cmdInit(dir string) int {
 	return 0
 }
 
-func cmdInstall(kbRoot string) int {
+func cmdInstall(kbRoot string, force bool) int {
 	if kbRoot == "" {
 		fmt.Fprintln(os.Stderr, "pylon: could not locate manifests/pylons.yaml")
 		return 3
 	}
-	res, err := install.EnsureHooks(kbRoot)
+	res, err := install.EnsureHooks(kbRoot, force)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "pylon install: %v\n", err)
 		return 1
@@ -479,6 +508,9 @@ func cmdInstall(kbRoot string) int {
 	}
 	for _, name := range res.SkippedHooks {
 		fmt.Printf("pylon install: kept existing .githooks/%s\n", name)
+	}
+	for _, name := range res.DriftedHooks {
+		fmt.Printf("pylon install: kept modified .githooks/%s (differs from shipped asset; --force overwrites)\n", name)
 	}
 	if res.HooksPathSet {
 		fmt.Printf("pylon install: enabled core.hooksPath .githooks\n")
@@ -495,21 +527,44 @@ func cmdInstall(kbRoot string) int {
 func cmdManifestJSON(outPath string, payload any, checkOnly bool) int {
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
-		return 2
+		fmt.Fprintf(os.Stderr, "pylon: marshal manifest: %v\n", err)
+		return 1
 	}
 	data = append(data, '\n')
 	if checkOnly {
 		existing, err := os.ReadFile(outPath)
-		if err != nil || string(existing) != string(data) {
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: %s is missing; run the manifest command without --check\n", outPath)
+			return 1
+		}
+		// Normalize CRLF so autocrlf checkouts do not report phantom drift.
+		if strings.ReplaceAll(string(existing), "\r\n", "\n") != string(data) {
 			fmt.Fprintf(os.Stderr, "pylon: %s is out of date\n", outPath)
 			return 1
 		}
 		return 0
 	}
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: %v\n", err)
 		return 1
 	}
-	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(outPath), ".pylon-manifest-*")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: %v\n", err)
+		return 1
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		fmt.Fprintf(os.Stderr, "pylon: %v\n", err)
+		return 1
+	}
+	if err := tmp.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: %v\n", err)
+		return 1
+	}
+	if err := os.Rename(tmp.Name(), outPath); err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: %v\n", err)
 		return 1
 	}
 	fmt.Printf("wrote %s\n", outPath)

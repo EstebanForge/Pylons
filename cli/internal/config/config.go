@@ -7,10 +7,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 
 	"gopkg.in/yaml.v3"
 )
+
+// Extension names become pylon-ext-<name> binaries; slashes or dots would
+// escape extDir or dodge PATH lookup.
+var extensionNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
 // Config holds the parsed pylons.yaml registry.
 type Config struct {
@@ -51,6 +56,18 @@ func Load(root string) (Config, error) {
 	}
 	if cfg.Projects == nil {
 		cfg.Projects = map[string]ProjectConfig{}
+	}
+	for _, ext := range cfg.Extensions {
+		if !extensionNameRe.MatchString(ext) {
+			return cfg, errors.New("invalid extension name: " + ext)
+		}
+	}
+	for alias, proj := range cfg.Projects {
+		for _, ext := range proj.Extensions {
+			if !extensionNameRe.MatchString(ext) {
+				return cfg, errors.New("invalid extension name for project " + alias + ": " + ext)
+			}
+		}
 	}
 	return cfg, nil
 }

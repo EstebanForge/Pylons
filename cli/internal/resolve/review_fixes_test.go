@@ -1,0 +1,112 @@
+// Copyright 2026 EstebanForge <esteban at attitude dot cl>
+// SPDX-License-Identifier: Apache-2.0
+
+package resolve
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// a/** covers a's contents but never the bare directory itself.
+func TestMatchGlobTrailingDoubleStar(t *testing.T) {
+	cases := []struct {
+		pat, tgt string
+		want     bool
+	}{
+		{"a/**", "a", false},
+		{"a/**", "a/b", true},
+		{"a/**", "a/b/c", true},
+		{"**", "x/y", true},
+		{"**/x", "x", true},
+		{"x/**/y", "x/y", true},
+		{"x/**/y", "x/m/y", true},
+		{"a/b/**", "a/b", false},
+		{"cmd/**", "cmd/app.go", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.pat+"|"+tc.tgt, func(t *testing.T) {
+			if got := MatchGlob(tc.pat, tc.tgt); got != tc.want {
+				t.Fatalf("MatchGlob(%q, %q) = %v, want %v", tc.pat, tc.tgt, got, tc.want)
+			}
+		})
+	}
+}
+
+// A symlink inside the project that points at a device must never be read.
+func TestGrepProjectSkipsSymlinks(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "real.go"), []byte("needle here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/dev/zero", filepath.Join(root, "evil.go")); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+	if got := grepProject(root, "needle"); got != "real.go" {
+		t.Fatalf("grepProject = %q, want real.go", got)
+	}
+}
+
+// Frontmatter fences must survive a BOM and CRLF line endings.
+func TestFrontMatterCRLFAndBOM(t *testing.T) {
+	content := "\ufeff---\r\ntitle: Auth\r\ntype: plan\r\nstatus: accepted\r\n---\r\n\r\n# Auth\r\n"
+	var meta DocMeta
+	if !ParseDocMeta(content, &meta) {
+		t.Fatal("CRLF+BOM frontmatter did not parse")
+	}
+	if meta.Title != "Auth" || meta.Type != "plan" {
+		t.Fatalf("meta = %+v", meta)
+	}
+	body := WithoutFrontMatter(content)
+	if body == content {
+		t.Fatal("frontmatter was not stripped")
+	}
+}
+
+// A configured ref that does not resolve must fail closed, while a
+// worktree-only project (no .git) keeps working.
+func TestRefFailClosed(t *testing.T) {
+	gitRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(gitRoot, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if msg := refErr(gitRoot, "nope"); msg == "" {
+		t.Fatal("missing ref in a git repo must fail closed")
+	}
+	if msg := refErr(gitRoot, "-dangerous"); msg == "" {
+		t.Fatal("dash ref must always be rejected")
+	}
+	plain := t.TempDir()
+	if msg := refErr(plain, "main"); msg != "" {
+		t.Fatalf("non-git root must stay on the worktree: %v", msg)
+	}
+}
+
+// URI safety: dot segments, trailing slashes, control chars, drive letters.
+func TestIsSafeRelPathHardened(t *testing.T) {
+	bad := []string{"a/./b", "a/", "a\x00b", "a/b\x1b", "C:/x", "./x", ".."}
+	good := []string{"a/b.go", "cmd/main.go", "a_b/c-d.txt"}
+	for _, p := range bad {
+		if isSafeRelPath(p) {
+			t.Fatalf("isSafeRelPath(%q) = true, want false", p)
+		}
+	}
+	for _, p := range good {
+		if !isSafeRelPath(p) {
+			t.Fatalf("isSafeRelPath(%q) = false, want true", p)
+		}
+	}
+}
+
+// A contract kind with no extension namespace must never pick a binary.
+func TestExternalExtensionRequiresNamespace(t *testing.T) {
+	reg := NewRegistryWithOptions(RegistryOptions{Extensions: []string{"php-symbol"}})
+	v, handled := reg.tryExternalExtension(t.TempDir(), Kind("nospace"), "whatever")
+	if !handled {
+		t.Fatal("kind without a dash must be handled (refused), not fall through")
+	}
+	if v.Resolved {
+		t.Fatal("kind without a dash must not resolve")
+	}
+}

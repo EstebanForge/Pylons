@@ -1,15 +1,29 @@
 #!/usr/bin/env bash
 # Pylons pre-commit gate: regenerate manifests, lint changed docs, review staged
-# proposals and quirks. Enable with: git config core.hooksPath .githooks
+# proposals and quirks. Enable with: pylon install (or git config core.hooksPath .githooks)
+# Known limits: manifest auto-stage uses the real index (git commit --only uses
+# a temp index, so the staged manifests stay outside that commit), and
+# lint --changed reads working-tree content of staged paths.
 
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BIN="$DIR/bin/pylon"
 
-if [[ ! -x "$BIN" ]]; then
-    echo "pylon: bin/pylon not executable; skipping hook (build: cd cli && go build -o ../bin/pylon ./cmd/pylon)" >&2
-    exit 0
+find_bin() {
+    local cand
+    for cand in "$DIR/bin/pylon" "$DIR/bin/pylon.exe"; do
+        [[ -x "$cand" ]] && { printf '%s\n' "$cand"; return 0; }
+    done
+    command -v pylon 2>/dev/null
+}
+
+if ! BIN="$(find_bin)"; then
+    if [[ "${PYLON_HOOKS_OPTIONAL:-0}" == "1" ]]; then
+        echo "pylon: PYLON_HOOKS_OPTIONAL=1; skipping pre-commit gate" >&2
+        exit 0
+    fi
+    echo "pylon: no pylon binary found (build: cd cli && go build -o ../bin/pylon ./cmd/pylon; opt out: PYLON_HOOKS_OPTIONAL=1)" >&2
+    exit 1
 fi
 
 # Commit-time convenience: auto-stage manifest drift. Push time blocks instead.
@@ -20,7 +34,13 @@ if ! git -C "$DIR" diff --exit-code manifests/rules.json manifests/packages.json
     echo "pylon: auto-staged regenerated manifests"
 fi
 
-if ! "$BIN" lint --changed --format human; then
+set +e
+"$BIN" lint --changed --format human
+code=$?
+set -e
+if [[ "$code" -eq 3 ]]; then
+    echo "pylon: no manifests/pylons.yaml; skipping lint gate" >&2
+elif [[ "$code" -ne 0 ]]; then
     echo "pylon: lint findings on changed docs; fix before committing" >&2
     exit 1
 fi

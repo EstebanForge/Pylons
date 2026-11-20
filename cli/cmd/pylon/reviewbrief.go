@@ -132,10 +132,17 @@ func validateReviewBrief(path string, requireResolutions bool, format report.For
 	for _, lens := range reviewLenses {
 		if !strings.Contains(content, "| "+lens+" |") {
 			problems = append(problems, "missing coverage lens row: "+lens)
+		} else if requireResolutions && strings.Contains(content, "| "+lens+" | pending |") {
+			// --validate-resolutions rejects an untouched template row.
+			problems = append(problems, "coverage lens still pending: "+lens)
 		}
 	}
-	if requireResolutions && strings.Contains(content, "### F") && !strings.Contains(content, "resolution:") {
-		problems = append(problems, "findings present without resolution: field")
+	if requireResolutions {
+		findings := strings.Count(content, "### F")
+		resolutions := strings.Count(content, "resolution:")
+		if findings > resolutions {
+			problems = append(problems, fmt.Sprintf("findings without resolution: %d of %d", findings-resolutions, findings))
+		}
 	}
 
 	if len(problems) > 0 {

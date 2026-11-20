@@ -19,3 +19,6 @@
 .idea/
 *.swp
 *~
+
+# local release artifacts
+/dist/

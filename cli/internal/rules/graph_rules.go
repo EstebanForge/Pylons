@@ -4,8 +4,10 @@
 package rules
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/estebanforge/pylons/cli/internal/report"
@@ -192,7 +194,7 @@ func checkFolderEntryREADMEs(kbRoot string, docs []corpusDoc) []report.Finding {
 		}
 	}
 	var out []report.Finding
-	for zone := range zones {
+	for _, zone := range slices.Sorted(maps.Keys(zones)) {
 		if _, err := os.Stat(filepath.Join(kbRoot, zone, "AGENTS.md")); err != nil {
 			out = append(out, report.Finding{
 				RuleID:   "PYLON034",

@@ -37,5 +37,5 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 | `pylon protocol [list|<name>]` | List or render CLI protocols (`pylon reflect` is shorthand for `pylon protocol reflect`). |
 | `pylon manifest [rules|packages]` | Generate or `--check` `manifests/rules.json` and `manifests/packages.json`. |
 | `pylon explain <rule_id>` | Print rule description and fix hint for any `PYLON*` rule. |
-| `pylon install` | Write `.githooks/` and enable `core.hooksPath`; idempotent. |
-| `pylon init [dir]` | Scaffold a new KB; wires gate hooks when run inside a git repository. |
+| `pylon install` | Write `.githooks/` and enable `core.hooksPath`; idempotent. Refuses a pylon below the repository root, refuses to replace another tool's `core.hooksPath` unless `--force`, and reports hooks that drifted from the shipped assets. |
+| `pylon init [dir]` | Scaffold a new pylon; wires gate hooks when run inside a git repository. |

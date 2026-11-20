@@ -16,7 +16,8 @@ import (
 )
 
 var (
-	branchMentionRe = regexp.MustCompile(`repo://([a-zA-Z0-9._-]+)@([a-zA-Z0-9._/-]+)/`)
+	// Branch grammar matches ParseURI: no slashes in branch names.
+	branchMentionRe = regexp.MustCompile(`repo://([a-zA-Z0-9._-]+)@([a-zA-Z0-9._-]+)/`)
 	quirkGuards     = map[string]bool{
 		"lint-rule":     true,
 		"convention":    true,
@@ -69,7 +70,13 @@ func checkPlanEvidenceAndFalsifiers(kbRoot, rel string, pf resolve.PlanFrontMatt
 				for _, field := range []string{"verified_by", "falsified_by"} {
 					if ref, _ := entry[field].(string); strings.TrimSpace(ref) != "" {
 						id, _ := entry["id"].(string)
-						_, projRoot, _, baseRef, _ := resolveProjectTarget(kbRoot, id, pf.Components, cfg)
+						// A repo:// test ref names its own project; a bare
+						// file::symbol falls back to the contract's project.
+						targetID := id
+						if u, ok := resolve.ParseURI(ref); ok && u.Scheme == "repo" {
+							targetID = "repo://" + u.Alias
+						}
+						_, projRoot, _, baseRef, _ := resolveProjectTarget(kbRoot, targetID, pf.Components, cfg)
 						if projRoot != "" {
 							reg := resolve.NewRegistryWithOptions(resolve.RegistryOptions{Ref: baseRef})
 							if v := reg.Resolve(projRoot, resolve.KindSymbol, ref); !v.Resolved {
