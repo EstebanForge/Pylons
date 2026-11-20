@@ -63,6 +63,7 @@ var Catalog = map[string]RuleSpec{
 	"PYLON045": {ID: "PYLON045", Name: "slice_incomplete", Severity: "advisory", Description: "A slice plan lacks a behavior contract or the test surface that proves it.", FixHint: "Declare contracts on every layer the slice touches: behavior plus a test file or glob."},
 	"PYLON046": {ID: "PYLON046", Name: "contract_no_scenario", Severity: "advisory", Description: "A slice plan's behavior contract has no covering declared scenario.", FixHint: "Add a scenario entry with given/when/expect and covers naming the contract id."},
 	"PYLON047": {ID: "PYLON047", Name: "merge_danger", Severity: "error", Description: "The pull request body lacks a valid merge danger line, or the derived minimum door outranks the author door.", FixHint: "Add 'Merge danger: <one-way|two-way> | blast radius: <scope>' to the body (conventions/pr-template.md)."},
+	"PYLON048": {ID: "PYLON048", Name: "release_surface", Severity: "error", Description: "A pinned deployment consumes a public surface that is removed or changed against the pinned release tag, or a pin cannot be judged.", FixHint: "Restore the surface at HEAD or cut and ship a new release for the pinned deployment; unregistered pins fail closed."},
 }
 
 // AllRules returns the sorted rule catalog.

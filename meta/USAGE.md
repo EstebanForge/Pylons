@@ -27,6 +27,7 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 | `pylon check <paths...>` | Intersect target paths with `contract.editing`, `contract.unstable`, and `protected:` globs. |
 | `pylon context <paths...>` | Emit architectural slice for target files (`--preamble` adds workspace header). |
 | `pylon context --slice <plan>` | Print only one plan's contracts with resolution state, linked quirks, and linked domain terms (`--json` supported). |
+| `pylon context --diff-since <ref> [--manifest]` | Report declared surfaces the diff touched whose docs did not move in the same commit set; `--manifest` emits the JSON document. Report-only. |
 | `pylon lint` | Validate frontmatter, folder lifecycle, links, STE-100, and contracts (`--changed`, `--doc-only`, `--fix`, `--ci`). Findings render a remediation line from the rule catalog. macOS AppleDouble `._*` docs are skipped when `.gitignore` covers them; otherwise they fail with a fix hint. |
 | `pylon contract <plan>` | Validate 1 plan's `contract.stable` entries against tracked projects. |
 | `pylon map` | Filterable corpus overview ranked by BM25 (`--type`, `--package`, `--tag`, `--status`, `--folder`, `--query`, `--limit`, `--all`). |
@@ -38,6 +39,7 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 | `pylon review ratchet` | Compare advisory counts per package/zone against `manifests/ratchet.json`; rising counts block (`--update` re-baselines after review). |
 | `pylon review rework` | Count `fix:`/`refactor:` commits touching paths a `feat:` commit changed, per registered project, report-only (`--window`, `--package`). |
 | `pylon review merge-danger` | Gate one `Merge danger:` body line against the closed door vocabulary and the diff's derived minimum door (`--body <file|->`, `--base <ref>`; blocking on missing, invalid, duplicate, or downgraded lines). |
+| `pylon review release-surface` | Block when a pinned deployment consumes a public surface removed or changed against its pinned release tag (`--pinned-releases <dir>`, `--base <ref>` overrides pinning; blocking on removed, changed, unknown pins, or a missing tag). |
 | `pylon sync --detached` | Start a detached background fetch when the last one is over an hour old, then fast-forward onto `origin/main` on a clean tree; never blocks. |
 | `pylon review-brief <plan>` | Generate `.pylon-review-brief.md` or validate review packets (`--validate`, `--validate-resolutions`). |
 | `pylon protocol [list|<name>]` | List or render CLI protocols (`pylon reflect` is the hygiene pass; `pylon protocol agent` is the session loop). |

@@ -39,13 +39,6 @@ All features, rules, and commands in Pylons and the `pylon` CLI must be 100% det
 
 External agentic-memory products auto-capture session context and regenerate docs as work happens. Pylons adopts the pattern, not the hosted runtime. All capture stays deterministic and git-native. No SaaS dependency. No model calls inside the engine. The engine reports drift; an agent skill or a human writes the prose.
 
-### session-capture
-- **Command**: `pylon context --diff-since <ref> --manifest`
-- **Deterministic Mechanism**: Compare `git log <ref>..HEAD` against declared `exposes:`, `sources:`, and `contracts:` in `packages/` and `plans/`. Emit a manifest of touched surfaces whose docs were not updated in the same commit set.
-- **Friction-Scored Quirk Detection**: Track session telemetry via agent hooks: count user tool call rejections, prompt corrections, repeated tool execution retries on the same file, and knowledge recall misses. Compute an integer friction score using fixed weights. If the score exceeds the threshold, flag a candidate quirk in the manifest.
-- **Consumer**: An agent session-close skill reads the manifest. If friction is high, it extracts the failure symptom (tool errors, user corrections) and resolution (final passing diff), then drafts `quirks/<topic>.md` for human approval before commit.
-- **Objective**: Close the manual-maintenance gap. Capture edge cases and footguns when developers actually struggle, avoiding documentation fatigue on routine tasks.
-
 ### dependency-graph
 - **Command**: `pylon context --graph <package> [--depth N]`
 - **Deterministic Mechanism**: Reuse the `resolve` package's symbol graph. Resolve `depends_on` declared in `packages/` against actual caller relationships across repos. Report declared vs actual divergences.
@@ -86,13 +79,6 @@ External agentic-memory products auto-capture session context and regenerate doc
   - Convention doc stub in `conventions/proposals/`.
 - **Consumer**: A maintainer accepts the candidate by commit. The loop ends in executable enforcement or accepted prose, never in a repeated comment. No auto-commit: candidate patch only, per the Explicitly Not Adopted list.
 - **Objective**: Never write the same comment twice. A recurring review finding becomes a check, a falsifier, or a convention. Extends the `knowledge-utility` pattern-promotion idea: input here is review findings, not document citations.
-
-### pinned-release-diff
-- **Command**: `pylon review release-surface --diff --pinned-releases <dir>`
-- **Deterministic Mechanism**: Read each deployment's dependency lockfile under the given directory. Resolve the pinned version of every mapped package to its release tag. Diff public surfaces (hooks, routes, exported names) against that tag instead of the development branch. Match every removed or changed surface by exact string against consumer code and vendored copies.
-- **Enforcement**: A removed or changed surface that a pinned deployment consumes is a blocking finding. An explicit `--base` overrides pinning, never silently.
-- **Consumer**: Release review before merge to `main`; the same check runs in CI on version bumps.
-- **Objective**: The map rule "what a consumer uses today keeps working" becomes a check against the versions deployments actually run, not the development branch.
 
 ## Explicitly Not Adopted
 

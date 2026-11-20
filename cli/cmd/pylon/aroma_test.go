@@ -389,3 +389,44 @@ func TestDiffParsesHeadersNotBodies(t *testing.T) {
 		t.Fatalf("the +++ body line broke the file path: %q", stdout.String())
 	}
 }
+
+func TestReleaseSurfaceFlagPath(t *testing.T) {
+	// The flag path itself: --pinned-releases is required, --base is a
+	// value flag, and the advisory renders with exit 0.
+	dir := t.TempDir()
+	if code := run([]string{"init", dir}); code != 0 {
+		t.Fatalf("init returned %d, want 0", code)
+	}
+	pin := filepath.Join(dir, "deploy")
+	if err := os.MkdirAll(pin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code := run([]string{"review", "release-surface", "--pylons", dir}); code != 2 {
+		t.Fatalf("missing --pinned-releases must exit 2, got %d", code)
+	}
+	code := run([]string{"review", "release-surface", "--pinned-releases", pin, "--pylons", dir})
+	if code != 0 {
+		t.Fatalf("no pins must be advisory exit 0, got %d", code)
+	}
+	// --base is a value flag; it parses even against a refless KB.
+	if code := run([]string{"review", "release-surface", "--pinned-releases", pin, "--base", "origin/main", "--pylons", dir}); code != 0 {
+		t.Fatalf("--base must be a value flag, got %d", code)
+	}
+}
+
+func TestCaptureFlagPath(t *testing.T) {
+	dir := t.TempDir()
+	if code := run([]string{"init", dir}); code != 0 {
+		t.Fatalf("init returned %d, want 0", code)
+	}
+	if code := run([]string{"context", "--diff-since", "--pylons", dir}); code != 2 {
+		t.Fatalf("--diff-since without a value must exit 2, got %d", code)
+	}
+	// A KB outside git reports every doc as unmoved; capture is
+	// report-only and exits 0.
+	if code := run([]string{"context", "--diff-since", "HEAD", "--pylons", dir}); code != 0 {
+		t.Fatalf("capture must exit 0, got %d", code)
+	}
+	code := run([]string{"context", "--diff-since", "HEAD", "--manifest", "--pylons", dir})
+	_ = code
+}

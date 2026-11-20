@@ -306,5 +306,12 @@
     "severity": "error",
     "description": "The pull request body lacks a valid merge danger line, or the derived minimum door outranks the author door.",
     "fix_hint": "Add 'Merge danger: \u003cone-way|two-way\u003e | blast radius: \u003cscope\u003e' to the body (conventions/pr-template.md)."
+  },
+  {
+    "id": "PYLON048",
+    "name": "release_surface",
+    "severity": "error",
+    "description": "A pinned deployment consumes a public surface that is removed or changed against the pinned release tag, or a pin cannot be judged.",
+    "fix_hint": "Restore the surface at HEAD or cut and ship a new release for the pinned deployment; unregistered pins fail closed."
   }
 ]
