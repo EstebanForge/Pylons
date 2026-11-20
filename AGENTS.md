@@ -30,8 +30,13 @@ Pylons documents reference files with URI schemes, never machine paths.
 - `pylon check <paths...> [--stop-block] [--format=human|json|sarif]`
 - `pylon brief [--format=human|json]`
 - `pylon context <paths...> [--preamble] [--format=human|json]`
-- `pylon staleness [--package <pkg>] [--fix] [--format=human|json|sarif]`
-- `pylon review [plan <path> | postmortem [path] [--check-sources] | staleness [--package <pkg>] [--fix]]`
+- `pylon review plan <path>`
+- `pylon review postmortem [path] [--check-sources]`
+- `pylon review staleness [--package <pkg>] [--fix]`
+- `pylon review ratchet [--update]`
+- `pylon review rework [--window <period>] [--package <pkg>]`
+- `pylon review merge-danger --body <file|-> [--base <ref>]`
+- `pylon sync [--detached]`
 - `pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>]`
 - `pylon protocol [list|<name>] [--template <path>]`
 - `pylon reflect [--template <path>]`
@@ -40,4 +45,6 @@ Pylons documents reference files with URI schemes, never machine paths.
 - `pylon search <query> [--limit <n>] [--all]`
 - `pylon manifest [rules|packages] [--check]`
 - `pylon explain <rule_id>`
+- `pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]`
+- `pylon install`
 - `pylon init [dir]`
