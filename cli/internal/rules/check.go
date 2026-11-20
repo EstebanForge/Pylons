@@ -64,7 +64,21 @@ func Check(kbRoot string, targets []string) []report.Finding {
 		content := string(data)
 
 		var pf resolve.PlanFrontMatter
-		if resolve.ParsePlanFrontMatter(content, &pf) && pf.Type == "plan" && (pf.Status == "accepted" || pf.Status == "in-progress") {
+		pfParsed := resolve.ParsePlanFrontMatter(content, &pf) && pf.Type == "plan"
+		if pfParsed {
+			if pf.Status != "accepted" && pf.Status != "in-progress" {
+				pfParsed = false
+			}
+		} else if strings.HasPrefix(content, "---\n") {
+			// A plan doc whose plan frontmatter cannot parse must
+			// fail loudly: silently dropping it would skip the
+			// collision walk and ripple for this document.
+			var probe resolve.DocMeta
+			if resolve.ParseDocMeta(content, &probe) && probe.Type == "plan" {
+				findings = append(findings, errFinding("PYLON001", rel, 1, "plan frontmatter cannot parse; collisions and ripple are skipped for this document"))
+			}
+		}
+		if pfParsed {
 			for _, nt := range normTargets {
 				for _, raw := range pf.Contract.Editing {
 					if gs, ok := extractGlobString(raw); ok && globMatchesTarget(gs, nt, pf.Components) {
@@ -129,6 +143,7 @@ func Check(kbRoot string, targets []string) []report.Finding {
 		}
 		return nil
 	})
+	findings = append(findings, rippleFindings(kbRoot, cfg, normTargets)...)
 	return findings
 }
 

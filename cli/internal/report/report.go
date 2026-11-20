@@ -36,6 +36,9 @@ type Finding struct {
 	File     string `json:"file"`
 	Line     int    `json:"line,omitempty"`
 	Message  string `json:"message"`
+	// Remediation carries the rule catalog fix hint so a finding answers
+	// "how do I fix this" without a second explain lookup.
+	Remediation string `json:"remediation,omitempty"`
 }
 
 // ValidateFormat reports whether format is one of human, json, or sarif.
@@ -85,6 +88,11 @@ func Render(w io.Writer, format Format, findings []Finding) error {
 					return err
 				}
 			}
+			if f.Remediation != "" {
+				if _, err := fmt.Fprintf(w, "  fix: %s\n", cleanText(f.Remediation)); err != nil {
+					return err
+				}
+			}
 		}
 		return nil
 	}
@@ -107,13 +115,21 @@ func cleanText(s string) string {
 // RenderStopBlocks renders FORCED findings as structured agent stop blocks.
 func RenderStopBlocks(w io.Writer, findings []Finding) error {
 	for _, f := range findings {
-		f.RuleID, f.File, f.Message = cleanText(f.RuleID), cleanText(f.File), cleanText(f.Message)
+		f.RuleID, f.File, f.Message, f.Remediation = cleanText(f.RuleID), cleanText(f.File), cleanText(f.Message), cleanText(f.Remediation)
 		if f.Severity == SeverityError {
-			if _, err := fmt.Fprintf(w, "=== PYLON STOP BLOCK [%s] ===\nFile: %s\nReason: %s\nAction: Stop and resolve before editing.\n=== END STOP BLOCK ===\n", f.RuleID, f.File, f.Message); err != nil {
+			fix := ""
+			if f.Remediation != "" {
+				fix = "Fix: " + f.Remediation + "\n"
+			}
+			if _, err := fmt.Fprintf(w, "=== PYLON STOP BLOCK [%s] ===\nFile: %s\nReason: %s\n%sAction: Stop and resolve before editing.\n=== END STOP BLOCK ===\n", f.RuleID, f.File, f.Message, fix); err != nil {
 				return err
 			}
 		} else {
-			if _, err := fmt.Fprintf(w, "ADVISORY [%s] %s: %s\n", f.RuleID, f.File, f.Message); err != nil {
+			hint := ""
+			if f.Remediation != "" {
+				hint = "; fix: " + f.Remediation
+			}
+			if _, err := fmt.Fprintf(w, "ADVISORY [%s] %s: %s%s\n", f.RuleID, f.File, f.Message, hint); err != nil {
 				return err
 			}
 		}
@@ -136,12 +152,16 @@ func renderSARIF(w io.Writer, findings []Finding) error {
 		if f.Line > 0 {
 			loc["physicalLocation"].(map[string]any)["region"] = map[string]any{"startLine": f.Line}
 		}
-		results = append(results, map[string]any{
+		result := map[string]any{
 			"ruleId":    f.RuleID,
 			"level":     level,
 			"message":   map[string]any{"text": f.Message},
 			"locations": []any{loc},
-		})
+		}
+		if f.Remediation != "" {
+			result["properties"] = map[string]any{"remediation": f.Remediation}
+		}
+		results = append(results, result)
 	}
 	doc := map[string]any{
 		"version": "2.1.0",

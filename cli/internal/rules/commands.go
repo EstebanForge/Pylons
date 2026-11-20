@@ -20,6 +20,14 @@ import (
 
 const stalenessMaxDays = 90
 
+// Closed token sets for the two post-mortem signal fields; exact
+// comparison, no normalization, per the vocabulary convention.
+var aiAuthoredTokens = map[string]bool{"yes": true, "no": true, "unknown": true}
+
+var volumePressureTokens = map[string]bool{
+	"review": true, "test": true, "rollout": true, "observability": true, "none": true,
+}
+
 var updatedLineRe = regexp.MustCompile(`(?m)^(updated:\s*)(?:"[^"\n]+"|'[^'\n]+'|[^\s#\n]+)(.*)$`)
 
 // CheckPlanContract validates all contract entries, falsifiers, and test refs in a plan document.
@@ -225,6 +233,12 @@ func postmortemFindings(kbRoot, rel, content string, cfg config.Config, checkSou
 		if !hasHeading(content, sec) {
 			findings = append(findings, errFinding("PYLON022", rel, 1, fmt.Sprintf("postmortem missing required section %q", sec)))
 		}
+	}
+	if token := strings.TrimSpace(fm.AIAuthoredContributed); token != "" && !aiAuthoredTokens[token] {
+		findings = append(findings, errFinding("PYLON041", rel, 1, "ai_authored_contributed must be one of yes|no|unknown, got "+token))
+	}
+	if token := strings.TrimSpace(fm.VolumePressure); token != "" && !volumePressureTokens[token] {
+		findings = append(findings, errFinding("PYLON041", rel, 1, "volume_pressure must be one of review|test|rollout|observability|none, got "+token))
 	}
 	if checkSources {
 		for _, src := range fm.Sources {

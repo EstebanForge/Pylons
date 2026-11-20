@@ -46,7 +46,7 @@ func isRootSkippedDir(kbRoot, dirPath string) bool {
 		return filepath.Base(dirPath) == ".git"
 	}
 	switch rel {
-	case ".git", "cli", "bin", "templates", "manifests", "protocols", "extensions":
+	case ".git", ".github", "cli", "bin", "templates", "manifests", "protocols", "extensions":
 		return true
 	default:
 		return false
@@ -139,6 +139,9 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 	}
 	findings = append(findings, scanPlanAndQuirkRules(kbRoot, docs, cfg, opts)...)
 	findings = append(findings, scanLifecycleRules(kbRoot, docs, cfg, opts.HasCode)...)
+	if opts.HasCode {
+		findings = append(findings, lintImportBoundaries(kbRoot, cfg, changedSet)...)
+	}
 	return findings
 }
 
