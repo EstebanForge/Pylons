@@ -14,6 +14,7 @@ import (
 	"go/parser"
 	"go/scanner"
 	"go/token"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -114,6 +115,51 @@ func childrenOf(root ast.Node) map[ast.Node][]ast.Node {
 	return children
 }
 
+// parentsOf maps each node to its direct parent; the root's parent is nil.
+func parentsOf(root ast.Node) map[ast.Node]ast.Node {
+	parents := make(map[ast.Node]ast.Node)
+	var stack []ast.Node
+	ast.Inspect(root, func(node ast.Node) bool {
+		if node == nil {
+			stack = stack[:len(stack)-1]
+			return true
+		}
+		parent := ast.Node(nil)
+		if len(stack) > 0 {
+			parent = stack[len(stack)-1]
+		}
+		parents[node] = parent
+		stack = append(stack, node)
+		return true
+	})
+	return parents
+}
+
+// identifierRole reports whether an identifier is a structural name rather
+// than a variable reference: a selector's field, a composite-literal key, or
+// a statement label. Those must never read as locals.
+func identifierRole(node ast.Node, parents map[ast.Node]ast.Node) string {
+	switch parent := parents[node].(type) {
+	case *ast.SelectorExpr:
+		if parent.Sel == node {
+			return "field"
+		}
+	case *ast.KeyValueExpr:
+		if parent.Key == node {
+			return "key"
+		}
+	case *ast.LabeledStmt:
+		if parent.Label == node {
+			return "label"
+		}
+	case *ast.BranchStmt:
+		if parent.Label == node {
+			return "label"
+		}
+	}
+	return "reference"
+}
+
 // collectDeclared gathers the names declared in a method's range: receiver,
 // parameters, and named results of the method itself, plus everything
 // declared inside the body. Type names and the method's own name are not
@@ -127,7 +173,14 @@ func collectDeclared(decl *ast.FuncDecl) map[string]bool {
 		addFieldNames(decl.Type.Params, local)
 		addFieldNames(decl.Type.Results, local)
 	}
-	ast.Inspect(decl.Body, func(node ast.Node) bool {
+	collectDeclaredIn(decl.Body, local)
+	return local
+}
+
+// collectDeclaredIn gathers the names declared inside one body: :=, var and
+// const specs, range DEFINE, and nested function signatures.
+func collectDeclaredIn(body ast.Node, local map[string]bool) {
+	ast.Inspect(body, func(node ast.Node) bool {
 		switch n := node.(type) {
 		case *ast.AssignStmt:
 			if n.Tok == token.DEFINE {
@@ -161,7 +214,6 @@ func collectDeclared(decl *ast.FuncDecl) map[string]bool {
 		}
 		return true
 	})
-	return local
 }
 
 func addFieldNames(fields *ast.FieldList, into map[string]bool) {
@@ -177,10 +229,12 @@ func addFieldNames(fields *ast.FieldList, into map[string]bool) {
 
 // convert turns one AST node into a simplified parse tree. It leaves the
 // children map untouched so callers can reuse it.
-func (p *parser0) convert(node ast.Node, children map[ast.Node][]ast.Node, local func(string) bool) Node {
+func (p *parser0) convert(node ast.Node, children map[ast.Node][]ast.Node, parents map[ast.Node]ast.Node, local func(string) bool) Node {
 	switch n := node.(type) {
 	case *ast.Ident:
-		return Token{Text: n.Name, Keyword: false, Local: local(n.Name), Line: p.lineOf(n.Pos()), EndLine: p.lineOf(n.End())}
+		role := identifierRole(node, parents)
+		isLocal := role == "reference" && local(n.Name)
+		return Token{Text: n.Name, Keyword: false, Local: isLocal, Line: p.lineOf(n.Pos()), EndLine: p.lineOf(n.End())}
 	case *ast.BasicLit:
 		// A literal is never a local variable; only identifiers can be.
 		return Token{Text: n.Value, Keyword: false, Local: false, Line: p.lineOf(n.Pos()), EndLine: p.lineOf(n.End())}
@@ -190,10 +244,10 @@ func (p *parser0) convert(node ast.Node, children map[ast.Node][]ast.Node, local
 	var out []Node
 	at := p.offsetOf(node.Pos())
 	appendGap := func(end int) {
-		for _, entry := range p.scanned {
-			if entry.offset < at {
-				continue
-			}
+		// The scan is offset-ascending, so start at the first token past
+		// `at` instead of rescanning from the top of the file.
+		start := sort.Search(len(p.scanned), func(i int) bool { return p.scanned[i].offset >= at })
+		for _, entry := range p.scanned[start:] {
 			if entry.offset >= end {
 				break
 			}
@@ -203,7 +257,7 @@ func (p *parser0) convert(node ast.Node, children map[ast.Node][]ast.Node, local
 	}
 	for _, kid := range kids {
 		appendGap(p.offsetOf(kid.Pos()))
-		converted := p.convert(kid, children, local)
+		converted := p.convert(kid, children, parents, local)
 		if converted != nil {
 			out = append(out, converted)
 		}
@@ -231,15 +285,14 @@ func (p *parser0) convert(node ast.Node, children map[ast.Node][]ast.Node, local
 // syntax errors is still used; a file that cannot be read at all returns
 // nothing.
 func ParseMethods(source, path string) []Method {
-	p, file, err := newParser(source)
+	p, file, _ := newParser(source)
 	if file == nil {
-		_ = err
 		return nil
 	}
 	var methods []Method
 	for _, decl := range file.Decls {
 		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil {
-			methods = append(methods, p.methodOf(fn, path))
+			methods = append(methods, p.methodOf(fn))
 			continue
 		}
 		if gen, ok := decl.(*ast.GenDecl); ok && gen.Tok == token.VAR {
@@ -248,13 +301,15 @@ func ParseMethods(source, path string) []Method {
 				if !ok {
 					continue
 				}
-				for _, value := range valueSpec.Values {
+				for i, value := range valueSpec.Values {
 					if lit, ok := value.(*ast.FuncLit); ok {
+						// var a, b = f(), g() pairs each literal with
+						// its own name.
 						name := ""
-						if len(valueSpec.Names) > 0 {
-							name = valueSpec.Names[0].Name
+						if i < len(valueSpec.Names) {
+							name = valueSpec.Names[i].Name
 						}
-						methods = append(methods, p.funcLitMethod(lit, name, path))
+						methods = append(methods, p.funcLitMethod(lit, name))
 					}
 				}
 			}
@@ -263,11 +318,10 @@ func ParseMethods(source, path string) []Method {
 	return methods
 }
 
-func (p *parser0) methodOf(fn *ast.FuncDecl, path string) Method {
+func (p *parser0) methodOf(fn *ast.FuncDecl) Method {
 	local := collectDeclared(fn)
-	// The method's own name is not a local variable.
-	delete(local, fn.Name.Name)
 	children := childrenOf(fn.Body)
+	parents := parentsOf(fn.Body)
 	name := fn.Name.Name
 	if fn.Recv != nil && len(fn.Recv.List) > 0 {
 		receiver := fn.Recv.List[0].Type
@@ -277,54 +331,22 @@ func (p *parser0) methodOf(fn *ast.FuncDecl, path string) Method {
 		Name:      name,
 		StartLine: p.lineOf(fn.Pos()),
 		EndLine:   p.lineOf(fn.End()),
-		Body:      p.convert(fn.Body, children, localLookup(local)),
+		Body:      p.convert(fn.Body, children, parents, localLookup(local)),
 	}
 }
 
-func (p *parser0) funcLitMethod(lit *ast.FuncLit, name, path string) Method {
+func (p *parser0) funcLitMethod(lit *ast.FuncLit, name string) Method {
 	local := map[string]bool{}
 	addFieldNames(lit.Type.Params, local)
 	addFieldNames(lit.Type.Results, local)
-	ast.Inspect(lit.Body, func(node ast.Node) bool {
-		switch n := node.(type) {
-		case *ast.AssignStmt:
-			if n.Tok == token.DEFINE {
-				for _, lhs := range n.Lhs {
-					if ident, ok := lhs.(*ast.Ident); ok {
-						local[ident.Name] = true
-					}
-				}
-			}
-		case *ast.GenDecl:
-			if n.Tok == token.VAR || n.Tok == token.CONST {
-				for _, spec := range n.Specs {
-					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-						for _, declared := range valueSpec.Names {
-							local[declared.Name] = true
-						}
-					}
-				}
-			}
-		case *ast.RangeStmt:
-			if n.Tok == token.DEFINE {
-				for _, target := range []ast.Expr{n.Key, n.Value} {
-					if ident, ok := target.(*ast.Ident); ok {
-						local[ident.Name] = true
-					}
-				}
-			}
-		case *ast.FuncLit:
-			addFieldNames(n.Type.Params, local)
-			addFieldNames(n.Type.Results, local)
-		}
-		return true
-	})
+	collectDeclaredIn(lit.Body, local)
 	children := childrenOf(lit.Body)
+	parents := parentsOf(lit.Body)
 	return Method{
 		Name:      name,
 		StartLine: p.lineOf(lit.Pos()),
 		EndLine:   p.lineOf(lit.End()),
-		Body:      p.convert(lit.Body, children, localLookup(local)),
+		Body:      p.convert(lit.Body, children, parents, localLookup(local)),
 	}
 }
 
@@ -353,7 +375,8 @@ func ParseSnippet(source string, options SnippetOptions) (Node, bool) {
 	if err == nil && file != nil && len(file.Decls) > 0 {
 		if fn, ok := file.Decls[0].(*ast.FuncDecl); ok && fn.Body != nil {
 			children := childrenOf(fn.Body)
-			node := p.convert(fn.Body, children, snippetLocal([]ast.Node{fn}, options))
+			parents := parentsOf(fn.Body)
+			node := p.convert(fn.Body, children, parents, snippetLocal([]ast.Node{fn}, options))
 			if node != nil {
 				return node, true
 			}
@@ -362,9 +385,10 @@ func ParseSnippet(source string, options SnippetOptions) (Node, bool) {
 	p, file, err = newParser("package _p\n\n" + source + "\n")
 	if err == nil && file != nil && len(file.Decls) > 0 {
 		children := childrenOf(file)
+		parents := parentsOf(file)
 		var parts []Node
 		for _, decl := range file.Decls {
-			converted := p.convert(decl, children, snippetLocal(toNodes(file.Decls), options))
+			converted := p.convert(decl, children, parents, snippetLocal(toNodes(file.Decls), options))
 			if converted != nil {
 				parts = append(parts, converted)
 			}
@@ -378,7 +402,8 @@ func ParseSnippet(source string, options SnippetOptions) (Node, bool) {
 		if gen, ok := file.Decls[0].(*ast.GenDecl); ok && len(gen.Specs) > 0 {
 			if valueSpec, ok := gen.Specs[0].(*ast.ValueSpec); ok && len(valueSpec.Values) > 0 {
 				children := childrenOf(valueSpec.Values[0])
-				node := p.convert(valueSpec.Values[0], children, snippetLocal([]ast.Node{valueSpec.Values[0]}, options))
+				parents := parentsOf(valueSpec.Values[0])
+				node := p.convert(valueSpec.Values[0], children, parents, snippetLocal([]ast.Node{valueSpec.Values[0]}, options))
 				if node != nil {
 					return node, true
 				}
@@ -399,7 +424,6 @@ func snippetLocal(roots []ast.Node, options SnippetOptions) func(string) bool {
 	for _, root := range roots {
 		if fn, ok := root.(*ast.FuncDecl); ok {
 			declared = collectDeclared(fn)
-			delete(declared, fn.Name.Name)
 		}
 	}
 	for _, root := range roots {

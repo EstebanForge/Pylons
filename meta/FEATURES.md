@@ -350,7 +350,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `context --preamble` | Emits `context` plus the cache-friendly architecture preamble. | Agent prompt boot | Clean output |
 | `map` | Projects corpus front matter as filterable one-line discovery records ranked by BM25. | Discovering docs before reading them | Usage errors exit 2 |
 | `search <query>` | Full-text BM25 search across non-archived documents. | Finding docs by content | Usage errors exit 2 |
-| `aroma search\|recommend` | Structural code similarity over featurized parse trees: methods resembling the query, then the code its results share. Query from `--lines path:a-b`, `--snippet <file|->`, or `--diff <file|->`; corpus is registered projects by default, else `--corpus`. Zero model calls. | Exploring unfamiliar code, orienting on a diff | No indexable files in the corpus (exit 2 on usage) |
+| `aroma search\|recommend` | Structural code similarity over featurized parse trees: methods resembling the query, then the code its results share. Query from `--lines path:a-b`, `--snippet <file|->`, or `--diff <file|->` (one query per method the lines touch); corpus is registered projects by default, else `--corpus`. Zero model calls. | Exploring unfamiliar code, orienting on a diff | Never; usage, unreadable corpus, or an empty corpus exit 2 |
 | `lint` | Validates frontmatter, lifecycle statuses, links, the dependency graph, and STE-100 prose. | Before commit / PR | Frontmatter, links, lifecycle errors |
 | `lint --fix` | Auto-relocates misplaced docs and heals single-depth broken links. | Fixing lint errors | Unfixable errors |
 | `lint --changed` | Pre-commit fast path: validates staged git files only. | Git pre-commit gate | Errors in staged files |
@@ -413,7 +413,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--min-support <n>` | Fewest methods behind a recommendation. 2 by default; 1 reproduces the paper's behavior. | `aroma` |
 | `--min-query-size <n>` | Drops queries with fewer features. Default 0. | `aroma` |
 | `--include-tests` | Keeps `_test.go` files in the corpus. | `aroma` |
-| `--lang <id>` | Forces the language front end. Only `go` ships today. | `aroma` |
+| `--lang <id>` | Picks the language front end for stdin snippets. Only `go` ships today. | `aroma` |
 
 ### 5.3 Exit codes
 

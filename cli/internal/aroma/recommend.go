@@ -234,20 +234,34 @@ func cluster(candidates []Ranked, minExpansion, minCohesion, maxOverlap float64)
 // method (Section 4.3.5).
 func intersect(candidates []Ranked, members []int, query Query) []int {
 	first := candidates[members[0]].Method
+	// wholeMethod distinguishes "no prune ran yet" (the first member is
+	// kept whole) from "the prune kept nothing", which mirrors the
+	// reference's undefined-versus-empty distinction.
+	wholeMethod := true
 	var kept []int
 	for _, member := range members[1:] {
 		target := featuresOf(candidates[member].Method.TokenTable, nil)
 		for feature, count := range query.Features {
 			target[feature] += count
 		}
-		kept = Prune(target, first.TokenTable, kept).Tokens
+		kept = Prune(target, first.TokenTable, keptOrNil(wholeMethod, kept)).Tokens
+		wholeMethod = false
 	}
-	if kept == nil {
+	if wholeMethod {
 		tokens := make([]int, len(first.Offsets)-1)
 		for token := range tokens {
 			tokens[token] = token
 		}
 		return tokens
+	}
+	return kept
+}
+
+// keptOrNil maps the whole-method state to Prune's candidates slice: nil
+// means every token, an empty slice means none.
+func keptOrNil(wholeMethod bool, kept []int) []int {
+	if wholeMethod {
+		return nil
 	}
 	return kept
 }
