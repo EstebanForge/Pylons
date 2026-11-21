@@ -722,9 +722,8 @@ func cmdInit(dir string) int {
 		return 1
 	}
 	seedFiles := map[string]string{
-		"AGENTS.md":                 "# Guidelines\n\nA pylon: the plain-text map of this platform. See `conventions/vocabulary.md`.\n",
-		"conventions/AGENTS.md":     "---\ntitle: \"Conventions\"\ntype: reference\nstatus: active\n---\n\n# Conventions\n",
-		"conventions/vocabulary.md": "---\ntitle: \"Vocabulary\"\ntype: convention\nstatus: accepted\n---\n\n# Vocabulary\n\nClosed frontmatter status values.\n",
+		"AGENTS.md":             "# Guidelines\n\nA pylon: the plain-text map of this platform. See `manifests/vocabulary.json` and `meta/docs/`.\n",
+		"conventions/AGENTS.md": "---\ntitle: \"Conventions\"\ntype: reference\nstatus: active\n---\n\n# Conventions\n",
 	}
 	for rel, body := range seedFiles {
 		dst := filepath.Join(dir, filepath.FromSlash(rel))

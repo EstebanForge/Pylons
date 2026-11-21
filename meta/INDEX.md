@@ -3,7 +3,7 @@ title: "Meta Docs Index"
 type: meta
 status: active
 created: 2026-11-19
-updated: 2026-11-19
+updated: 2026-11-21
 ---
 
 # Meta docs index
@@ -18,4 +18,5 @@ Documentation about Pylons and the `pylon` CLI.
 - [CHANGELOG.md](CHANGELOG.md): release history and origin timeline.
 - [docs/pylons-yaml.md](docs/pylons-yaml.md): schema and examples for `manifests/pylons.yaml`, the per-ledger configuration file.
 - [docs/extension-protocol.md](docs/extension-protocol.md): formal schema, manifest, and wire examples for `pylon-ext-<name>` plugins.
-- [docs/parity-spec.md](docs/parity-spec.md): the proposed declarative parity spec: language profiles and machine declarations (not shipped yet).
+- [docs/vocabulary.md](docs/vocabulary.md): the closed frontmatter value sets and the machine-readable registry at `manifests/vocabulary.json`.
+- [docs/parity-spec.md](docs/parity-spec.md): the declarative parity spec: language profiles, machine declarations, and the machine discipline.

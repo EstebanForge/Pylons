@@ -66,7 +66,7 @@ func MergeDanger(kbRoot string, opts MergeDangerOptions) ([]report.Finding, erro
 	case count > 1:
 		fail("MERGE_DANGER_DUPLICATE: exactly one merge danger line is required in the body")
 	case count == 0:
-		fail("MERGE_DANGER_MISSING: the body has no 'Merge danger: <door> | blast radius: <scope>' line (conventions/pr-template.md)")
+		fail("MERGE_DANGER_MISSING: the body has no 'Merge danger: <door> | blast radius: <scope>' line")
 	case door == "":
 		fail("MERGE_DANGER_INVALID: the merge danger line must read 'Merge danger: <one-way|two-way> | blast radius: <scope in one phrase>'")
 	default:

@@ -80,7 +80,7 @@ fi
 # junk. Tooling dirs stay out: hooks ship inside the binary, cli/ and
 # scripts/ are not part of an installed pylon.
 git archive --format=tar.gz -o "dist/pylons-kb-$tag.tar.gz" HEAD \
-	. ':(exclude)cli' ':(exclude).githooks' ':(exclude)scripts' ':(exclude)dist'
+	. ':(exclude)cli' ':(exclude).githooks' ':(exclude).github' ':(exclude)scripts' ':(exclude)dist'
 
 (cd dist && { sha256sum pylons-* 2>/dev/null || shasum -a 256 pylons-*; } > checksums.txt)
 
