@@ -792,6 +792,14 @@ func cmdInstall(kbRoot string, force bool) int {
 	for _, name := range res.DriftedHooks {
 		fmt.Printf("pylon install: kept modified .githooks/%s (differs from shipped asset; --force overwrites)\n", name)
 	}
+	// Every gate hook foreign means none of the pylon gates run.
+	// Quiet success here is how an adopter believes they are gated
+	// when they are not; refuse and point at the takeover flag.
+	if len(res.DriftedHooks) > 0 && len(res.SkippedHooks) == 0 && len(res.WroteHooks) == 0 {
+		fmt.Fprintf(os.Stderr, "pylon install: every gate hook is foreign; the pylon gates will not run\n")
+		fmt.Fprintf(os.Stderr, "pylon install: %s in .githooks differ from the shipped gates; inspect them, or take over with pylon install --force\n", strings.Join(res.DriftedHooks, ", "))
+		return 1
+	}
 	if res.HooksPathSet {
 		fmt.Printf("pylon install: enabled core.hooksPath .githooks\n")
 	} else {
