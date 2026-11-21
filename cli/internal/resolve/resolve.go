@@ -246,7 +246,7 @@ func ReadProjectFile(root, ref, rel string) ([]byte, bool) {
 	}
 	if ref != "" && hasGitRepo(root) {
 		if refExists(root, ref) {
-			out, err := GitRun(root, nil, "show", ref+":"+rel)
+			out, err := GitRun(root, nil, "show", ref+":./"+rel)
 			if err != nil {
 				return nil, false
 			}
@@ -279,7 +279,7 @@ func StatProjectFile(root, ref, rel string) bool {
 		return false
 	}
 	if ref != "" && hasGitRepo(root) && refExists(root, ref) {
-		out, err := GitRun(root, nil, "cat-file", "-t", ref+":"+rel)
+		out, err := GitRun(root, nil, "cat-file", "-t", ref+":./"+rel)
 		return err == nil && strings.TrimSpace(string(out)) == "blob"
 	}
 	target, ok := SafeJoin(root, rel)
@@ -290,9 +290,38 @@ func StatProjectFile(root, ref, rel string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
+// hasGitRepo reports whether root sits inside a git worktree. Git
+// resolves upward, so a project registered at a subdirectory (a
+// crate inside a workspace repo) is still a git project and keeps
+// its configured ref.
 func hasGitRepo(root string) bool {
-	_, err := os.Stat(filepath.Join(root, ".git"))
-	return err == nil
+	root = filepath.Clean(root)
+	for {
+		if _, err := os.Stat(filepath.Join(root, ".git")); err == nil {
+			return true
+		}
+		parent := filepath.Dir(root)
+		if parent == root {
+			return false
+		}
+		root = parent
+	}
+}
+
+// gitToplevelPrefix returns the project root's path relative to the
+// repo toplevel with a trailing slash ("" at the toplevel), so
+// toplevel-relative ls-tree lines can be compared with
+// project-relative globs.
+func gitToplevelPrefix(root string) string {
+	out, err := GitRun(root, nil, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(strings.TrimSpace(string(out)), root)
+	if err != nil || rel == "." {
+		return ""
+	}
+	return filepath.ToSlash(rel) + "/"
 }
 
 func refExists(root, ref string) bool {
@@ -315,10 +344,11 @@ func resolveGlob(projectRoot, ref string, kind Kind, id string) Verdict {
 	if ref != "" && hasGitRepo(projectRoot) && refExists(projectRoot, ref) {
 		out, err := GitRun(projectRoot, nil, "ls-tree", "-r", "--name-only", "-z", ref)
 		if err == nil {
+			prefix := gitToplevelPrefix(projectRoot)
 			for _, line := range strings.Split(string(out), "\x00") {
 				line = strings.TrimSpace(line)
-				if line != "" && MatchGlob(relPat, line) {
-					return Verdict{Kind: kind, ID: id, Resolved: true, Detail: line}
+				if line != "" && MatchGlob(relPat, strings.TrimPrefix(line, prefix)) {
+					return Verdict{Kind: kind, ID: id, Resolved: true, Detail: strings.TrimPrefix(line, prefix)}
 				}
 			}
 			return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "glob matched zero files"}

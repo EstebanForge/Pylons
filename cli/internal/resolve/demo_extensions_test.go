@@ -6,13 +6,32 @@ package resolve
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestDemoExtensionsModern2025Syntax(t *testing.T) {
-	extDir := filepath.Clean(filepath.Join("..", "..", "..", "extensions"))
-	if _, err := os.Stat(extDir); err != nil {
-		t.Fatalf("missing demo extensions dir %s: %v", extDir, err)
+	// Reference plugins live in extensions/_examples/, which the CLI
+	// never dispatches from. Copy them to a private extDir for this
+	// test.
+	examples := filepath.Clean(filepath.Join("..", "..", "..", "extensions", "_examples"))
+	entries, err := os.ReadDir(examples)
+	if err != nil {
+		t.Fatalf("missing demo extensions dir %s: %v", examples, err)
+	}
+	extDir := t.TempDir()
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), "pylon-ext-") {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(examples, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		dst := filepath.Join(extDir, e.Name())
+		if err := os.WriteFile(dst, src, 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	proj := t.TempDir()
