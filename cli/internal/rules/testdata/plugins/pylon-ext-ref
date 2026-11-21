@@ -3,9 +3,13 @@
 # stdin and writes one JSON response line on stdout. It extracts
 # nothing real; it demonstrates the wire contract for plugin authors
 # and serves the protocol tests. The "Missing" symbol exercises the
-# plugin-verdict error path.
+# plugin-verdict error path, and the transitions op returns fixed
+# triples.
 IFS= read -r line || exit 1
 case "$line" in
+  *'"op":"transitions"'*)
+    printf '{"triples":[{"from":"pending","event":"pick","to":"picked"},{"from":"picked","event":"ship","to":"shipped"}]}'
+    ;;
   *'"name":"Missing"'*)
     printf '{"cases":[],"error":"cannot resolve Missing"}'
     ;;

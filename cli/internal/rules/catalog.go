@@ -68,6 +68,12 @@ var Catalog = map[string]RuleSpec{
 	"PYLON050": {ID: "PYLON050", Name: "parity_count_mismatch", Severity: "error", Description: "The declared state count differs from the code enum's case count.", FixHint: "Align the states list with the enum's cases in the same change."},
 	"PYLON051": {ID: "PYLON051", Name: "parity_state_mismatch", Severity: "error", Description: "A state token appears on only one side of the declared-vs-code comparison.", FixHint: "Align the states list with the enum's cases in the same change."},
 	"PYLON052": {ID: "PYLON052", Name: "parity_route_mismatch", Severity: "advisory", Description: "No source line in the mapped project mentions the declared route path.", FixHint: "Register the route in the mapped project, or drop the expose entry."},
+	"PYLON053": {ID: "PYLON053", Name: "transition_unparseable", Severity: "error", Description: "A declared machine cannot be fully resolved: the declaration is malformed or the code map cannot be extracted.", FixHint: "Fix the declaration shape or the code-side map so both sides resolve fully."},
+	"PYLON054": {ID: "PYLON054", Name: "transition_mismatch", Severity: "error", Description: "The declared and extracted transition triple sets differ.", FixHint: "Align the declared triples with the code map in the same change."},
+	"PYLON055": {ID: "PYLON055", Name: "unknown_state_in_triple", Severity: "error", Description: "A declared triple names a state outside the machine's declared state set.", FixHint: "Add the state to the machine's states list, or fix the triple."},
+	"PYLON056": {ID: "PYLON056", Name: "unreachable_state", Severity: "error", Description: "A declared state is neither initial nor reachable from the initial states.", FixHint: "Add a path from the initial states, or drop the state."},
+	"PYLON057": {ID: "PYLON057", Name: "dead_state", Severity: "error", Description: "A declared state has no outgoing transitions and is not terminal.", FixHint: "Declare the state terminal, or give it an outgoing transition."},
+	"PYLON058": {ID: "PYLON058", Name: "duplicate_transition", Severity: "error", Description: "The same from-event pair is declared twice on one side.", FixHint: "Remove the duplicate triple from the declaration or the code map."},
 }
 
 // AllRules returns the sorted rule catalog.
