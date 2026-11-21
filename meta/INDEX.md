@@ -16,3 +16,6 @@ Documentation about Pylons and the `pylon` CLI.
 - [EXTENSIONS.md](EXTENSIONS.md): how to enable built-in language extensions and author custom `pylon-ext-<name>` plugins.
 - [MANIFESTO.md](MANIFESTO.md): design philosophy, zero-model determinism, and the closed agent loop.
 - [CHANGELOG.md](CHANGELOG.md): release history and origin timeline.
+- [docs/pylons-yaml.md](docs/pylons-yaml.md): schema and examples for `manifests/pylons.yaml`, the per-ledger configuration file.
+- [docs/extension-protocol.md](docs/extension-protocol.md): formal schema, manifest, and wire examples for `pylon-ext-<name>` plugins.
+- [docs/parity-spec.md](docs/parity-spec.md): the proposed declarative parity spec: language profiles and machine declarations (not shipped yet).
