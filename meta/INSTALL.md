@@ -20,14 +20,14 @@ Pylons has two parts: the pylon itself (a directory of Markdown, `manifests/pylo
 The installer places a ready-to-use pylon in `./pylons`: the `pylon` binary in `bin/`, the skeleton, a fresh git repository, and wired gate hooks. It never writes outside that directory.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | bash
 ```
 
 Variants:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh | bash -s -- my-kb          # custom directory
-curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh | PYLONS_VERSION=v0.1.0 bash  # pinned version
+curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | bash -s -- my-kb          # custom directory
+curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | PYLONS_VERSION=v0.1.0 bash  # pinned version
 ```
 
 The installer needs `bash`, `curl` or `wget`, and a sha256 tool. Minimal containers without `bash` cannot run it; download the release tarballs manually there.
