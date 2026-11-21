@@ -722,9 +722,18 @@ func cmdInit(dir string) int {
 		return 1
 	}
 	seedFiles := map[string]string{
-		"AGENTS.md":             "# Guidelines\n\nA pylon: the plain-text map of this platform. See `manifests/vocabulary.json` and `meta/docs/`.\n",
-		"conventions/AGENTS.md": "---\ntitle: \"Conventions\"\ntype: reference\nstatus: active\n---\n\n# Conventions\n",
+		"AGENTS.md": "# Guidelines\n\nA pylon: the plain-text map of this platform. See `manifests/vocabulary.json` and `meta/docs/`.\n",
 	}
+	for _, dir := range scaffoldDirs {
+		zone, _, _ := strings.Cut(dir, "/")
+		switch zone {
+		case "templates", "manifests", "protocols", "extensions":
+			continue
+		}
+		title := strings.ToUpper(zone[:1]) + zone[1:]
+		seedFiles[zone+"/AGENTS.md"] = "---\ntitle: \"" + title + "\"\ntype: reference\nstatus: active\n---\n\n# " + title + "\n"
+	}
+	seedFiles["conventions/AGENTS.md"] = "---\ntitle: \"Conventions\"\ntype: reference\nstatus: active\n---\n\n# Conventions\n"
 	for rel, body := range seedFiles {
 		dst := filepath.Join(dir, filepath.FromSlash(rel))
 		if _, err := os.Stat(dst); os.IsNotExist(err) {
