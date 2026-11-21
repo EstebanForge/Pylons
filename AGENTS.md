@@ -21,6 +21,7 @@ Pylons documents reference files with URI schemes, never machine paths.
 5. **Archive terminal documents.** Set `status: shipped` (with `artifact:`) or `status: abandoned` and move to `plans/archive/`.
 6. **Use Simplified Technical English (ASD-STE100).** Write direct technical English. Limit procedural sentences to 20 words and descriptive sentences to 25 words. Use active voice and present tense.
 7. **Use closed vocabularies.** Frontmatter `status:` accepts only the values listed in `manifests/vocabulary.json`.
+8. **Underscore directories are not content.** Any directory whose name starts with `_` (for example `extensions/_examples/`) is example or scratch space; the CLI never lints, indexes, lists, or dispatches anything under it.
 8. **Honor check grades.** `FORCED` (exit 1) stops work. `ADVISORY` (exit 0) informs and lets work proceed.
 
 ## CLI Commands

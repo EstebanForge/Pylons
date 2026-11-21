@@ -53,7 +53,13 @@ type parityCase struct {
 func parityStates(kbRoot string, cfg config.Config, allowExternal bool) []report.Finding {
 	var out []report.Finding
 	_ = filepath.WalkDir(filepath.Join(kbRoot, "domain"), func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), "_") {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		name := d.Name()
@@ -188,7 +194,13 @@ func compareStates(rel string, states resolve.StringOrList, cases []parityCase) 
 func parityRoutes(kbRoot string, cfg config.Config) []report.Finding {
 	routes := map[string][]routeDecl{} // alias -> declared routes with their anchor doc
 	_ = filepath.WalkDir(filepath.Join(kbRoot, "packages"), func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), "_") {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		name := d.Name()
@@ -269,7 +281,7 @@ func scanRoutePaths(root string, paths []string) map[string]bool {
 			return nil
 		}
 		if d.IsDir() {
-			if importDirSkip[d.Name()] || strings.HasPrefix(d.Name(), ".") {
+			if importDirSkip[d.Name()] || strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_") {
 				return filepath.SkipDir
 			}
 			return nil

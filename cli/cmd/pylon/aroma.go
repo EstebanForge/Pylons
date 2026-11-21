@@ -394,7 +394,7 @@ func walk(root corpusRoot, all []corpusRoot, languages []aroma.Language, include
 			return nil
 		}
 		if entry.IsDir() {
-			if path != root.abs && (skipDirs[entry.Name()] || strings.HasPrefix(entry.Name(), ".")) {
+			if path != root.abs && (skipDirs[entry.Name()] || strings.HasPrefix(entry.Name(), ".") || strings.HasPrefix(entry.Name(), "_")) {
 				return filepath.SkipDir
 			}
 			return nil

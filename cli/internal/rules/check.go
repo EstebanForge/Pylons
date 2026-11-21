@@ -38,7 +38,7 @@ func Check(kbRoot string, targets []string) []report.Finding {
 			return nil
 		}
 		if d.IsDir() {
-			if isRootSkippedDir(kbRoot, p) {
+			if isRootSkippedDir(kbRoot, p) || strings.HasPrefix(d.Name(), "_") {
 				return filepath.SkipDir
 			}
 			return nil
