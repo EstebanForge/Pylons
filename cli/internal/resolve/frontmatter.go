@@ -69,9 +69,34 @@ type DocMeta struct {
 	// enum lives in the mapped project.
 	States       StringOrList `yaml:"states"`
 	StatesSymbol string       `yaml:"states_symbol"`
+	// Formal machines: one entry per lifecycle on the entity. Each
+	// carries its own declaration and code pointers, so one entity can
+	// hold several machines.
+	Machines []MachineDecl `yaml:"machines"`
 	// Post-mortem signals, human-declared; the engine never infers them.
 	AIAuthoredContributed string `yaml:"ai_authored_contributed"`
 	VolumePressure        string `yaml:"volume_pressure"`
+}
+
+// MachineDecl is one declared state machine on a domain entity.
+// Machine ids are identities shared with the code-side marker; they
+// must be unique across the whole ledger.
+type MachineDecl struct {
+	Machine           string           `yaml:"machine"`
+	States            StringOrList     `yaml:"states"`
+	Initial           StringOrList     `yaml:"initial"`
+	Terminal          StringOrList     `yaml:"terminal"`
+	Transitions       []TransitionDecl `yaml:"transitions"`
+	StatesSymbol      string           `yaml:"states_symbol"`
+	TransitionsSymbol string           `yaml:"transitions_symbol"`
+	OnUnevaluated     string           `yaml:"on_unevaluated"`
+}
+
+// TransitionDecl is one declared (from, event, to) triple.
+type TransitionDecl struct {
+	From  string `yaml:"from"`
+	Event string `yaml:"event"`
+	To    string `yaml:"to"`
 }
 
 // PlanFrontMatter holds plan-specific frontmatter fields.

@@ -35,6 +35,7 @@ const (
 func lintParity(kbRoot string, cfg config.Config, allowExternal bool) []report.Finding {
 	findings := parityStates(kbRoot, cfg, allowExternal)
 	findings = append(findings, parityRoutes(kbRoot, cfg)...)
+	findings = append(findings, machineParityFindings(kbRoot, cfg, allowExternal)...)
 	return findings
 }
 
@@ -91,13 +92,24 @@ func checkEntityStates(kbRoot, rel string, meta resolve.DocMeta, cfg config.Conf
 	if !hasStates {
 		return nil
 	}
-	u, ok := resolve.ParseURI(meta.StatesSymbol)
+	cases, err := resolveEnumCases(kbRoot, cfg, meta.StatesSymbol, allowExternal)
+	if err != nil {
+		return []report.Finding{parityNotEvaluated(rel, err.Error())}
+	}
+	return compareStates(rel, meta.States, cases)
+}
+
+// resolveEnumCases resolves a states_symbol repo:// pointer to the
+// extracted enum cases through the project's parity profile. Every
+// failure is not-evaluated: the caller grades it.
+func resolveEnumCases(kbRoot string, cfg config.Config, symbol string, allowExternal bool) ([]parityCase, error) {
+	u, ok := resolve.ParseURI(symbol)
 	if !ok || u.Scheme != "repo" {
-		return []report.Finding{parityNotEvaluated(rel, "states_symbol is not a repo:// URI")}
+		return nil, fmt.Errorf("states_symbol is not a repo:// URI")
 	}
 	root := cfg.ProjectPath(kbRoot, u.Alias)
 	if root == "" {
-		return []report.Finding{parityNotEvaluated(rel, fmt.Sprintf("project %q is not registered", u.Alias))}
+		return nil, fmt.Errorf("project %q is not registered", u.Alias)
 	}
 	filePart := uriSurfacePath(u.Path)
 	enumName := ""
@@ -106,20 +118,20 @@ func checkEntityStates(kbRoot, rel string, meta resolve.DocMeta, cfg config.Conf
 	}
 	target, safe := resolve.SafeJoin(root, filePart)
 	if !safe {
-		return []report.Finding{parityNotEvaluated(rel, fmt.Sprintf("states_symbol path %q is unsafe", filePart))}
+		return nil, fmt.Errorf("states_symbol path %q is unsafe", filePart)
 	}
 	source, err := readBounded(target)
 	if err != nil {
-		return []report.Finding{parityNotEvaluated(rel, fmt.Sprintf("the states_symbol file %s is unreadable", filePart))}
+		return nil, fmt.Errorf("the states_symbol file %s is unreadable", filePart)
 	}
 	cases, err := extractWithProfile(cfg, u.Alias, filePart, source, enumName, kbRoot, allowExternal)
 	if err != nil {
-		return []report.Finding{parityNotEvaluated(rel, err.Error())}
+		return nil, err
 	}
 	if len(cases) == 0 {
-		return []report.Finding{parityNotEvaluated(rel, fmt.Sprintf("no enum named %s found in %s; a skipped set must never read as parity", enumName, filePart))}
+		return nil, fmt.Errorf("no enum named %s found in %s; a skipped set must never read as parity", enumName, filePart)
 	}
-	return compareStates(rel, meta.States, cases)
+	return cases, nil
 }
 
 // compareStates: when every case carries a literal backing value the

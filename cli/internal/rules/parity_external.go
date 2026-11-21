@@ -73,3 +73,54 @@ func extractExternalStates(cfg config.Config, alias, lang, enumName, source stri
 	}
 	return cases, nil
 }
+
+// parityExtTriple is one wire triple for the transitions op.
+type parityExtTriple struct {
+	From  string `json:"from"`
+	Event string `json:"event"`
+	To    string `json:"to"`
+}
+
+type parityExtTransitionsResponse struct {
+	Triples []parityExtTriple `json:"triples"`
+	Error   string            `json:"error,omitempty"`
+}
+
+// extractExternalTransitions asks the project's external profile
+// plugin for the machine's transition triples. Transport failures are
+// wrapped in errParityTransport; a plugin-reported resolution failure
+// is a plain error graded TRANSITION_UNPARSEABLE.
+func extractExternalTransitions(cfg config.Config, alias, lang, machineID, source string, prof config.ParityProfile, kbRoot string, allowExternal bool) ([]parityTransition, error) {
+	_, name, _ := strings.Cut(prof.Use, ":")
+	reg := resolve.NewRegistryWithOptions(resolve.RegistryOptions{
+		Extensions:    cfg.ProjectExtensions(alias),
+		ExtDir:        filepath.Join(kbRoot, "extensions"),
+		AllowExternal: allowExternal,
+	})
+	req := parityExtRequest{
+		SchemaVersion: 1,
+		Op:            "transitions",
+		Profile:       lang,
+		Name:          machineID,
+		Options:       prof.Options,
+		Source:        source,
+	}
+	var resp parityExtTransitionsResponse
+	if err := reg.CallExternal(name, req, &resp); err != nil {
+		return nil, fmt.Errorf("%w: external parity profile %s failed: %s", errParityTransport, name, err)
+	}
+	if resp.Error != "" {
+		return nil, fmt.Errorf("external parity profile %s cannot resolve machine %s: %s", name, machineID, resp.Error)
+	}
+	out := make([]parityTransition, 0, len(resp.Triples))
+	for _, tr := range resp.Triples {
+		if tr.From == "" || tr.Event == "" || tr.To == "" {
+			return nil, fmt.Errorf("external parity profile %s returned an incomplete triple", name)
+		}
+		out = append(out, parityTransition{from: tr.From, event: tr.Event, to: tr.To})
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("external parity profile %s returned no transitions", name)
+	}
+	return out, nil
+}

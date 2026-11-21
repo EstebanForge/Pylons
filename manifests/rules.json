@@ -341,5 +341,47 @@
     "severity": "advisory",
     "description": "No source line in the mapped project mentions the declared route path.",
     "fix_hint": "Register the route in the mapped project, or drop the expose entry."
+  },
+  {
+    "id": "PYLON053",
+    "name": "transition_unparseable",
+    "severity": "error",
+    "description": "A declared machine cannot be fully resolved: the declaration is malformed or the code map cannot be extracted.",
+    "fix_hint": "Fix the declaration shape or the code-side map so both sides resolve fully."
+  },
+  {
+    "id": "PYLON054",
+    "name": "transition_mismatch",
+    "severity": "error",
+    "description": "The declared and extracted transition triple sets differ.",
+    "fix_hint": "Align the declared triples with the code map in the same change."
+  },
+  {
+    "id": "PYLON055",
+    "name": "unknown_state_in_triple",
+    "severity": "error",
+    "description": "A declared triple names a state outside the machine's declared state set.",
+    "fix_hint": "Add the state to the machine's states list, or fix the triple."
+  },
+  {
+    "id": "PYLON056",
+    "name": "unreachable_state",
+    "severity": "error",
+    "description": "A declared state is neither initial nor reachable from the initial states.",
+    "fix_hint": "Add a path from the initial states, or drop the state."
+  },
+  {
+    "id": "PYLON057",
+    "name": "dead_state",
+    "severity": "error",
+    "description": "A declared state has no outgoing transitions and is not terminal.",
+    "fix_hint": "Declare the state terminal, or give it an outgoing transition."
+  },
+  {
+    "id": "PYLON058",
+    "name": "duplicate_transition",
+    "severity": "error",
+    "description": "The same from-event pair is declared twice on one side.",
+    "fix_hint": "Remove the duplicate triple from the declaration or the code map."
   }
 ]

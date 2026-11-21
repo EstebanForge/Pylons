@@ -142,11 +142,12 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 	}
 	findings = append(findings, scanPlanAndQuirkRules(kbRoot, docs, cfg, opts)...)
 	findings = append(findings, scanLifecycleRules(kbRoot, docs, cfg, opts.HasCode)...)
+	findings = append(findings, scanMachineDeclarations(docs)...)
 	if opts.HasCode {
 		findings = append(findings, lintImportBoundaries(kbRoot, cfg, changedSet)...)
 	}
 	if opts.Parity && opts.HasCode {
-		findings = append(findings, lintParity(kbRoot, cfg)...)
+		findings = append(findings, lintParity(kbRoot, cfg, opts.AllowExternal)...)
 	}
 	return findings
 }
