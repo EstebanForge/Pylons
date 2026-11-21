@@ -37,7 +37,7 @@ func writeProductTree(t *testing.T, root string) {
 		"conventions/proposals", "conventions/archive",
 		"quirks/archive",
 		"domain/entities", "domain/archive",
-		"investigations/archive", "audits/archive",
+		"investigations/archive",
 		"references/archive", "tickets/archive",
 	}
 	write(t, filepath.Join(root, "AGENTS.md"), "# guidelines\n")

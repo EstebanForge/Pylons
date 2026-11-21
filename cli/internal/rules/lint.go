@@ -274,8 +274,7 @@ var allowedStatuses = map[string][]string{
 	"plans":          {"proposed", "accepted", "in-progress", "shipped", "abandoned"},
 	"conventions":    {"proposed", "accepted", "enforced", "superseded"},
 	"decisions":      {"proposed", "accepted", "superseded", "deprecated"},
-	"audits":         {"active", "superseded", "withdrawn", "retired"},
-	"investigations": {"active", "resolved", "abandoned"},
+	"investigations": {"active", "resolved", "abandoned", "superseded", "withdrawn", "retired"},
 	"packages":       {"active", "deprecated", "retired"},
 	"references":     {"active", "superseded", "retired"},
 	"quirks":         {"active"},
@@ -315,10 +314,12 @@ func statusMatchesFolder(rootZone, rel, status string) bool {
 			return !inArchive && !inProposals
 		}
 	case "investigations":
-		if status == "resolved" || status == "abandoned" {
+		switch status {
+		case "resolved", "abandoned", "superseded", "withdrawn", "retired":
 			return inArchive
+		default:
+			return !inArchive
 		}
-		return !inArchive
 	case "packages":
 		if status == "retired" {
 			return inArchive

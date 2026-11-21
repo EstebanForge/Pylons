@@ -15,7 +15,7 @@ func TestInitSeedsZoneAgentGuides(t *testing.T) {
 	}
 	for _, zone := range []string{
 		"packages", "proposals", "plans", "decisions", "quirks",
-		"domain", "investigations", "audits", "references", "tickets",
+		"domain", "investigations", "references", "tickets",
 		"prompts", "skills", "conventions",
 	} {
 		if _, err := os.Stat(filepath.Join(dir, zone, "AGENTS.md")); err != nil {

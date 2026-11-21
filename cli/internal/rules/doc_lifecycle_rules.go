@@ -60,6 +60,10 @@ func scanLifecycleRules(kbRoot string, docs []corpusDoc, cfg config.Config, hasC
 			}
 			out = append(out, ReviewPlan(kbRoot, d.rel)...)
 		case "investigations":
+			if d.meta.Type == "audit" {
+				out = append(out, checkAuditDoc(d)...)
+				break
+			}
 			if !invFilenameRe.MatchString(base) {
 				out = append(out, errFinding("PYLON030", d.rel, 1, "investigation filename must match YYYY-MM-DD-<slug>.md"))
 			}
@@ -68,8 +72,6 @@ func scanLifecycleRules(kbRoot string, docs []corpusDoc, cfg config.Config, hasC
 					out = append(out, errFinding("PYLON031", d.rel, 1, "closed investigation must include ## Root Cause and ## Resolution"))
 				}
 			}
-		case "audits":
-			out = append(out, checkAuditDoc(d)...)
 		case "quirks":
 			out = append(out, postmortemFindings(kbRoot, d.rel, d.content, cfg, hasCode)...)
 		case "domain":

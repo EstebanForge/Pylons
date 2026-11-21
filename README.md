@@ -36,9 +36,8 @@ A pylon is organized by rate of change. Slow-moving knowledge sits apart from fa
 | Conventions | `conventions/` | Cross-project patterns and closed vocabularies (`conventions/proposals/`, `conventions/archive/`). |
 | Domain | `domain/` | Ubiquitous language and domain entity definitions. |
 | Quirks | `quirks/` | Append-only ledger of verified traps: symptom, cause, resolution, and affected contracts. |
-| Investigations | `investigations/` | Structured debugging records for complex bugs (`investigations/archive/`). |
+| Investigations | `investigations/` | Structured debugging records for complex bugs, plus audit records with findings tables (`investigations/archive/`). |
 | Tickets | `tickets/` | Local work items: bugs, tasks, improvements, and chores (`tickets/archive/`). |
-| Audits | `audits/` | Point-in-time health and compliance audits (`audits/archive/`). |
 | References | `references/` | External 3rd-party API and tool references (`references/archive/`). |
 | Templates | `templates/` | Canonical schema templates for every document type. |
 | Protocols | `protocols/` | CLI-consumed protocol templates (`pylon protocol`, `pylon reflect`). |

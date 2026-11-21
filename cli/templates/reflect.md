@@ -30,7 +30,6 @@ Run this protocol periodically (weekly or monthly) to keep Pylons (`{{.Root}}`) 
 | `plans/`, `proposals/` | Phase 2 | PRs, base branch, `{{.Bin}} contract` | `shipped` / `abandoned` move to `plans/archive/` |
 | `decisions/`, `decisions/proposals/` | Phase 2 | Live architecture and code | `superseded` / `deprecated` move to `decisions/archive/` |
 | `conventions/`, `conventions/proposals/` | Phase 2 | Tooling, CI, codebase patterns | `superseded` move to `conventions/archive/` |
-| `audits/` | Phase 2 | Remediation plans and code | `superseded` / `withdrawn` / `retired` move to `audits/archive/` |
 | `investigations/` | Phase 2 | Fix commits and live code | `resolved` / `abandoned` move to `investigations/archive/` |
 | `tickets/` | Phase 2 | Local work items and plans | `done` / `wontfix` move to `tickets/archive/` |
 | `packages/` | Phase 3 | `pylons.yaml` registered `repo://` checkouts | `retired` move to `packages/archive/` |
@@ -84,7 +83,7 @@ Track counts and paths across phases:
    - Move `superseded` or `deprecated` decisions to `decisions/archive/`.
 3. **Conventions, Audits, and Investigations**:
    - Move `superseded` conventions to `conventions/archive/`.
-   - Check `audits/` for overdue `reaudit:` dates (`PYLON026`) and valid finding row statuses (`PYLON018`).
+   - Check audit docs in `investigations/` for overdue `reaudit:` dates (`PYLON026`) and valid finding row statuses (`PYLON018`).
    - Move `resolved` or `abandoned` investigations (with `## Root Cause` and `## Resolution`) to `investigations/archive/`.
 4. Update `updated: YYYY-MM-DD` only on files whose content or frontmatter changed.
 

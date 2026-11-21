@@ -161,14 +161,14 @@ func seedProductTree(t *testing.T, root string) {
 		"packages/AGENTS.md", "proposals/AGENTS.md", "plans/AGENTS.md",
 		"decisions/AGENTS.md", "conventions/AGENTS.md", "quirks/AGENTS.md",
 		"domain/AGENTS.md", "investigations/AGENTS.md",
-		"audits/AGENTS.md", "references/AGENTS.md", "tickets/AGENTS.md",
+		"references/AGENTS.md", "tickets/AGENTS.md",
 		"prompts/AGENTS.md", "skills/AGENTS.md",
 		"packages/archive/.gitkeep", "plans/archive/.gitkeep",
 		"decisions/proposals/.gitkeep", "decisions/archive/.gitkeep",
 		"conventions/proposals/.gitkeep", "conventions/archive/.gitkeep",
 		"quirks/archive/.gitkeep",
 		"domain/entities/.gitkeep", "domain/archive/.gitkeep",
-		"investigations/archive/.gitkeep", "audits/archive/.gitkeep",
+		"investigations/archive/.gitkeep",
 		"references/archive/.gitkeep", "tickets/archive/.gitkeep"} {
 		full := filepath.Join(root, filepath.FromSlash(p))
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {

@@ -115,7 +115,7 @@ Every incident has 2 costs: the outage and the relearning. The features in this 
 
 - **What**: Structured diagnostic records for complex, multi-package bugs: symptom, reproduction, fail-first commands, root cause, blast radius, and resolution evidence.
 - **The pain**: Hard bugs get solved in chat threads and closed tickets, and the knowledge dies there. The next similar bug restarts from zero.
-- **How it works**: The investigation document lives beside the work, before and during the fix (`YYYY-MM-DD-<slug>.md`, `PYLON030`). Investigations stay contract-free. Terminal records move to `investigations/archive/`. Findings with recurring traps promote into `quirks/` with a verified guard.
+- **How it works**: The investigation document lives beside the work, before and during the fix (`YYYY-MM-DD-<slug>.md`, `PYLON030`). Audit records (`type: audit`) share the zone with their own rules: findings-table row statuses (`PYLON018`) and reaudit dates (`PYLON026`). Investigations stay contract-free. Terminal records of both shapes move to `investigations/archive/`. Findings with recurring traps promote into `quirks/` with a verified guard.
 - **Guard**: `pylon lint` enforces the lifecycle statuses and folder placement.
 
 #### Decision records (`decisions/`)
@@ -281,7 +281,6 @@ The cards above cover the systems with commands and grades. The rest of the ledg
 | `references/` | Third-party API docs and external hooks the platform relies on. | Developers and agents extending integrations |
 | `prompts/` | Shared raw agent prompts, reusable across the platform. | Agents and their operators |
 | `skills/` | Reusable team skills for agent environments. | Agents |
-| `audits/` | Per-package and test-suite audit records. | Reviewers, leads |
 | `meta/` | Documentation about Pylons itself: manifesto, feature guide, roadmap, changelog, CLI manual. Start at [`meta/INDEX.md`](meta/INDEX.md). | Everyone |
 | `manifests/` | Compiled JSON artifacts the CLI emits and CI checks. | Tooling |
 

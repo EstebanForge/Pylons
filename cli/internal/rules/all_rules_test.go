@@ -172,7 +172,7 @@ func TestDocLifecycleAndFilenameRules(t *testing.T) {
 	mustWrite(t, filepath.Join(kb, "plans/badname.md"), "---\ntitle: \"Bad\"\ntype: plan\nstatus: accepted\nticket: [T-1]\n---\n\n# Bad\n")
 
 	// Overdue audit (PYLON026) + invalid row status (PYLON018)
-	mustWrite(t, filepath.Join(kb, "audits/sec.md"), `---
+	mustWrite(t, filepath.Join(kb, "investigations/sec-audit.md"), `---
 title: "Sec Audit"
 type: audit
 status: active

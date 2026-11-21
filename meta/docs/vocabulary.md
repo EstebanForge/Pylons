@@ -25,8 +25,7 @@ The `status:` field records where a document sits in its lifecycle. Allowed valu
 | `plans/` | `proposed`, `accepted`, `in-progress`, `shipped`, `abandoned` |
 | `conventions/` | `proposed`, `accepted`, `enforced`, `superseded` |
 | `decisions/` | `proposed`, `accepted`, `superseded`, `deprecated` |
-| `audits/` | `active`, `superseded`, `withdrawn`, `retired` |
-| `investigations/` | `active`, `resolved`, `abandoned` |
+| `investigations/` | `active`, `resolved`, `abandoned`; audit docs add `superseded`, `withdrawn`, `retired` |
 | `packages/` | `active`, `deprecated`, `retired` |
 | `references/` | `active`, `superseded`, `retired` |
 | `quirks/` | `active` |
@@ -62,8 +61,8 @@ These fields accept values only from the sets in the JSON `closed_sets` map. No 
 | `level:` | conventions | `MUST`, `SHOULD` |
 | `ai_authored_contributed:` | quirks | `yes`, `no`, `unknown` (validated by `PYLON041`) |
 | `volume_pressure:` | quirks | `review`, `test`, `rollout`, `observability`, `none` (validated by `PYLON041`) |
-| `remediation:` | audits | `open`, `in-progress`, `complete`, `rejected` |
-| `severity:` | investigations, audits | `critical`, `high`, `medium`, `low` |
+| `remediation:` | investigations (audit docs) | `open`, `in-progress`, `complete`, `rejected` |
+| `severity:` | investigations | `critical`, `high`, `medium`, `low` |
 | `reproducible:` | investigations | `always`, `intermittent`, `environmental` |
 | `rollout:` | packages | `development`, `production` |
 | `guard:` | quirks | `lint-rule`, `convention`, `test`, `accepted-risk` |
