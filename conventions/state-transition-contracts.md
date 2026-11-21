@@ -3,7 +3,7 @@ title: "State transition contracts"
 type: convention
 slug: conv.state-transition-contracts
 level: MUST
-status: proposed
+status: accepted
 created: 2026-11-21
 updated: 2026-11-21
 owners:

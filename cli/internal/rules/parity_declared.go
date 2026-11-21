@@ -233,7 +233,7 @@ func machineCodeFindings(kbRoot, rel string, meta resolve.DocMeta, cfg config.Co
 			continue
 		}
 		out = append(out, compareTriples(rel, m, triples)...)
-		out = append(out, scanPersistedKeyWrites(kbRoot, cfg, m)...)
+		out = append(out, scanPersistedKeyWrites(kbRoot, cfg, rel, m)...)
 		out = append(out, checkMachineVerifiedBy(kbRoot, cfg, rel, m)...)
 	}
 	return out
@@ -359,7 +359,7 @@ var persistedKeyWriteRes = []*regexp.Regexp{
 // persisted key in the project source, outside the machine surface
 // (the transitions file) and test files. Advisory: a constructor or
 // rehydration may be legitimate, and lint cannot prove intent.
-func scanPersistedKeyWrites(kbRoot string, cfg config.Config, m *resolve.MachineDecl) []report.Finding {
+func scanPersistedKeyWrites(kbRoot string, cfg config.Config, rel string, m *resolve.MachineDecl) []report.Finding {
 	if strings.TrimSpace(m.PersistedKey) == "" || m.TransitionsSymbol == "" {
 		return nil
 	}
@@ -415,8 +415,8 @@ func scanPersistedKeyWrites(kbRoot string, cfg config.Config, m *resolve.Machine
 				if re.MatchString(line) {
 					hits++
 					if hits == 1 {
-						out = append(out, advisoryFinding(bypassedWriteID, m.Machine, i+1,
-							fmt.Sprintf("BYPASSED_STATE_WRITE: %s in %s writes the persisted state key %q outside the machine surface; route the write through the machine", name, m.Machine, m.PersistedKey)))
+						out = append(out, advisoryFinding(bypassedWriteID, rel, i+1,
+							fmt.Sprintf("BYPASSED_STATE_WRITE: %s in machine %s writes the persisted state key %q outside the machine surface; route the write through the machine", name, m.Machine, m.PersistedKey)))
 					}
 					break
 				}

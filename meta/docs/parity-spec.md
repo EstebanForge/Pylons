@@ -7,7 +7,7 @@ updated: 2026-11-20
 owners:
   - esteban
 sources: []
-description: "Schema and examples for the planned declarative parity spec: language profiles, machine declarations, and transition triples."
+description: "Schema and examples for the declarative parity spec: language profiles, machine declarations, and transition triples."
 tags: [reference, schema, parity, proposed]
 ---
 
@@ -48,7 +48,7 @@ parity:
 
 `use: builtin:<language>` selects an in-process profile shipped with the CLI (go, rust, typescript, javascript, python, php, csharp, ruby are the planned built-in set). `use: external:<name>` selects the enabled extension `<name>`, run as the `pylon-ext-<name>` binary; it needs `--allow-external-extensions` at check time. Rebinding a language overrides its built-in with no implicit precedence. Two profiles claiming the same file extension is a config error. A declared machine with no matching binding yields the PARITY_NOT_EVALUATED advisory; an `on_unevaluated:` knob (default advisory) can make it block. With no `parity:` section at all, an enabled builtin extension acts as an implicit builtin binding.
 
-## Example: machine declaration (planned)
+## Example: machine declaration
 
 On `domain/shipment.md`, one entity carrying two machines (a lifecycle and a returns process), because real entities often hold several:
 
@@ -97,4 +97,4 @@ The profile extracts the enum case set and the transition triples from the named
 - A profile that cannot fully resolve a declared machine errors and fails closed. A skipped machine must never read as parity.
 - `initial:` and `terminal:` are mandatory fields on every machine entry. Machine ids are unique across the repo.
 - Configuration lives in the user's ledger. This ledger registers no live project and carries no machine declarations.
-- Until the spec ships, the shipped `states:` and `states_symbol:` set checks under `lint --parity` are the only parity surface. See [EXTENSIONS.md](../EXTENSIONS.md) for what is enabled today.
+- The `states:`/`states_symbol:` set checks and the `machines:` transition checks both run under `lint --parity`. Transition extraction ships for go, php, and rust built-in profiles; other languages need an external plugin binding. See [EXTENSIONS.md](../EXTENSIONS.md) for what is enabled today.
