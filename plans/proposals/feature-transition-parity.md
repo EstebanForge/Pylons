@@ -33,9 +33,9 @@ The comparison extends cli/internal/rules/parity.go. The catalog tops out at PYL
 
 ## Design
 
-A lifecycle becomes a formal machine: one closed `State` set, one backed `Event` enum beside it, and one pure `(State, Event) -> State` transition map. The doc side declares the triples as structured frontmatter on the domain entity, plus mandatory `initial:` and `terminal:` sets. The code side is a package-level nested map keyed by state case value, then event case value, with literal case values only. Purity, throw-on-invalid, and compare-and-swap persistence are convention prose plus a table test in the mapped repo's QA suite; lint cannot prove them.
+A lifecycle becomes a formal machine: one closed `State` set, one backed `Event` enum beside it, and one pure `(State, Event) -> State` transition map. The doc side declares each machine as one entry of a `machines:` front-matter list on the domain entity. Every entry carries its id, `states:` set, `transitions:` triples, and mandatory `initial:` and `terminal:` sets. The list form is pinned from day one, because real entities carry several machines. The legacy migration in one adoption tree holds an arm/disarm lifecycle and a migration phase. Order-shaped entities in the other stack carry order status, payment status, and subscription status at once. The code side is a package-level nested map keyed by state case value, then event case value, with literal case values only. Purity, throw-on-invalid, and compare-and-swap persistence are convention prose plus a table test in the mapped repo's QA suite; lint cannot prove them.
 
-Declaration is explicit in both directions. A profile-defined declaration marker sits above the map in code, and a `machine:` front-matter key on the domain entity names the same target. No enum auto-discovery: discovery by proximity is a heuristic and violates the determinism constraint.
+Declaration is explicit in both directions. A profile-defined declaration marker sits above the map in code, and a `machines:` front-matter entry on the domain entity names the same target. No enum auto-discovery: discovery by proximity is a heuristic and violates the determinism constraint.
 
 ### Product surface: language profiles
 
@@ -59,7 +59,7 @@ Each profile pins one canonical form for its language, plus the marker that decl
 
 Severities are lint severities, registered in the catalog. `FORCED` and `ADVISORY` check grades stay plan-signal-only and never appear in lint output.
 
-- `PYLON053 TRANSITION_UNPARSEABLE` (error): a declared machine that cannot be fully resolved on either side. The declaration side: missing `initial:` or `terminal:`, a bad triple shape, a `machine:` with no resolvable target. The code side: an unresolvable map. Fail closed.
+- `PYLON053 TRANSITION_UNPARSEABLE` (error): a declared machine that cannot be fully resolved on either side. Declaration side: a missing or duplicate machine id, a missing `initial:` or `terminal:`, a bad triple shape, an unresolved target. Code side: an unresolvable map. Fail closed.
 - `PYLON054 TRANSITION_MISMATCH` (error): a doc triple with no code triple, or the reverse.
 - `PYLON055 UNKNOWN_STATE_IN_TRIPLE` (error): a triple names a state absent from the enum.
 - `PYLON056 UNREACHABLE_STATE` (error): a case with no inbound transition and not declared initial.
@@ -67,7 +67,7 @@ Severities are lint severities, registered in the catalog. `FORCED` and `ADVISOR
 - `PYLON058 DUPLICATE_TRANSITION` (error): two triples share `(from, event)` with different `to`. Map literals silently overwrite duplicates; the AST still sees both.
 - `PYLON059 BYPASSED_STATE_WRITE` (advisory, ratchet-fed): the persisted state key named by the machine is written outside the machine's surface.
 
-Three more pins complete the semantics. The doc side carries its own identity. The `machine:` id must equal the code marker id; a duplicated id in one repo is an error. Graph checks (unreachable, dead, duplicate, unknown state) are doc-only and run without a profile. A declared machine is therefore graph-checked even before its code side is bound. Plugin infrastructure failures (missing binary, timeout, crash, invalid JSON, disabled externals) are separate from plugin verdicts. Infrastructure yields PARITY_NOT_EVALUATED with a cause; a plugin that runs but cannot resolve the shape yields PYLON053. The engine sorts the extracted triple list before comparing, so PYLON058 can see duplicates the map literal would overwrite.
+Three more pins complete the semantics. The doc side carries its own identity. Each machine entry's id must equal its code marker id; a duplicated machine id, in one entity or across the repo, is an error. Graph checks (unreachable, dead, duplicate, unknown state) are doc-only and run without a profile. A declared machine is therefore graph-checked even before its code side is bound. Plugin infrastructure failures (missing binary, timeout, crash, invalid JSON, disabled externals) are separate from plugin verdicts. Infrastructure yields PARITY_NOT_EVALUATED with a cause; a plugin that runs but cannot resolve the shape yields PYLON053. The engine sorts the extracted triple list before comparing, so PYLON058 can see duplicates the map literal would overwrite.
 
 ### Generation and binding
 
@@ -83,7 +83,7 @@ v1 ships comparison only: the declared frontmatter triples are parsed, checked a
 - [ ] M1: Convention entry. The `state-transition-contracts.md` convention file (proposed), written language-neutral.
 - [ ] M2: Go reference profile. The package-level map literal and directive marker, parsed with `go/parser`. Red-first tests over a fixture machine; unparseable shapes fail closed as PYLON053.
 - [ ] M3: Php and rust reference profiles. Line-parseable canonical forms: the class-level const map and the match table. The first profiles beyond Go, sized for the first two adoption stacks.
-- [ ] M4: Declared side. The `machine:` key, `transitions:` triples, `initial:`, and `terminal:` as domain-entity frontmatter, validated by the parser. No generator in v1.
+- [ ] M4: Declared side. The `machines:` front-matter list, each entry carrying its id, states, triples, and `initial:`/`terminal:` sets, validated by the parser. No generator in v1.
 - [ ] M5: Comparison and graph rules. Triple-set intersection in both directions, plus PYLON054 through PYLON058, each with a red-first test.
 - [ ] M6: Advisory and proofs. PYLON059 via the import-boundary write scan; `verified_by:` resolution; `context` and `brief` surfacing.
 - [ ] M7: Merge-door escalation wiring, ship-rule docs (USAGE, FEATURES, CHANGELOG, roadmap deletion), and the ship commit.
@@ -92,6 +92,6 @@ v1 ships comparison only: the declared frontmatter triples are parsed, checked a
 ## Open questions
 
 - Does the legacy vocabulary of an existing ledger demand declared-side key aliases? The default is a one-time content migration. Aliases are deferred until a real vocabulary demands them.
-- Can one domain entity declare more than one machine? The v1 answer is one `machine:` per entity. A list is a later schema bump.
+- One domain entity can declare several machines, via the `machines:` list. Real cases exist in both adoption trees. The list ships in v1, and no schema bump will ever be needed.
 - Resolved: comparison-only in v1. Generation follows the first real machine (M7).
 - Resolved for the Go reference profile: a package-level `var` literal with const identifier keys, marked by a `// pylon:machine <id>` directive. Other profiles pin their own canonical forms when they land.
