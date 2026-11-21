@@ -90,9 +90,8 @@ func machineDeclaredChecks(rel string, m *resolve.MachineDecl) []report.Finding 
 	if len(nonEmptyList(m.Initial)) == 0 {
 		unparsable(fmt.Sprintf("machine %s declares no initial states", m.Machine))
 	}
-	if len(nonEmptyList(m.Terminal)) == 0 {
-		unparsable(fmt.Sprintf("machine %s declares no terminal states", m.Machine))
-	}
+	// terminal is optional: a machine can legitimately never
+	// terminate (a sync loop returns to idle forever).
 	if len(out) > 0 {
 		return out
 	}
@@ -102,9 +101,9 @@ func machineDeclaredChecks(rel string, m *resolve.MachineDecl) []report.Finding 
 	}
 	adj := map[string][]string{}
 	outgoing := map[string]bool{}
-	seenPair := map[[2]string]bool{}
+	seenPair := map[[3]string]bool{}
 	for _, tr := range m.Transitions {
-		if tr.From == "" || tr.Event == "" || tr.To == "" {
+		if tr.From == "" || tr.To == "" {
 			unparsable(fmt.Sprintf("machine %s carries an incomplete triple", m.Machine))
 			continue
 		}
@@ -114,13 +113,13 @@ func machineDeclaredChecks(rel string, m *resolve.MachineDecl) []report.Finding 
 					fmt.Sprintf("UNKNOWN_STATE_IN_TRIPLE: %s is not in machine %s's declared states", tok, m.Machine)))
 			}
 		}
-		pair := [2]string{tr.From, tr.Event}
-		if seenPair[pair] {
+		dup := duplicateKey(tripleKey{tr.From, tr.Event, tr.To})
+		if seenPair[dup] {
 			out = append(out, errFinding(transitionDuplicateID, rel, 1,
-				fmt.Sprintf("DUPLICATE_TRANSITION: %s --%s--> is declared twice in machine %s", tr.From, tr.Event, m.Machine)))
+				fmt.Sprintf("DUPLICATE_TRANSITION: %s is declared twice in machine %s", dupLabel(dup), m.Machine)))
 			continue
 		}
-		seenPair[pair] = true
+		seenPair[dup] = true
 		adj[tr.From] = append(adj[tr.From], tr.To)
 		outgoing[tr.From] = true
 	}
@@ -299,28 +298,40 @@ func resolveMachineTransitions(kbRoot string, cfg config.Config, symbol, machine
 	return extractExternalTransitions(cfg, u.Alias, lang, machineID, source, prof, kbRoot, allowExternal)
 }
 
+// duplicateKey identifies a transition whose repetition is an error:
+// the (from, event) pair when an event exists, the exact from->to
+// pair for event-less adjacency transitions.
+func duplicateKey(t tripleKey) [3]string {
+	if t.event != "" {
+		return [3]string{t.from, t.event, ""}
+	}
+	return [3]string{t.from, "", t.to}
+}
+
+func dupLabel(k [3]string) string {
+	if k[1] == "" {
+		return k[0] + " --> " + k[2]
+	}
+	return k[0] + " --" + k[1] + "-->"
+}
+
 // compareTriples compares declared and extracted triple sets in both
 // directions, order-insensitive, and flags duplicate extracted
 // transitions a map literal would silently overwrite.
 func compareTriples(rel string, m *resolve.MachineDecl, extracted []parityTransition) []report.Finding {
 	var out []report.Finding
-	pairCount := map[[2]string]int{}
+	dupCount := map[[3]string]int{}
 	extractedCount := map[tripleKey]int{}
 	for _, t := range extracted {
 		extractedCount[tripleKey{t.from, t.event, t.to}]++
-		pairCount[[2]string{t.from, t.event}]++
+		dupCount[duplicateKey(tripleKey{t.from, t.event, t.to})]++
 	}
-	pairs := slices.Collect(maps.Keys(pairCount))
-	slices.SortFunc(pairs, func(a, b [2]string) int {
-		if c := strings.Compare(a[0], b[0]); c != 0 {
-			return c
-		}
-		return strings.Compare(a[1], b[1])
-	})
+	pairs := slices.Collect(maps.Keys(dupCount))
+	slices.SortFunc(pairs, func(a, b [3]string) int { return strings.Compare(dupLabel(a), dupLabel(b)) })
 	for _, pair := range pairs {
-		if n := pairCount[pair]; n > 1 {
+		if n := dupCount[pair]; n > 1 {
 			out = append(out, errFinding(transitionDuplicateID, rel, 1,
-				fmt.Sprintf("DUPLICATE_TRANSITION: the code map declares %s --%s--> %d times", pair[0], pair[1], n)))
+				fmt.Sprintf("DUPLICATE_TRANSITION: the code map declares %s %d times", dupLabel(pair), n)))
 		}
 	}
 	declared := map[tripleKey]bool{}
