@@ -271,7 +271,16 @@ func schemaContractSurfaces(kbRoot string) map[string][]string {
 	out := map[string][]string{}
 	seen := map[string]bool{}
 	_ = filepath.WalkDir(filepath.Join(kbRoot, "plans"), func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), "_") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".md") {
 			return nil
 		}
 		name := d.Name()

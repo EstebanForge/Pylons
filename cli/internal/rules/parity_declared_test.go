@@ -163,7 +163,6 @@ func machineKB(t *testing.T, source string, mutate func(*resolve.MachineDecl)) s
 	return kb
 }
 
-
 // projectRootOf reads the fixture's registered project path.
 func projectRootOf(t *testing.T, kb string) string {
 	t.Helper()

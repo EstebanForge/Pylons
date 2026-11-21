@@ -178,7 +178,13 @@ func nonEmptyList(list []string) []string {
 func machineParityFindings(kbRoot string, cfg config.Config, allowExternal bool) []report.Finding {
 	var out []report.Finding
 	_ = filepath.WalkDir(filepath.Join(kbRoot, "domain"), func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), "_") {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		name := d.Name()
@@ -379,7 +385,13 @@ func scanPersistedKeyWrites(kbRoot string, cfg config.Config, rel string, m *res
 	}
 	var out []report.Finding
 	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), "_") {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		name := d.Name()

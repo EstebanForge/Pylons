@@ -974,7 +974,7 @@ func scanDocs(kbRoot string, includeArchive bool) []docEntry {
 					}
 				}
 			}
-			if d.Name() == ".git" || (!includeArchive && d.Name() == "archive") {
+			if d.Name() == ".git" || (!includeArchive && d.Name() == "archive") || strings.HasPrefix(d.Name(), "_") {
 				return filepath.SkipDir
 			}
 			return nil

@@ -537,7 +537,7 @@ func scanImports(root, self string, ident []projectIdentity, langs map[string]bo
 			return nil
 		}
 		if d.IsDir() {
-			if importDirSkip[d.Name()] || strings.HasPrefix(d.Name(), ".") {
+			if importDirSkip[d.Name()] || strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_") {
 				return filepath.SkipDir
 			}
 			// A nested registered project owns its own files.

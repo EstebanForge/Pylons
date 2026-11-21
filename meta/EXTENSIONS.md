@@ -44,7 +44,7 @@ If an extension is not enabled for a project, its contract kinds fail resolution
 
 To support any custom language, schema format, or framework without recompiling `pylon`:
 
-1. Create an executable named `pylon-ext-<name>` and place it in `<pylons-root>/extensions/` or anywhere on `PATH`.
+1. Create an executable named `pylon-ext-<name>` and place it in `<pylons-root>/extensions/` or anywhere on `PATH`. Reference plugins live in `extensions/_examples/`; copy one out of there. The CLI ignores every directory whose name starts with `_`, so `_examples/` content is never dispatched, linted, or indexed anywhere in the ledger.
 2. Enable `<name>` in `manifests/pylons.yaml` under `extensions:`.
 3. Use contract kinds prefixed with `<name>-` (for example `<name>-symbol` or `<name>-route`).
 4. Pass `--allow-external-extensions` (or set `PYLON_ALLOW_EXTERNAL_EXTENSIONS=1`) when running `lint` or `contract` against trusted repositories.

@@ -292,7 +292,7 @@ func BuildPackagesManifest(kbRoot string) []PackageManifestEntry {
 			return nil
 		}
 		if d.IsDir() {
-			if d.Name() == "archive" {
+			if d.Name() == "archive" || strings.HasPrefix(d.Name(), "_") {
 				return filepath.SkipDir
 			}
 			return nil

@@ -337,7 +337,7 @@ func buildDeploymentIndex(dir string) *deploymentIndex {
 			return nil
 		}
 		if d.IsDir() {
-			if d.Name() != "." && deploymentSkipDirs[d.Name()] {
+			if d.Name() != "." && (deploymentSkipDirs[d.Name()] || strings.HasPrefix(d.Name(), "_")) {
 				return fs.SkipDir
 			}
 			return nil
@@ -407,7 +407,16 @@ func surfaceName(surface, kind string) string {
 func publicContractSurfaces(kbRoot string) map[string]map[string]string {
 	out := map[string]map[string]string{}
 	_ = filepath.WalkDir(filepath.Join(kbRoot, "plans"), func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), "_") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".md") {
 			return nil
 		}
 		name := d.Name()
