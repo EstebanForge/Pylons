@@ -39,15 +39,6 @@ All features, rules, and commands in Pylons and the `pylon` CLI must be 100% det
 - **Consumer**: Filter input for `pylon context` ranking and periodic hygiene reviews.
 - **Objective**: Keep context lean and high-signal. Weed out obsolete quirks and elevate proven operational patterns to formal engineering standards.
 
-### parity-linter
-- **Command**: `pylon lint --parity`
-- **Deterministic Mechanism**: AST extraction via the enabled language extensions and markdown table parsing. Extract enum definitions, state machines, and route registrations from the mapped source, against the declared tables in `domain/` and `packages/`.
-- **Enforcement**:
-  - Detect `COUNT_MISMATCH`: Markdown lists 4 states, but the code enum contains 5.
-  - Detect `STATE_MISMATCH`: Markdown names state values that do not match the enum backing values.
-  - Detect `API_ROUTE_MISMATCH`: Route parameters or HTTP methods in documentation disagree with registered route callbacks.
-- **Objective**: Catch semantic drift between high-level architectural documentation and actual codebase implementations without manual line-by-line inspection.
-
 ### pr-harvest
 - **Command**: `pylon harvest pr --diff <patch> [--metadata <json>]`
 - **Deterministic Mechanism**: Run in CI upon PR merge across the mapped repositories. Parse PR commit messages, merge diffs, and review conversation markers for architectural changes and public symbol additions.

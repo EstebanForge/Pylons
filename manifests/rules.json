@@ -313,5 +313,33 @@
     "severity": "error",
     "description": "A pinned deployment consumes a public surface that is removed or changed against the pinned release tag, or a pin cannot be judged.",
     "fix_hint": "Restore the surface at HEAD or cut and ship a new release for the pinned deployment; unregistered pins fail closed."
+  },
+  {
+    "id": "PYLON049",
+    "name": "parity_not_evaluated",
+    "severity": "advisory",
+    "description": "A parity declaration has one half without the other, or the declared enum cannot be resolved; a skipped set must never read as parity.",
+    "fix_hint": "Declare states and states_symbol together, and point states_symbol at a repo:// file and enum name that exists."
+  },
+  {
+    "id": "PYLON050",
+    "name": "parity_count_mismatch",
+    "severity": "error",
+    "description": "The declared state count differs from the code enum's case count.",
+    "fix_hint": "Align the states list with the enum's cases in the same change."
+  },
+  {
+    "id": "PYLON051",
+    "name": "parity_state_mismatch",
+    "severity": "error",
+    "description": "A state token appears on only one side of the declared-vs-code comparison.",
+    "fix_hint": "Align the states list with the enum's cases in the same change."
+  },
+  {
+    "id": "PYLON052",
+    "name": "parity_route_mismatch",
+    "severity": "advisory",
+    "description": "No source line in the mapped project mentions the declared route path.",
+    "fix_hint": "Register the route in the mapped project, or drop the expose entry."
   }
 ]

@@ -65,6 +65,10 @@ type DocMeta struct {
 	Sources    []string     `yaml:"sources"`
 	Ticket     []any        `yaml:"ticket"`
 	Avoid      StringOrList `yaml:"avoid"`
+	// State parity: the declared closed set and where the backed
+	// enum lives in the mapped project.
+	States       StringOrList `yaml:"states"`
+	StatesSymbol string       `yaml:"states_symbol"`
 	// Post-mortem signals, human-declared; the engine never infers them.
 	AIAuthoredContributed string `yaml:"ai_authored_contributed"`
 	VolumePressure        string `yaml:"volume_pressure"`

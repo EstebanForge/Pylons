@@ -357,6 +357,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `lint` | Validates frontmatter, lifecycle statuses, links, the dependency graph, and STE-100 prose. | Before commit / PR | Frontmatter, links, lifecycle errors |
 | `lint --fix` | Auto-relocates misplaced docs and heals single-depth broken links. | Fixing lint errors | Unfixable errors |
 | `lint --changed` | Pre-commit fast path: validates staged git files only. | Git pre-commit gate | Errors in staged files |
+| `lint --parity` | Declared-vs-code set checks on top of the standard pass: domain `states:` against the enum at `states_symbol` (backing values when every case carries one, else case names) and route exposes against project source mentions (advisory). Opt-in flag. | Typed-contract drift in states and routes | Count and state mismatch error; an unresolvable enum or a missing half stays advisory and never reads as parity |
 | `lint --ci` | Strict mode: exits 1 on any finding, including advisories. | CI pipelines | Any finding |
 | `contract <plan>` | Resolves a plan's `contract.stable` definitions against tracked repositories. | Pre-release verification | Unresolved contracts |
 | `staleness [--package <pkg>]` | Flags package documents older than the age limit. | Release preparation | Stale documentation |

@@ -31,7 +31,7 @@ import (
 const usage = `pylon validates and queries a Pylons pylon: the plain-text map of a platform, checked against its code.
 
 Usage:
-  pylon lint             [--changed] [--doc-only] [--fix] [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
+  pylon lint             [--changed] [--doc-only] [--fix] [--parity] [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
   pylon contract <plan>  [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
   pylon check <paths...> [--stop-block] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon brief            [--format=human|json] [--json] [--pylons <path>]
@@ -129,7 +129,7 @@ func run(args []string) int {
 	checkManifest, stopBlock, preamble, checkSources := false, false, false, false
 	rbStdout, mapAll := false, false
 	allowExternal := os.Getenv("PYLON_ALLOW_EXTERNAL_EXTENSIONS") == "1"
-	forceHooks, ratchetUpdate := false, false
+	forceHooks, ratchetUpdate, lintParity := false, false, false
 	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild := "", "", "", "", "", "", "", "", "", ""
 	pinnedReleases, sessionSince := "", ""
 	sessionManifest, diffSinceSet := false, false
@@ -187,6 +187,8 @@ func run(args []string) int {
 			ratchetUpdate = true
 		case arg == "--manifest":
 			sessionManifest = true
+		case arg == "--parity":
+			lintParity = true
 		case arg == "--detached":
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
@@ -333,6 +335,7 @@ func run(args []string) int {
 			Fix:           fix,
 			ChangedOnly:   changed,
 			AllowExternal: allowExternal,
+			Parity:        lintParity,
 		})
 		return renderFindings(findings, format, ci)
 
