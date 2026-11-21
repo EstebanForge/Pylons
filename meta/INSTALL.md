@@ -61,7 +61,7 @@ If starting a fresh pylon, run:
 pylon init /path/to/my-ledger
 ```
 
-If cloning this repository directly, `manifests/pylons.yaml`, `templates/`, `conventions/vocabulary.md`, and `protocols/` are already in place. Section 2's installer produces the same shape without the clone.
+If cloning this repository directly, `manifests/pylons.yaml`, `templates/`, `manifests/vocabulary.json`, and `protocols/` are already in place. Section 2's installer produces the same shape without the clone.
 
 ## 5. Register Tracked Projects in `manifests/pylons.yaml`
 

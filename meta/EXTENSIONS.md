@@ -64,3 +64,12 @@ The executable writes 1 JSON line to `stdout`:
 ```
 
 If resolution fails due to a runtime error, return `{"resolved": false, "detail": "reason", "error": "diagnostic"}`.
+
+## Parity plugins
+
+The parity system uses the same `pylon-ext-<name>` plugins for two extra request types beyond contract resolution. With a `use: external:<name>` profile binding in the `parity:` section of `manifests/pylons.yaml`, pylon sends the plugin a request with `"op"` instead of `"id"`:
+
+- `"op": "states"` asks for the case list of one enum: the plugin answers `{"cases": [{"name": "...", "value": "..."}]}` or, when it cannot resolve the type, `{"error": "diagnostic"}`.
+- `"op": "transitions"` asks for the transition triples of one machine: the plugin answers `{"triples": [{"from": "...", "event": "...", "to": "..."}]}` or fails with an error line.
+
+The engine reads the marked source file itself and sends its bounded text with the request, so the plugin stays a pure function. Transport failures grade as the not-evaluated advisory; a plugin-reported resolution failure grades as a hard finding. See [docs/parity-spec.md](docs/parity-spec.md) for the profile bindings and the reference plugin under `cli/internal/rules/testdata/plugins/`.

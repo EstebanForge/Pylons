@@ -26,7 +26,7 @@ Run this protocol at the start of every work session on a platform mapped by Pyl
 - **Code is truth.** Verify every claim against source on the project's configured branch, never against another document.
 - **Deterministic checks only.** The engine never calls a model. Findings are reproducible; do not argue with an AST resolver.
 - **Two grades.** Halt on `FORCED`. Read `ADVISORY`, then decide.
-- **ASD-STE100.** Every `.md` file you create or edit uses short sentences, active voice, and the closed vocabulary in `pylon://conventions/vocabulary.md`.
+- **ASD-STE100.** Every `.md` file you create or edit uses short sentences, active voice, and the closed vocabulary in `pylon://manifests/vocabulary.json`.
 - **URI schemes.** Reference code with `repo://<alias>/<path>` and documents with `pylon://<path>`. Never write local machine paths into documents.
 - **No direct ledger writes from the engine.** Capture produces candidate documents for human review. A human or an approved skill commits them.
 

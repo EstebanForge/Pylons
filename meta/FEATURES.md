@@ -82,7 +82,7 @@ Every card answers in the same order: **What** names the feature, **The pain** n
 - **The pain**: "Membership", "plan", "tier", and "account" all sound interchangeable. Teams and agents mix them, and you get class names, database fields, and route parameters that name the same idea 3 different ways.
 - **How it works**: One term per concept. Documentation, plans, and reviews use the canonical term, so a `Membership` in the docs is the same `Membership` in the schema.
 - **How it works**: Each entity declares `avoid:` anti-terms: the near-synonyms that must not name the concept. Documentation, reviews, and generated code stay on the canonical term.
-- **Guard**: The closed value sets live in `conventions/vocabulary.md`. An entity with an empty `avoid:` list fires `PYLON039`.
+- **Guard**: The closed value sets live in `manifests/vocabulary.json`. An entity with an empty `avoid:` list fires `PYLON039`.
 
 #### Transaction flows (`flows/`)
 

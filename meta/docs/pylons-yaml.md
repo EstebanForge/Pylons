@@ -67,4 +67,4 @@ projects:
 - An unparsable file produces a fail-closed finding. Commands that only inform print a warning and continue.
 - One alias can register one project; alias names are stable identifiers, so renaming one breaks every `repo://` URI that names it.
 - The extension system is configured here too. See [EXTENSIONS.md](../EXTENSIONS.md) for the language list and plugin installation.
-- The planned parity spec lands in this same manifest family. See [parity-spec.md](parity-spec.md), currently proposed.
+- The `parity:` section configures the parity spec in this same manifest family. See [parity-spec.md](parity-spec.md) for the closed schema, and `manifests/parity.json` for its JSON schema.
