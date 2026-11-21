@@ -38,7 +38,7 @@ parity:
       use: builtin:go
     # External binding for a language with no built-in profile.
     kotlin:
-      use: external:pylon-ext-kotlin
+      use: external:kotlin
       options:
         marker: "pylon:machine"
     # Override: rebind a built-in language to your own plugin.
@@ -46,7 +46,7 @@ parity:
       use: external:wp-php
 ```
 
-`use: builtin:<language>` selects an in-process profile shipped with the CLI (go, rust, typescript, javascript, python, php, csharp, ruby are the planned built-in set). `use: external:<plugin>` names a drop-in plugin executable and needs `--allow-external-extensions`. Rebinding a language overrides its built-in with no implicit precedence. Two profiles claiming the same file extension is a config error. A declared machine with no matching binding yields the PARITY_NOT_EVALUATED advisory; an `on_unevaluated:` knob (default advisory) can make it block. With no `parity:` section at all, an enabled builtin extension acts as an implicit builtin binding.
+`use: builtin:<language>` selects an in-process profile shipped with the CLI (go, rust, typescript, javascript, python, php, csharp, ruby are the planned built-in set). `use: external:<name>` selects the enabled extension `<name>`, run as the `pylon-ext-<name>` binary; it needs `--allow-external-extensions` at check time. Rebinding a language overrides its built-in with no implicit precedence. Two profiles claiming the same file extension is a config error. A declared machine with no matching binding yields the PARITY_NOT_EVALUATED advisory; an `on_unevaluated:` knob (default advisory) can make it block. With no `parity:` section at all, an enabled builtin extension acts as an implicit builtin binding.
 
 ## Example: machine declaration (planned)
 

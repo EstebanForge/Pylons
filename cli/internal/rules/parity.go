@@ -32,8 +32,8 @@ const (
 // Routes: package docs declare route exposes; the mapped project
 // source must mention the route path somewhere (a registration can
 // carry method or framework specifics, so this check is advisory).
-func lintParity(kbRoot string, cfg config.Config) []report.Finding {
-	findings := parityStates(kbRoot, cfg)
+func lintParity(kbRoot string, cfg config.Config, allowExternal bool) []report.Finding {
+	findings := parityStates(kbRoot, cfg, allowExternal)
 	findings = append(findings, parityRoutes(kbRoot, cfg)...)
 	return findings
 }
@@ -49,7 +49,7 @@ type parityCase struct {
 
 // parityStates walks domain/ entities and checks the declared state
 // sets against the enums the symbol pointers name.
-func parityStates(kbRoot string, cfg config.Config) []report.Finding {
+func parityStates(kbRoot string, cfg config.Config, allowExternal bool) []report.Finding {
 	var out []report.Finding
 	_ = filepath.WalkDir(filepath.Join(kbRoot, "domain"), func(p string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -72,13 +72,13 @@ func parityStates(kbRoot string, cfg config.Config) []report.Finding {
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
-		out = append(out, checkEntityStates(kbRoot, rel, meta, cfg)...)
+		out = append(out, checkEntityStates(kbRoot, rel, meta, cfg, allowExternal)...)
 		return nil
 	})
 	return out
 }
 
-func checkEntityStates(kbRoot, rel string, meta resolve.DocMeta, cfg config.Config) []report.Finding {
+func checkEntityStates(kbRoot, rel string, meta resolve.DocMeta, cfg config.Config, allowExternal bool) []report.Finding {
 	hasStates := meta.States.NonEmpty()
 	hasSymbol := strings.TrimSpace(meta.StatesSymbol) != ""
 	if hasStates != hasSymbol {
@@ -112,7 +112,7 @@ func checkEntityStates(kbRoot, rel string, meta resolve.DocMeta, cfg config.Conf
 	if err != nil {
 		return []report.Finding{parityNotEvaluated(rel, fmt.Sprintf("the states_symbol file %s is unreadable", filePart))}
 	}
-	cases, err := extractEnum(enabledLanguages(cfg, u.Alias), source, enumName, filePart)
+	cases, err := extractWithProfile(cfg, u.Alias, filePart, source, enumName, kbRoot, allowExternal)
 	if err != nil {
 		return []report.Finding{parityNotEvaluated(rel, err.Error())}
 	}
@@ -292,24 +292,76 @@ var (
 	tsMemberRe     = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*'((?:[^'\\]|\\.)*)'|=\s*"((?:[^"\\]|\\.)*)")?\s*,?\s*$`)
 )
 
-// extractEnum pulls the case list for enumName out of the source file
-// using the language extractors enabled for the project. An enum that
-// cannot be resolved is an error, never an empty parity pass.
-func extractEnum(langs map[string]bool, source, enumName, file string) ([]parityCase, error) {
-	ext := strings.ToLower(filepath.Ext(file))
-	if langs["go"] && ext == ".go" {
-		return extractGoEnum(source, enumName)
-	}
-	if langs["rust"] && ext == ".rs" {
+// builtinProfileOrder fixes the language claim precedence when one
+// file extension is claimed by several languages (typescript keeps its
+// legacy .js ownership over javascript). Explicit parity specs reject
+// such claims at load; the order only governs the implicit path.
+var builtinProfileOrder = []string{
+	"go", "rust", "php", "typescript", "javascript", "python", "csharp", "ruby",
+}
+
+// builtinParityExtractors holds the in-process set-check extractors.
+// A built-in language missing here has no shipped extractor yet.
+var builtinParityExtractors = map[string]func(source, enumName string) ([]parityCase, error){
+	"go": extractGoEnum,
+	"rust": func(source, enumName string) ([]parityCase, error) {
 		return extractBracedEnum("enum", source, enumName, rustMemberRe)
-	}
-	if langs["php"] && ext == ".php" {
+	},
+	"php": func(source, enumName string) ([]parityCase, error) {
 		return extractBracedEnum("enum", source, enumName, phpMemberRe)
-	}
-	if langs["typescript"] && (ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx") {
+	},
+	"typescript": func(source, enumName string) ([]parityCase, error) {
 		return extractBracedEnum("enum", source, enumName, tsMemberRe)
+	},
+}
+
+// parityProfileFor resolves the binding for a file: the first language
+// in builtin claim order that both has a binding for the project and
+// claims the file extension (canonical list plus profile additions).
+func parityProfileFor(cfg config.Config, alias, file string) (string, config.ParityProfile, bool) {
+	ext := strings.ToLower(filepath.Ext(file))
+	bound := map[string]struct{}{}
+	for _, lang := range append(slices.Clone(builtinProfileOrder), cfg.ParityLanguages(alias)...) {
+		prof, ok := cfg.ParityProfileFor(alias, lang)
+		if !ok {
+			continue
+		}
+		bound[lang] = struct{}{}
+		if slices.Contains(config.BuiltinProfileExtensions[lang], ext) || slices.Contains(prof.Extensions, ext) {
+			return lang, prof, true
+		}
 	}
-	return nil, fmt.Errorf("no enabled language extractor can read %s", file)
+	return "", config.ParityProfile{}, false
+}
+
+// extractWithProfile pulls the case list for enumName through the
+// resolved parity profile. A builtin without a shipped extractor and
+// an unbound language are errors, never an empty parity pass.
+func extractWithProfile(cfg config.Config, alias, file, source, enumName, kbRoot string, allowExternal bool) ([]parityCase, error) {
+	lang, prof, bound := parityProfileFor(cfg, alias, file)
+	if !bound {
+		ext := strings.ToLower(filepath.Ext(file))
+		var claimants []string
+		for _, candidate := range builtinProfileOrder {
+			if slices.Contains(config.BuiltinProfileExtensions[candidate], ext) {
+				claimants = append(claimants, candidate)
+			}
+		}
+		return nil, fmt.Errorf("no parity profile binds %s, which claims %s", strings.Join(claimants, " or "), file)
+	}
+	use, name, _ := strings.Cut(prof.Use, ":")
+	switch use {
+	case "builtin":
+		extract, ok := builtinParityExtractors[name]
+		if !ok {
+			return nil, fmt.Errorf("the builtin parity profile for %s has no in-process extractor yet", name)
+		}
+		return extract(source, enumName)
+	case "external":
+		return extractExternalStates(cfg, alias, lang, enumName, source, prof, kbRoot, allowExternal)
+	default:
+		return nil, fmt.Errorf("unknown profile use %q", prof.Use)
+	}
 }
 
 // extractGoEnum reads every const block: `const ( ... )` with manual

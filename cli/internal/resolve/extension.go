@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -207,34 +209,64 @@ func (r *Registry) tryExternalExtension(projectRoot string, kind Kind, id string
 		if err != nil {
 			return Verdict{Kind: kind, ID: id, Resolved: false, Detail: err.Error()}, true
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		cmd := exec.CommandContext(ctx, bin)
-		cmd.Env = extEnv()
-		cmd.Stdin = bytes.NewReader(append(reqBytes, '\n'))
-		// A grandchild holding the stdout pipe must not block ReadAll forever.
-		cmd.WaitDelay = time.Second
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			cancel()
-			return Verdict{Kind: kind, ID: id, Resolved: false, Detail: err.Error()}, true
-		}
-		if err := cmd.Start(); err != nil {
-			cancel()
-			return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "extension start failed: " + err.Error()}, true
-		}
-		out, readErr := io.ReadAll(io.LimitReader(stdout, maxExtStdoutBytes))
-		waitErr := cmd.Wait()
-		cancel()
-		if readErr != nil || waitErr != nil {
-			return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "extension failed"}, true
-		}
 		var resp extResponse
-		if err := json.Unmarshal(bytes.TrimSpace(out), &resp); err != nil {
-			return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "invalid extension JSON"}, true
+		if err := runExternalJSON(bin, reqBytes, &resp); err != nil {
+			return Verdict{Kind: kind, ID: id, Resolved: false, Detail: err.Error()}, true
 		}
 		return Verdict{Kind: kind, ID: id, Resolved: resp.Resolved, Detail: resp.Detail}, true
 	}
 	return Verdict{}, false
+}
+
+// runExternalJSON runs one plugin binary with one JSON request line
+// on stdin and decodes one JSON response from stdout. The guards are
+// the shared extension protocol guards: 5s timeout, 64KB stdout cap,
+// and a WaitDelay so a grandchild holding the pipe cannot hang the
+// read forever.
+func runExternalJSON(bin string, reqBytes []byte, response any) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin)
+	cmd.Env = extEnv()
+	cmd.Stdin = bytes.NewReader(append(reqBytes, '\n'))
+	cmd.WaitDelay = time.Second
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("extension pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("extension start failed: %w", err)
+	}
+	out, readErr := io.ReadAll(io.LimitReader(stdout, maxExtStdoutBytes))
+	waitErr := cmd.Wait()
+	if readErr != nil || waitErr != nil {
+		return errors.New("extension failed")
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(out), response); err != nil {
+		return errors.New("invalid extension JSON")
+	}
+	return nil
+}
+
+// CallExternal runs the pylon-ext-<name> plugin for one non-contract
+// request (parity ops and future protocol users). The plugin must be
+// an enabled extension and --allow-external-extensions must be on.
+func (r *Registry) CallExternal(name string, request, response any) error {
+	if !slices.Contains(r.enabledExtensions, name) {
+		return fmt.Errorf("extension %s is not enabled", name)
+	}
+	if !r.allowExternal {
+		return errors.New("external extensions disabled (pass --allow-external-extensions)")
+	}
+	bin := r.findExternalBinary(name)
+	if bin == "" {
+		return fmt.Errorf("extension binary pylon-ext-%s not found", name)
+	}
+	reqBytes, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+	return runExternalJSON(bin, reqBytes, response)
 }
 
 func extEnv() []string {
