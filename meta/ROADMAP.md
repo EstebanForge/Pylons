@@ -30,21 +30,6 @@ All features, rules, and commands in Pylons and the `pylon` CLI must be 100% det
 - **Consumer**: `pylon lint` blocks on error findings; the advisory feeds `advisory-ratchet`. `pylon context` prints the graph beside contract entries, so agents see the allowed transitions before writing flow code. `brief` reports the machine count and the count missing `verified_by:`. The machine declaration carries `verified_by:` naming one table test in the mapped repo's QA suite; lint resolves it by set membership. The test derives its legal triples from the same const as the full cross product of state cases and events, and asserts the complement throws. No hand-copied table, no third source to drift.
 - **Objective**: When the first machines ship, mapped lifecycles become checkable graphs instead of prose and parallel booleans. Lint proves shape parity between doc and code; the convention and the table test carry purity, throw-on-invalid, and concurrency.
 
-### pr-review-bot
-- **Deterministic Mechanism**: Parse `pylon lint --format sarif/json` findings to construct Check annotations and PR review API payloads.
-- **Objective**: Integrate `pylon` with CI for inline PR feedback.
-- **Behavior**: Post a single updating summary comment on PRs with line-anchored annotations strictly for blocking errors.
-
-## Auto-Capture and Living Documentation
-
-External agentic-memory products auto-capture session context and regenerate docs as work happens. Pylons adopts the pattern, not the hosted runtime. All capture stays deterministic and git-native. No SaaS dependency. No model calls inside the engine. The engine reports drift; an agent skill or a human writes the prose.
-
-### dependency-graph
-- **Command**: `pylon context --graph <package> [--depth N]`
-- **Deterministic Mechanism**: Reuse the `resolve` package's symbol graph. Resolve `depends_on` declared in `packages/` against actual caller relationships across repos. Report declared vs actual divergences.
-- **Consumer**: Exposed to agents via the same prefix-cacheable manifest sequence.
-- **Objective**: Give agents and engineers a live ownership and dependency view, sourced from the platform's own code.
-
 ### knowledge-utility
 - **Command**: `pylon review utility [--prune] [--promote]`
 - **Deterministic Mechanism**: Track knowledge usage across agent sessions using structured citation comments (`<!-- pylon:referenced-doc: <slug> -->`). Compute a deterministic utility score for each document: citation count divided by injection count, combined with recency decay.

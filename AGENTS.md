@@ -30,12 +30,16 @@ Pylons documents reference files with URI schemes, never machine paths.
 - `pylon check <paths...> [--stop-block] [--format=human|json|sarif]`
 - `pylon brief [--format=human|json]`
 - `pylon context <paths...> [--preamble] [--format=human|json]`
+- `pylon context --diff-since <ref> [--manifest]`
+- `pylon context --graph <package> [--depth N]`
 - `pylon review plan <path>`
 - `pylon review postmortem [path] [--check-sources]`
 - `pylon review staleness [--package <pkg>] [--fix]`
 - `pylon review ratchet [--update]`
 - `pylon review rework [--window <period>] [--package <pkg>]`
 - `pylon review merge-danger --body <file|-> [--base <ref>]`
+- `pylon review release-surface --pinned-releases <dir> [--base <ref>]`
+- `pylon review annotations --from <file|->`
 - `pylon sync [--detached]`
 - `pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>]`
 - `pylon protocol [list|<name>] [--template <path>]`
