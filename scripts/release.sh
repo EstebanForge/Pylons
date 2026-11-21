@@ -15,6 +15,9 @@ if [ "$bare" != "$version" ]; then
 	echo "tag $tag does not match cli/internal/version/version.go ($version)" >&2
 	exit 1
 fi
+# Asset names carry the v-form (the installer normalizes its version
+# to v before building download URLs); the git tag itself stays bare.
+vtag="v$bare"
 
 # The skeleton is built from HEAD and the tag points at a remote
 # commit, so only a pushed, clean tree may release.
@@ -52,7 +55,7 @@ for pair in $targets; do
 		mv "dist/$name/bin/pylon" "dist/$name/bin/pylon.exe"
 	fi
 	cp LICENSE NOTICE bin/THIRD_PARTY_NOTICES "dist/$name/"
-	tar -czf "dist/pylons-$tag-$os-$arch.tar.gz" -C "dist/$name" bin LICENSE NOTICE THIRD_PARTY_NOTICES
+	tar -czf "dist/pylons-$vtag-$os-$arch.tar.gz" -C "dist/$name" bin LICENSE NOTICE THIRD_PARTY_NOTICES
 	rm -rf "dist/$name"
 done
 
@@ -66,7 +69,7 @@ case "$(uname -s):$(uname -m)" in
 esac
 if [ -n "$host" ]; then
 	smoke="$(mktemp -d)"
-	tar -xzf "dist/pylons-$tag-$host.tar.gz" -C "$smoke"
+	tar -xzf "dist/pylons-$vtag-$host.tar.gz" -C "$smoke"
 	got="$("$smoke/bin/pylon" --version)"
 	[ "$got" = "pylon $version" ] || { echo "smoke test failed: '$got'" >&2; exit 1; }
 	rm -rf "$smoke"
@@ -76,7 +79,7 @@ fi
 # Skeleton from tracked content only; git archive cannot pick up
 # junk. Tooling dirs stay out: hooks ship inside the binary, cli/ and
 # scripts/ are not part of an installed pylon.
-git archive --format=tar.gz -o "dist/pylons-kb-$tag.tar.gz" HEAD \
+git archive --format=tar.gz -o "dist/pylons-kb-$vtag.tar.gz" HEAD \
 	. ':(exclude)cli' ':(exclude).githooks' ':(exclude)scripts' ':(exclude)dist'
 
 (cd dist && { sha256sum pylons-* 2>/dev/null || shasum -a 256 pylons-*; } > checksums.txt)
