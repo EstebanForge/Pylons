@@ -46,7 +46,7 @@ Usage:
   pylon review rework    [--window <period>] [--package <pkg>] [--json] [--pylons <path>]
   pylon review merge-danger --body <file|-> [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review release-surface --pinned-releases <dir> [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
-  pylon review annotations --from <file|-> [--format=human|json] [--json] [--pylons <path>]
+  pylon review annotations --from <file|-> [--path-prefix <p>] [--format=human|json] [--json] [--pylons <path>]
   pylon sync             [--detached] [--pylons <path>]
   pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>] [--format=human|json] [--pylons <path>]
   pylon protocol [list|<name>] [--template <path>] [--pylons <path>]
@@ -133,8 +133,9 @@ func run(args []string) int {
 	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild := "", "", "", "", "", "", "", "", "", ""
 	pinnedReleases, sessionSince := "", ""
 	sessionManifest, diffSinceSet := false, false
-	graphPkg, annFrom := "", ""
+	graphPkg, annFrom, annPrefix := "", "", ""
 	graphDepth := 0
+	graphSet, depthSet := false, false
 	mapType, mapTag, mapStatus, mapFolder, mapQuery := "", "", "", "", ""
 	limit := 0
 	var rest []string
@@ -190,7 +191,7 @@ func run(args []string) int {
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
-		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth":
+		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "pylon: flag %s requires a value\n", arg)
 				return 2
@@ -227,8 +228,11 @@ func run(args []string) int {
 				syncChild = val
 			case "--graph":
 				graphPkg = val
+				graphSet = true
 			case "--from":
 				annFrom = val
+			case "--path-prefix":
+				annPrefix = val
 			case "--depth":
 				n, err := strconv.Atoi(val)
 				if err != nil || n < 0 {
@@ -236,6 +240,7 @@ func run(args []string) int {
 					return 2
 				}
 				graphDepth = n
+				depthSet = true
 			case "--type":
 				mapType = val
 			case "--tag":
@@ -367,6 +372,24 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, "pylon: context --diff-since requires a ref")
 			return 2
 		}
+		modes := 0
+		for _, set := range []bool{len(rest) > 0, slicePlan != "", graphSet, sessionSince != ""} {
+			if set {
+				modes++
+			}
+		}
+		if modes > 1 {
+			fmt.Fprintln(os.Stderr, "pylon: context takes one of paths, --slice, --graph, or --diff-since")
+			return 2
+		}
+		if graphSet && graphPkg == "" {
+			fmt.Fprintln(os.Stderr, "pylon: context --graph requires a package")
+			return 2
+		}
+		if depthSet && !graphSet {
+			fmt.Fprintln(os.Stderr, "pylon: --depth only applies to context --graph")
+			return 2
+		}
 		if sessionSince != "" {
 			if slicePlan != "" || len(rest) != 0 {
 				fmt.Fprintln(os.Stderr, "pylon: context --diff-since takes no other target")
@@ -379,10 +402,6 @@ func run(args []string) int {
 			return cmdCapture(kbRoot, sessionSince, sessionManifest, format)
 		}
 		if graphPkg != "" {
-			if slicePlan != "" || sessionSince != "" || len(rest) != 0 {
-				fmt.Fprintln(os.Stderr, "pylon: context --graph takes a package, not other targets")
-				return 2
-			}
 			if format == report.FormatSARIF {
 				fmt.Fprintln(os.Stderr, "pylon: format sarif is not supported for the dependency graph")
 				return 2
@@ -440,7 +459,7 @@ func run(args []string) int {
 		case "staleness":
 			return renderFindings(rules.CheckStaleness(kbRoot, pkgArg, fix), format, ci)
 		case "annotations":
-			return cmdAnnotations(annFrom, format)
+			return cmdAnnotations(annFrom, annPrefix, format)
 		case "ratchet":
 			findings, err := rules.RunRatchet(kbRoot, rules.RatchetOptions{Update: ratchetUpdate, AllowExternal: allowExternal})
 			if err != nil {
@@ -1061,9 +1080,9 @@ func cmdGraph(kbRoot, pkgName string, depth int, format report.Format) int {
 		}
 		return 0
 	}
-	fmt.Printf("=== Dependency graph for %s (depth %d) ===\n", graph.Package, graph.Depth)
+	fmt.Printf("=== Dependency graph for %s (depth %d) ===\n", report.CleanText(graph.Package), graph.Depth)
 	for _, w := range graph.Warnings {
-		fmt.Printf("  warning: %s\n", w)
+		fmt.Printf("  warning: %s\n", report.CleanText(w))
 	}
 	fmt.Printf("  packages: %v\n", slices.Sorted(maps.Keys(graph.Declared)))
 	for _, pkg := range slices.Sorted(maps.Keys(graph.Declared)) {
@@ -1077,7 +1096,7 @@ func cmdGraph(kbRoot, pkgName string, depth int, format report.Format) int {
 		fmt.Printf("  edge %s -> %s\n", e.From, e.To)
 	}
 	for _, e := range graph.Undeclared {
-		fmt.Printf("  undeclared: %s -> %s\n", e.From, e.To)
+		fmt.Printf("  undeclared: %s -> %s\n", report.CleanText(e.From), report.CleanText(e.To))
 	}
 	for _, u := range graph.Unused {
 		fmt.Printf("  unused: %s\n", u)
@@ -1085,18 +1104,16 @@ func cmdGraph(kbRoot, pkgName string, depth int, format report.Format) int {
 	return 0
 }
 
-func cmdAnnotations(from string, format report.Format) int {
+func cmdAnnotations(from, pathPrefix string, format report.Format) int {
+	if format == report.FormatSARIF {
+		fmt.Fprintln(os.Stderr, "pylon: format sarif is not supported for annotations; they already are Check payloads")
+		return 2
+	}
 	if from == "" {
 		fmt.Fprintln(os.Stderr, "pylon: review annotations requires --from <file|->")
 		return 2
 	}
-	var input []byte
-	var err error
-	if from == "-" {
-		input, err = io.ReadAll(os.Stdin)
-	} else {
-		input, err = os.ReadFile(from)
-	}
+	input, err := readAnnotationInput(from)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "pylon: review annotations: %v\n", err)
 		return 2
@@ -1106,9 +1123,12 @@ func cmdAnnotations(from string, format report.Format) int {
 		fmt.Fprintf(os.Stderr, "pylon: review annotations: %v\n", err)
 		return 2
 	}
-	if format == report.FormatSARIF {
-		fmt.Fprintln(os.Stderr, "pylon: format sarif is not supported for annotations; they already are Check payloads")
-		return 2
+	// Findings are KB-relative; a KB living in a repo subdirectory
+	// needs the prefix to make annotation paths repo-relative.
+	if pathPrefix != "" {
+		for i := range out.Annotations {
+			out.Annotations[i].Path = pathPrefix + "/" + out.Annotations[i].Path
+		}
 	}
 	if format == report.FormatJSON {
 		if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
@@ -1119,9 +1139,46 @@ func cmdAnnotations(from string, format report.Format) int {
 	}
 	fmt.Print(out.Summary)
 	for _, a := range out.Annotations {
-		fmt.Printf("  %s:%d %s %s\n", a.Path, a.StartLine, a.Title, firstAnnLine(a.Message))
+		fmt.Printf("  %s:%d %s %s\n", report.CleanText(a.Path), a.StartLine, report.CleanText(a.Title), report.CleanText(firstAnnLine(a.Message)))
 	}
 	return 0
+}
+
+// readAnnotationInput applies the shared bounded-regular-read guard to
+// the findings document, so a FIFO named lint.sarif cannot hang the CI
+// job and a runaway file cannot exhaust memory.
+func readAnnotationInput(from string) ([]byte, error) {
+	const maxInputBytes = 4 * 1024 * 1024
+	if from == "-" {
+		data, err := io.ReadAll(io.LimitReader(os.Stdin, maxInputBytes+1))
+		if err != nil {
+			return nil, err
+		}
+		if len(data) > maxInputBytes {
+			return nil, fmt.Errorf("input exceeds %d bytes", maxInputBytes)
+		}
+		return data, nil
+	}
+	f, err := os.Open(from)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !st.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", from)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxInputBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxInputBytes {
+		return nil, fmt.Errorf("input exceeds %d bytes", maxInputBytes)
+	}
+	return data, nil
 }
 
 func firstAnnLine(s string) string {

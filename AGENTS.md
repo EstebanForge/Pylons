@@ -39,7 +39,7 @@ Pylons documents reference files with URI schemes, never machine paths.
 - `pylon review rework [--window <period>] [--package <pkg>]`
 - `pylon review merge-danger --body <file|-> [--base <ref>]`
 - `pylon review release-surface --pinned-releases <dir> [--base <ref>]`
-- `pylon review annotations --from <file|->`
+- `pylon review annotations --from <file|-> [--path-prefix <p>]`
 - `pylon sync [--detached]`
 - `pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>]`
 - `pylon protocol [list|<name>] [--template <path>]`

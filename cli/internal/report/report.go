@@ -70,7 +70,7 @@ func Render(w io.Writer, format Format, findings []Finding) error {
 		return renderSARIF(w, findings)
 	default:
 		for _, f := range findings {
-			f.RuleID, f.Severity, f.Grade, f.File, f.Message = cleanText(f.RuleID), cleanText(f.Severity), cleanText(f.Grade), cleanText(f.File), cleanText(f.Message)
+			f.RuleID, f.Severity, f.Grade, f.File, f.Message = CleanText(f.RuleID), CleanText(f.Severity), CleanText(f.Grade), CleanText(f.File), CleanText(f.Message)
 			grade := f.Grade
 			if grade == "" {
 				if f.Severity == SeverityError {
@@ -89,7 +89,7 @@ func Render(w io.Writer, format Format, findings []Finding) error {
 				}
 			}
 			if f.Remediation != "" {
-				if _, err := fmt.Fprintf(w, "  fix: %s\n", cleanText(f.Remediation)); err != nil {
+				if _, err := fmt.Fprintf(w, "  fix: %s\n", CleanText(f.Remediation)); err != nil {
 					return err
 				}
 			}
@@ -98,9 +98,9 @@ func Render(w io.Writer, format Format, findings []Finding) error {
 	}
 }
 
-// cleanText strips control characters (including ANSI escapes) so hostile
+// CleanText strips control characters (including ANSI escapes) so hostile
 // finding text cannot repaint the terminal.
-func cleanText(s string) string {
+func CleanText(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r < 0x20 && r != '\n' && r != '\t' {
 			return -1
@@ -115,7 +115,7 @@ func cleanText(s string) string {
 // RenderStopBlocks renders FORCED findings as structured agent stop blocks.
 func RenderStopBlocks(w io.Writer, findings []Finding) error {
 	for _, f := range findings {
-		f.RuleID, f.File, f.Message, f.Remediation = cleanText(f.RuleID), cleanText(f.File), cleanText(f.Message), cleanText(f.Remediation)
+		f.RuleID, f.File, f.Message, f.Remediation = CleanText(f.RuleID), CleanText(f.File), CleanText(f.Message), CleanText(f.Remediation)
 		if f.Severity == SeverityError {
 			fix := ""
 			if f.Remediation != "" {
