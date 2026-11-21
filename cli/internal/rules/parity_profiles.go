@@ -5,6 +5,7 @@ package rules
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -170,7 +171,10 @@ func extractRustTransitions(source, machineID string) ([]parityTransition, error
 		}
 		trimmed := strings.TrimSpace(line)
 		if !inBody {
-			if strings.HasPrefix(trimmed, "{") || strings.Contains(trimmed, "{") {
+			// The match header starts the arm body; enum, impl, and
+			// fn lines before it carry their own braces and are
+			// skipped, never mistaken for the body.
+			if strings.Contains(trimmed, "match") && strings.Contains(trimmed, "{") {
 				inBody = true
 			}
 			continue
@@ -184,13 +188,11 @@ func extractRustTransitions(source, machineID string) ([]parityTransition, error
 			// carry no triples.
 			continue
 		}
-		tr, ok := rustArmShape(trimmed)
-		if !ok {
-			// A non-triple arm (wildcard or catch-all) is legal
-			// fallthrough, never a transition.
-			continue
+		trs, err := parseRustArm(trimmed)
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, tr)
+		out = append(out, trs...)
 	}
 	if !found {
 		if sawID != "" {
@@ -204,46 +206,127 @@ func extractRustTransitions(source, machineID string) ([]parityTransition, error
 	return out, nil
 }
 
-// rustArmRe parses one match arm: (Path::A, Path::B) => Path::C.
-var rustArmShape = func(arm string) (parityTransition, bool) {
+// parseRustArm reads one match arm. Three canonical shapes: tuple
+// arms (State::A, Event::B) => State::C (or-patterns with | give one
+// triple each), adjacency arms State::A => &[State::B, State::C],
+// and direct event-less arms State::A => State::B. Wrapped values
+// like Ok(State::B) read through to the inner state path. A
+// wildcard-only pattern is legal fallthrough; an arm that has state
+// tokens but parses to nothing is a canonical-shape error, never a
+// silent skip. A multi-line arm body ({ after =>) is a
+// canonical-shape error too.
+func parseRustArm(arm string) ([]parityTransition, error) {
 	before, after, ok := strings.Cut(arm, "=>")
 	if !ok {
-		return parityTransition{}, false
+		return nil, nil
 	}
-	before = strings.TrimSpace(before)
-	before = strings.TrimPrefix(before, "(")
-	before = strings.TrimSuffix(before, ")")
-	before = strings.TrimSpace(before)
-	parts := strings.Split(before, ",")
-	if len(parts) != 2 {
-		return parityTransition{}, false
+	value := strings.TrimSpace(after)
+	if strings.HasSuffix(strings.TrimSpace(before), "{") || strings.HasPrefix(value, "{") {
+		return nil, fmt.Errorf("rust arm %q: multi-line arm bodies are outside the canonical form; write a bare state path after =>", arm)
 	}
-	from, ok := rustCaseToken(parts[0])
-	if !ok {
-		return parityTransition{}, false
+	if strings.HasPrefix(value, "&[") {
+		if !strings.HasSuffix(value, "]") {
+			return nil, fmt.Errorf("rust arm %q: adjacency value must close with ]", arm)
+		}
+		inner := strings.TrimSuffix(strings.TrimPrefix(value, "&["), "]")
+		from, ok := rustStateToken(strings.TrimSpace(before))
+		if !ok {
+			return nil, fmt.Errorf("rust arm %q: cannot read the source state", arm)
+		}
+		var out []parityTransition
+		for _, part := range strings.Split(inner, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			to, ok := rustStateToken(part)
+			if !ok {
+				return nil, fmt.Errorf("rust arm %q: cannot read successor %q", arm, part)
+			}
+			out = append(out, parityTransition{from: from, to: to})
+		}
+		return out, nil
 	}
-	event, ok := rustCaseToken(parts[1])
-	if !ok {
-		return parityTransition{}, false
+	var triples []parityTransition
+	for _, alt := range strings.Split(before, "|") {
+		alt = strings.TrimSpace(alt)
+		if rustPatternIsWildcard(alt) {
+			return triples, nil
+		}
+		to, ok := rustStateToken(value)
+		if !ok {
+			return nil, fmt.Errorf("rust arm %q: cannot read the target state", arm)
+		}
+		alt = strings.TrimPrefix(alt, "(")
+		alt = strings.TrimSuffix(alt, ")")
+		parts := strings.Split(alt, ",")
+		switch len(parts) {
+		case 1:
+			from, ok := rustStateToken(strings.TrimSpace(parts[0]))
+			if !ok {
+				return nil, fmt.Errorf("rust arm %q: cannot read the source state", arm)
+			}
+			triples = append(triples, parityTransition{from: from, to: to})
+		case 2:
+			from, ok := rustStateToken(strings.TrimSpace(parts[0]))
+			if !ok {
+				return nil, fmt.Errorf("rust arm %q: cannot read the source state", arm)
+			}
+			event, ok := rustStateToken(strings.TrimSpace(parts[1]))
+			if !ok {
+				return nil, fmt.Errorf("rust arm %q: cannot read the event", arm)
+			}
+			triples = append(triples, parityTransition{from: from, event: event, to: to})
+		default:
+			return nil, fmt.Errorf("rust arm %q: pattern must be State::A or (State::A, Event::B)", arm)
+		}
 	}
-	to, ok := rustCaseToken(after)
-	if !ok {
-		return parityTransition{}, false
-	}
-	return parityTransition{from: from, event: event, to: to}, true
+	return triples, nil
 }
 
-// rustCaseToken reads State::Pending or a bare wildcard; a wildcard
-// is not a token.
-func rustCaseToken(fragment string) (string, bool) {
+// rustPatternIsWildcard reports a fallthrough arm: _ or (_, _).
+func rustPatternIsWildcard(alt string) bool {
+	alt = strings.TrimPrefix(alt, "(")
+	alt = strings.TrimSuffix(alt, ")")
+	for _, part := range strings.Split(alt, ",") {
+		if strings.TrimSpace(part) != "_" {
+			return false
+		}
+	}
+	return true
+}
+
+// rustStateToken reads a state or event token from a pattern or
+// value fragment. The preferred form is a path (State::Pending,
+// crate::m::State::Pending: the last segment wins); a bare
+// identifier is accepted, wrapper names (Ok, Some, Err, None, vec)
+// are ignored, and a wildcard is not a token.
+func rustStateToken(fragment string) (string, bool) {
 	fragment = strings.TrimSpace(fragment)
-	if fragment == "_" {
+	if fragment == "" || fragment == "_" {
 		return "", false
 	}
-	_, token, found := strings.Cut(fragment, "::")
-	if !found {
-		return "", false
+	paths := rustPathRe.FindAllString(fragment, -1)
+	if len(paths) > 0 {
+		last := paths[len(paths)-1]
+		if i := strings.LastIndex(last, "::"); i >= 0 {
+			last = last[i+2:]
+		}
+		return last, last != ""
 	}
-	token = strings.TrimSpace(token)
-	return token, token != ""
+	for _, tok := range strings.FieldsFunc(fragment, func(r rune) bool {
+		return !('a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' || '0' <= r && r <= '9' || r == '_')
+	}) {
+		if !rustWrapperTokens[tok] {
+			return tok, true
+		}
+	}
+	return "", false
+}
+
+var rustPathRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+`)
+
+var rustWrapperTokens = map[string]bool{
+	"Ok": true, "Some": true, "Err": true, "None": true,
+	"ok": true, "some": true, "err": true, "none": true, "vec": true, "Vec": true,
 }

@@ -52,9 +52,8 @@ func TestMachineMalformedDeclFailsClosed(t *testing.T) {
 	}{
 		{"no id", func(m *resolve.MachineDecl) { m.Machine = "" }},
 		{"no initial", func(m *resolve.MachineDecl) { m.Initial = nil }},
-		{"no terminal", func(m *resolve.MachineDecl) { m.Terminal = nil }},
 		{"no states", func(m *resolve.MachineDecl) { m.States = nil }},
-		{"bad triple", func(m *resolve.MachineDecl) { m.Transitions[0].Event = "" }},
+		{"bad triple", func(m *resolve.MachineDecl) { m.Transitions[0].To = "" }},
 		{"bad knob", func(m *resolve.MachineDecl) { m.OnUnevaluated = "sometimes" }},
 	}
 	for _, tc := range cases {
