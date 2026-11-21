@@ -599,8 +599,16 @@ func run(args []string) int {
 		}
 		switch rest[0] {
 		case "rules":
+			if !generatesManifest(kbRoot, "rules") {
+				fmt.Fprintln(os.Stderr, "pylon: rules manifest generation is disabled by manifests.generate")
+				return 0
+			}
 			return cmdManifestJSON(filepath.Join(kbRoot, "manifests", "rules.json"), rules.AllRules(), checkManifest)
 		case "packages":
+			if !generatesManifest(kbRoot, "packages") {
+				fmt.Fprintln(os.Stderr, "pylon: packages manifest generation is disabled by manifests.generate")
+				return 0
+			}
 			return cmdManifestJSON(filepath.Join(kbRoot, "manifests", "packages.json"), rules.BuildPackagesManifest(kbRoot), checkManifest)
 		default:
 			fmt.Fprintln(os.Stderr, "pylon: manifest supports 'rules' or 'packages'")
@@ -810,6 +818,14 @@ func cmdInstall(kbRoot string, force bool) int {
 		return 1
 	}
 	return 0
+}
+
+// generatesManifest loads the KB config and asks whether the gates
+// maintain the named manifest; an unreadable config falls back to
+// generation on, matching the pre-toggle behavior.
+func generatesManifest(kbRoot, name string) bool {
+	cfg, _ := config.Load(kbRoot)
+	return cfg.GeneratesManifest(name)
 }
 
 func cmdManifestJSON(outPath string, payload any, checkOnly bool) int {

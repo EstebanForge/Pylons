@@ -23,7 +23,27 @@ type Config struct {
 	Extensions []string                 `yaml:"extensions"`
 	Protocols  map[string]string        `yaml:"protocols"`
 	Parity     *ParityConfig            `yaml:"parity"`
+	Generate   *[]string                `yaml:"generate"`
 	Projects   map[string]ProjectConfig `yaml:"projects"`
+}
+
+// GeneratedManifests is the closed set of manifests the gate hooks
+// regenerate and check.
+var GeneratedManifests = []string{"rules", "packages"}
+
+// GeneratesManifest reports whether the gates maintain the named
+// manifest. Absent generate means all of them; an explicit list is
+// exact, so adopters can hand a manifest over to foreign tooling.
+func (c Config) GeneratesManifest(name string) bool {
+	if c.Generate == nil {
+		return true
+	}
+	for _, g := range *c.Generate {
+		if g == name {
+			return true
+		}
+	}
+	return false
 }
 
 // ProjectConfig describes one tracked repository or project.
@@ -98,6 +118,20 @@ func Load(root string) (Config, error) {
 	}
 	if cfg.Projects == nil {
 		cfg.Projects = map[string]ProjectConfig{}
+	}
+	if cfg.Generate != nil {
+		for _, g := range *cfg.Generate {
+			known := false
+			for _, m := range GeneratedManifests {
+				if g == m {
+					known = true
+					break
+				}
+			}
+			if !known {
+				return cfg, errors.New("generate: unknown manifest " + g + " (known: rules, packages)")
+			}
+		}
 	}
 	for _, ext := range cfg.Extensions {
 		if !extensionNameRe.MatchString(ext) {
