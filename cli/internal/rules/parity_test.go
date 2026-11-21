@@ -31,8 +31,11 @@ func newParityFixture(t *testing.T, lang, source, states, symbol string) (kb, ro
 	case "typescript":
 		mk("package.json", "{\n  \"name\": \"svc\"\n}\n")
 		mk("state.ts", source)
+	case "php":
+		mk("composer.json", "{\n  \"name\": \"svc/svc\"\n}\n")
+		mk("state.php", source)
 	}
-	exts := map[string]string{"go": "go", "rust": "rust", "typescript": "typescript"}[lang]
+	exts := map[string]string{"go": "go", "rust": "rust", "typescript": "typescript", "php": "php"}[lang]
 	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"),
 		"version: 1\nextensions: ["+exts+"]\nprojects:\n  svc:\n    path: "+root+"\n    ref: main\n")
 	fm := "---\ntitle: \"Message\"\ntype: domain-entity\nstatus: accepted\ncreated: 2026-11-20\nupdated: 2026-11-20\nowners: [o]\nstates: " + states + "\nstates_symbol: \"" + symbol + "\"\ntags: [domain]\n---\n\n# Message\n"
@@ -137,5 +140,113 @@ func TestParityRouteMismatch(t *testing.T) {
 	}
 	if !route {
 		t.Fatal("a route the source never mentions must fire the advisory")
+	}
+}
+
+func TestParityTrailingCommentsParse(t *testing.T) {
+	src := "package svc\n\ntype Status string\n\nconst (\n\tDraft Status = \"draft\" // live\n\tSent Status = \"sent\"\n)\n"
+	kb, _ := newParityFixture(t, "go", src, "[draft, sent]", "repo://svc/state.go::Status")
+	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" || f.RuleID == "PYLON049" {
+			t.Fatalf("a commented const line must still parse, got %+v", f)
+		}
+	}
+}
+
+func TestParityUnparsableLineFailsClosed(t *testing.T) {
+	src := "package svc\n\nconst (\n\tDraft Status = \"draft\"\n\t???garbage???\n)\n"
+	kb, _ := newParityFixture(t, "go", src, "[draft]", "repo://svc/state.go::Status")
+	findings := lintParity(kb, cfgMust(t, kb))
+	if len(findings) == 0 || findings[0].RuleID != "PYLON049" {
+		t.Fatalf("an unparseable case line must fail closed, got %+v", findings)
+	}
+}
+
+func TestParitySecondConstBlock(t *testing.T) {
+	src := "package svc\n\nconst (\n\tA Kind = iota\n)\n\nconst (\n\tDraft Status = \"draft\"\n\tSent Status = \"sent\"\n)\n"
+	kb, _ := newParityFixture(t, "go", src, "[draft, sent]", "repo://svc/state.go::Status")
+	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+		if f.RuleID == "PYLON049" || f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
+			t.Fatalf("an enum in a later const block must be found, got %+v", f)
+		}
+	}
+}
+
+func TestParityBlankIdentifierSkipped(t *testing.T) {
+	src := "package svc\n\nconst (\n\t_ Status = \"pad\"\n\tDraft Status = \"draft\"\n\tSent Status = \"sent\"\n)\n"
+	kb, _ := newParityFixture(t, "go", src, "[draft, sent]", "repo://svc/state.go::Status")
+	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
+			t.Fatalf("a padding blank identifier must not count as a case, got %+v", f)
+		}
+	}
+}
+
+func TestParityTSSingleQuotes(t *testing.T) {
+	src := "export enum Status {\n  Draft = 'draft',\n  Sent = 'sent',\n}\n"
+	kb, _ := newParityFixture(t, "typescript", src, "[draft, sent]", "repo://svc/state.ts::Status")
+	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+		if f.RuleID == "PYLON049" || f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
+			t.Fatalf("single-quoted enum values must compare, got %+v", f)
+		}
+	}
+}
+
+func TestParityRustNoTrailingComma(t *testing.T) {
+	src := "#[derive(Debug)]\npub enum Status {\n    Draft,\n    Sent\n}\n"
+	kb, _ := newParityFixture(t, "rust", src, "[Draft, Sent]", "repo://svc/state.rs::Status")
+	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
+			t.Fatalf("a last variant without a comma must compare, got %+v", f)
+		}
+	}
+}
+
+func TestParityEmptyStringValueIsValued(t *testing.T) {
+	src := "package svc\n\nconst (\n\tDraft Status = \"\"\n\tSent Status = \"sent\"\n)\n"
+	kb, _ := newParityFixture(t, "go", src, "[draft, sent]", "repo://svc/state.go::Status")
+	findings := lintParity(kb, cfgMust(t, kb))
+	var count, emptyState, draftState bool
+	for _, f := range findings {
+		if f.RuleID == "PYLON049" {
+			t.Fatalf("an empty-string value must not degrade to not-evaluated, got %+v", f)
+		}
+		if f.RuleID == "PYLON050" {
+			count = true
+		}
+		if f.RuleID == "PYLON051" && strings.Contains(f.Message, "\"\"") {
+			emptyState = true
+		}
+		if f.RuleID == "PYLON051" && strings.Contains(f.Message, "draft") {
+			draftState = true
+		}
+	}
+	if count || !emptyState || !draftState {
+		t.Fatalf("an empty-string value must still compare by values (count mismatch off; both sides surface in the state mismatch), got %+v", findings)
+	}
+}
+
+func TestParityDuplicateDeclaredStates(t *testing.T) {
+	src := "package svc\n\nconst (\n\tDraft Status = \"draft\"\n)\n"
+	kb, _ := newParityFixture(t, "go", src, "[draft, draft]", "repo://svc/state.go::Status")
+	findings := lintParity(kb, cfgMust(t, kb))
+	var count bool
+	for _, f := range findings {
+		if f.RuleID == "PYLON050" {
+			count = true
+		}
+	}
+	if !count {
+		t.Fatalf("duplicate declared states must fire the count mismatch, got %+v", findings)
+	}
+}
+
+func TestParityPhpEnum(t *testing.T) {
+	src := "<?php\nenum Status: string {\n    case Draft = 'draft';\n    case Sent = 'sent';\n}\n"
+	kb, _ := newParityFixture(t, "php", src, "[draft, sent]", "repo://svc/state.php::Status")
+	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
+			t.Fatalf("a php enum must compare backing values, got %+v", f)
+		}
 	}
 }
