@@ -46,7 +46,7 @@
     "name": "unknown_status",
     "severity": "error",
     "description": "Document status is outside the closed vocabulary for its root folder.",
-    "fix_hint": "Use an allowed status from conventions/vocabulary.md."
+    "fix_hint": "Use an allowed status from manifests/vocabulary.json."
   },
   {
     "id": "PYLON009",
@@ -263,7 +263,7 @@
     "name": "postmortem_field_token",
     "severity": "error",
     "description": "Post-mortem field uses a token outside its closed vocabulary.",
-    "fix_hint": "Use an allowed token from conventions/vocabulary.md."
+    "fix_hint": "Use an allowed token from manifests/vocabulary.json."
   },
   {
     "id": "PYLON042",
@@ -305,7 +305,7 @@
     "name": "merge_danger",
     "severity": "error",
     "description": "The pull request body lacks a valid merge danger line, or the derived minimum door outranks the author door.",
-    "fix_hint": "Add 'Merge danger: \u003cone-way|two-way\u003e | blast radius: \u003cscope\u003e' to the body (conventions/pr-template.md)."
+    "fix_hint": "Add 'Merge danger: \u003cone-way|two-way\u003e | blast radius: \u003cscope\u003e' to the body."
   },
   {
     "id": "PYLON048",

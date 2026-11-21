@@ -1205,7 +1205,7 @@ func TestMergeDangerSeparateRepo(t *testing.T) {
 	mustWrite(t, missing, "## How\n")
 	fs, _ = MergeDanger(kb, MergeDangerOptions{Body: missing, Base: "origin/main"})
 	for _, f := range fs {
-		if f.Message != "MERGE_DANGER_MISSING: the body has no 'Merge danger: <door> | blast radius: <scope>' line (conventions/pr-template.md)" {
+		if f.Message != "MERGE_DANGER_MISSING: the body has no 'Merge danger: <door> | blast radius: <scope>' line" {
 			t.Fatalf("empty door must produce no derived verdict, got %+v", f)
 		}
 	}

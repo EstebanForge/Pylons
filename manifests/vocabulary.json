@@ -1,0 +1,46 @@
+{
+  "$id": "https://pylons.local/schemas/vocabulary.json",
+  "version": 1,
+  "title": "Pylons closed frontmatter vocabulary",
+  "description": "The closed value sets Pylons frontmatter fields accept. Status values are enforced by the lint engine (PYLON008); the other sets are conventions, with PYLON041 validating the post-mortem tokens.",
+  "status": {
+    "proposals": ["proposed"],
+    "plans": ["proposed", "accepted", "in-progress", "shipped", "abandoned"],
+    "conventions": ["proposed", "accepted", "enforced", "superseded"],
+    "decisions": ["proposed", "accepted", "superseded", "deprecated"],
+    "audits": ["active", "superseded", "withdrawn", "retired"],
+    "investigations": ["active", "resolved", "abandoned"],
+    "packages": ["active", "deprecated", "retired"],
+    "references": ["active", "superseded", "retired"],
+    "flows": ["active"],
+    "quirks": ["active"],
+    "domain/entities": ["proposed", "accepted", "changed"],
+    "tickets": ["open", "in-progress", "blocked", "done", "wontfix"]
+  },
+  "contract_kinds": {
+    "file": "repo://<alias>/path/to/file or path/to/file",
+    "glob": "repo://<alias>/path/**/*.ext or path/**/*.ext",
+    "symbol": "path/to/file::SymbolName",
+    "route": "METHOD /path/pattern",
+    "cli": "command subcommand",
+    "event": "event.name",
+    "schema": "ModelOrTableName"
+  },
+  "protected_owners": {
+    "release-bot": "forced",
+    "vendored": "forced",
+    "generated": "forced",
+    "human-only": "forced",
+    "ask-first": "advisory"
+  },
+  "closed_sets": {
+    "level": { "documents": ["conventions"], "values": ["MUST", "SHOULD"], "enforced_by": null },
+    "ai_authored_contributed": { "documents": ["quirks"], "values": ["yes", "no", "unknown"], "enforced_by": "PYLON041" },
+    "volume_pressure": { "documents": ["quirks"], "values": ["review", "test", "rollout", "observability", "none"], "enforced_by": "PYLON041" },
+    "remediation": { "documents": ["audits"], "values": ["open", "in-progress", "complete", "rejected"], "enforced_by": null },
+    "severity": { "documents": ["investigations", "audits"], "values": ["critical", "high", "medium", "low"], "enforced_by": null },
+    "reproducible": { "documents": ["investigations"], "values": ["always", "intermittent", "environmental"], "enforced_by": null },
+    "rollout": { "documents": ["packages"], "values": ["development", "production"], "enforced_by": null },
+    "guard": { "documents": ["quirks"], "values": ["lint-rule", "convention", "test", "accepted-risk"], "enforced_by": null }
+  }
+}

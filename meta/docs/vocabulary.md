@@ -1,26 +1,23 @@
 ---
-title: "Pylons vocabulary: closed frontmatter value sets"
-type: convention
-slug: conv.pylons.vocabulary
-level: MUST
-status: accepted
-created: 2026-11-19
-updated: 2026-11-19
+title: "The closed frontmatter vocabulary"
+type: reference
+status: active
+created: 2026-11-21
+updated: 2026-11-21
 owners:
-  - estebanforge
-applies_to: ["all"]
-supersedes: []
-artifact: "cli/internal/rules/lint.go"
-tags: [pylons, vocabulary, status, lifecycle, contract, conventions]
+  - esteban
+sources: []
+description: "The closed value sets Pylons frontmatter fields accept, and the machine-readable registry at manifests/vocabulary.json."
+tags: [reference, schema, vocabulary]
 ---
 
-# Pylons vocabulary: closed frontmatter value sets
+# The closed frontmatter vocabulary
 
-Several Pylons frontmatter fields accept values from a closed set. This document defines each allowed set.
+Several Pylons frontmatter fields accept values from a closed set. The machine-readable registry lives at `manifests/vocabulary.json`; this page explains it. Status values are enforced by the lint engine (`PYLON008`); the other sets are conventions, with `PYLON041` validating the post-mortem tokens.
 
 ## Status values
 
-The `status:` field records where a document sits in its lifecycle. Allowed values differ by root folder.
+The `status:` field records where a document sits in its lifecycle. Allowed values differ by root folder; the JSON `status` map carries the sets, keyed by folder.
 
 | Root | Allowed `status:` values |
 |---|---|
@@ -39,7 +36,7 @@ The `status:` field records where a document sits in its lifecycle. Allowed valu
 
 ## Contract entry kinds
 
-Core built-in contract kinds work across any language:
+Core built-in contract kinds work across any language; the JSON `contract_kinds` map carries each kind's `id:` grammar.
 
 | `kind:` | `id:` grammar |
 |---|---|
@@ -55,11 +52,11 @@ Drop-in extensions enabled in `pylons.yaml` may register additional kinds (for e
 
 ## Protected path owners
 
-A package `protected:` entry carries `glob`, `owner`, and `reason`. Allowed `owner:` values: `release-bot` (`FORCED`), `vendored` (`FORCED`), `generated` (`FORCED`), `human-only` (`FORCED`), `ask-first` (`ADVISORY`).
+A package `protected:` entry carries `glob`, `owner`, and `reason`. The JSON `protected_owners` map carries the closed owner set and each owner's grade: `release-bot`, `vendored`, `generated`, and `human-only` are `FORCED`; `ask-first` is `ADVISORY`.
 
 ## Other closed value sets
 
-These fields accept values only from the sets below. No lint rule validates them; the sets are conventions.
+These fields accept values only from the sets in the JSON `closed_sets` map. No lint rule validates them beyond `PYLON041`; the sets are conventions.
 
 | Field | Documents | Allowed values |
 |---|---|---|

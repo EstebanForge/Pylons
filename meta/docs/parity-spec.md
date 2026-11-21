@@ -1,21 +1,21 @@
 ---
 title: "The parity spec"
 type: reference
-status: proposed
+status: active
 created: 2026-11-20
-updated: 2026-11-20
+updated: 2026-11-21
 owners:
   - esteban
 sources: []
 description: "Schema and examples for the declarative parity spec: language profiles, machine declarations, and transition triples."
-tags: [reference, schema, parity, proposed]
+tags: [reference, schema, parity]
 ---
 
 # The parity spec
 
 ## Overview
 
-Status: proposed. The parity spec is the declarative configuration for `lint --parity` extension work: the transition-graph rules do not exist yet, and this document pins the planned schema before any code lands. The plan of record lives at `repo://pylons/plans/proposals/feature-transition-parity.md`. Everything below describes intent, not shipped behavior.
+Status: active. The parity spec is the declarative configuration for `lint --parity` profile work. The `parity:` section schema and the machine machinery ship (rules `PYLON053` through `PYLON059`); everything below describes shipped behavior unless marked planned.
 
 ## Shape of the configuration
 
@@ -89,6 +89,10 @@ machines:
 ```
 
 The profile extracts the enum case set and the transition triples from the named code targets, and the checker compares the declared sets against the extracted ones in both directions. Each `machine:` value is an identity, not a pointer: the code-side marker must carry the same id (`// pylon:machine shipment` above the map). Machine ids are unique across the whole repo.
+
+## Machine discipline
+
+The convention a user's ledger declares alongside machine declarations: one closed state set per lifecycle, in a backed enum in the target language; one backed event enum beside it; one pure transition map. Side effects live outside transitions; lint cannot prove purity, so that rule is convention prose plus a table test in the mapped repo's QA suite (`verified_by:` names it). An invalid transition throws; the table test proves it, not lint. No parallel boolean flags (`isLoading` beside `isSuccess`); a review-lens rule, not an engine rule. Persisted transitions use a compare-and-swap on the stored state, because background workers may run concurrently.
 
 ## Key constraints
 
