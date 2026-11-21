@@ -25,7 +25,7 @@ contract:
 
 ## Problem
 
-`lint --parity` today checks a closed state set against a backed enum. A lifecycle is more than its cases: states change only along declared transitions, and the shipped set check cannot see a triple. A code change can add a transition, drop one, or leave a state unreachable, and the ledger still reads as parity. The roadmap carries the design at Priority 1; this plan turns it into an ordered build. It also fixes the product gap. Today the extractors are a hard-coded table inside parity.go, so a stack without a built-in extractor cannot use parity at all. End users must be able to configure parity for their own languages, the way they already configure contract kinds.
+`lint --parity` today checks a closed state set against a backed enum. A lifecycle is more than its cases: states change only along declared transitions, and the shipped set check cannot see a triple. A code change can add a transition, drop one, or leave a state unreachable, and the ledger still reads as parity. The roadmap carries the design at Priority 1; this plan turns it into an ordered build. It also fixes the product gap. Today the extractors are a hard-coded table inside parity.go, so a stack without a built-in extractor cannot use parity at all. The rule is: the CLI provides the plumbing, users configure the rest. The CLI reads a declarative spec, validates it, and acts on it. This ledger never registers a live project in its own manifest. Verification runs on fixture machines in the test suite. Adoption happens in the user's repo, by configuration.
 
 ## External contract (code-checked)
 
@@ -39,7 +39,7 @@ Declaration is explicit in both directions. A profile-defined declaration marker
 
 ### Product surface: language profiles
 
-Extraction is a configuration surface, not a built-in table. The engine is language-neutral. Each language carries a parity profile that answers two protocol requests. Request one returns the case lists for the `State` and `Event` enums. Request two returns the transition triples from the declared map. Users configure parity per project exactly as they configure contract kinds today. They enable the language in `manifests/pylons.yaml` and name the target with a `repo://` URI in the frontmatter. Nothing new to learn.
+Extraction is a configuration surface, not a built-in table. The engine is plumbing: it reads a declarative parity spec, validates it against a schema, and drives everything from it. Profile selection, the two extraction requests (State/Event case lists; transition triples), and the comparison all follow the spec. Users configure parity per project exactly as they configure contract kinds today. They enable the language in `manifests/pylons.yaml` and name the target with a `repo://` URI in the frontmatter. Nothing new to learn. Users configure parity per project exactly as they configure contract kinds today. They enable the language in `manifests/pylons.yaml` and name the target with a `repo://` URI in the frontmatter. Nothing new to learn.
 
 Three profile tiers serve any stack:
 
@@ -75,8 +75,8 @@ v1 ships comparison only: the declared frontmatter triples are parsed, checked a
 
 ## Milestones
 
-- [ ] M0: Pilot gate. Register one real project, any stack, in manifests/pylons.yaml. Add the `state-transition-contracts.md` convention entry (proposed). No implementation before this milestone.
-- [ ] M1: Profile protocol. A language-neutral parity profile interface in the engine, with the shipped set-check extractors behind it. The extensions protocol and schema gain the two request kinds, including the external plugin path. Red-first.
+- [ ] M0: Parity spec and profile protocol. A schema-validated declarative spec in manifests/ drives profile selection per project. A language-neutral profile interface sits in the engine, with the shipped set-check extractors behind it. The extensions protocol and schema gain the two request kinds, including the external plugin path. Red-first, verified on fixture machines only.
+- [ ] M0.5: Convention entry. The `state-transition-contracts.md` convention file (proposed), written language-neutral.
 - [ ] M2: Go reference profile. The package-level map literal and directive marker, parsed with `go/parser`. Red-first tests over a fixture machine; unparseable shapes fail closed as PYLON053.
 - [ ] M3: Declared side. The `machine:` key, `transitions:` triples, `initial:`, and `terminal:` as domain-entity frontmatter, validated by the parser. No generator in v1.
 - [ ] M4: Comparison and graph rules. Triple-set intersection in both directions, plus PYLON054 through PYLON058, each with a red-first test.
