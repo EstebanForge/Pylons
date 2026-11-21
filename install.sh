@@ -5,7 +5,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh | bash
 #   curl -fsSL ... | bash -s -- my-kb                  # custom directory
-#   curl -fsSL ... | PYLONS_VERSION=v0.2.0 bash        # pinned version
+#   curl -fsSL ... | PYLONS_VERSION=0.2.0 bash        # pinned version
 #
 # Requires bash, curl or wget, and a sha256 tool. The installer never
 # touches anything outside the target directory.
@@ -62,17 +62,12 @@ main() {
 				loc="$(wget -S --spider --max-redirect=0 "$latest_url" 2>&1 |
 					tr -d '\r' | sed -n 's/^ *[Ll]ocation: *//p' | head -n1 || true)"
 			fi
-			case "$loc" in */releases/tag/*) VERSION="${loc##*/}" ;; *) die "could not resolve the latest release; pin one, e.g. curl ... | PYLONS_VERSION=v0.2.0 bash" ;; esac
+			case "$loc" in */releases/tag/*) VERSION="${loc##*/}" ;; *) die "could not resolve the latest release; pin one, e.g. curl ... | PYLONS_VERSION=0.2.0 bash" ;; esac
 			;;
 	esac
-	# The tag is bare; download URLs want the v-form, so normalize after
-	# the case: the redirect-resolved tag must not skip this step.
-	case "$VERSION" in
-		v*) ;;
-		*) VERSION="v$VERSION" ;;
-	esac
-	# Semantic form only; VERSION lands in download URLs, so constrain it.
-	[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]] ||
+	# Semantic form only; VERSION lands in download URLs, so constrain
+	# it. Bare semver everywhere: the tag, the URLs, the asset names.
+	[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]] ||
 		die "invalid version '$VERSION'"
 	base="https://github.com/$REPO/releases/download/$VERSION"
 
