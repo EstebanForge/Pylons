@@ -84,7 +84,7 @@ curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh
 
 Prefer to build from source, or want the pylon to live inside this repository instead of a fresh install? See [meta/INSTALL.md](meta/INSTALL.md).
 
-See [meta/INDEX.md](meta/INDEX.md) for installation, usage, drop-in extensions, and design philosophy. Planned work lives in the [roadmap](meta/ROADMAP.md), with full designs in the plan documents ([one is shipped](plans/archive/feature-structural-code-search.md)); shipped work lands in the [changelog](meta/CHANGELOG.md).
+See [meta/INDEX.md](meta/INDEX.md) for installation, usage, drop-in extensions, and design philosophy. Planned work lives in the [roadmap](meta/ROADMAP.md), with full designs in the plan documents ([one is shipped](plans/archive/feature-structural-code-search.md), [one is in proposal](plans/proposals/feature-transition-parity.md)); shipped work lands in the [changelog](meta/CHANGELOG.md).
 
 ## License
 
