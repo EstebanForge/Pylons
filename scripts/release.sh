@@ -79,8 +79,21 @@ fi
 # Skeleton from tracked content only; git archive cannot pick up
 # junk. Tooling dirs stay out: hooks ship inside the binary, cli/ and
 # scripts/ are not part of an installed pylon.
-git archive --format=tar.gz -o "dist/pylons-kb-$tag.tar.gz" HEAD \
-	. ':(exclude)cli' ':(exclude).githooks' ':(exclude).github' ':(exclude)scripts' ':(exclude)dist'
+#
+# The product manifest is generated, not tracked: it lists exactly
+# what self-update may replace, so the updater can three-way every
+# product file against user edits.
+product_manifest="$(mktemp)"
+./bin/pylon manifest product --release-version "$tag" --pylons . > "$product_manifest" \
+	|| { echo "product manifest build failed; sweep before releasing" >&2; rm -f "$product_manifest"; exit 1; }
+
+stage="$(mktemp -d)"
+git archive --format=tar HEAD \
+	. ':(exclude)cli' ':(exclude).githooks' ':(exclude).github' ':(exclude)scripts' ':(exclude)dist' \
+	| tar -x -C "$stage"
+cp "$product_manifest" "$stage/manifests/product.json"
+COPYFILE_DISABLE=1 tar -cz -C "$stage" -f "dist/pylons-kb-$tag.tar.gz" .
+rm -rf "$stage" "$product_manifest"
 
 (cd dist && { sha256sum pylons-* 2>/dev/null || shasum -a 256 pylons-*; } > checksums.txt)
 

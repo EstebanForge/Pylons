@@ -54,7 +54,8 @@ Usage:
   pylon extensions [list|schema] [--format=human|json] [--json] [--pylons <path>]
   pylon map              [--type <t>] [--package <p>] [--tag <t>] [--status <s>] [--folder <dir>] [--query <q>] [--limit <n>] [--all] [--format=human|json] [--json] [--pylons <path>]
   pylon search <query>   [--limit <n>] [--all] [--format=human|json] [--json] [--pylons <path>]
-  pylon manifest [rules|packages] [--check] [--pylons <path>]
+  pylon manifest [rules|packages|product] [--check] [--release-version <v>] [--pylons <path>]
+  pylon self-update --from <staged-release-dir> [--dry-run] [--force] [--pylons <path>]
   pylon explain <rule_id>
   pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]
   pylon install         [--pylons <path>]
@@ -130,6 +131,8 @@ func run(args []string) int {
 	rbStdout, mapAll := false, false
 	allowExternal := os.Getenv("PYLON_ALLOW_EXTERNAL_EXTENSIONS") == "1"
 	forceHooks, ratchetUpdate, lintParity := false, false, false
+	releaseVersion := ""
+	dryRunUpdate := false
 	updateBaseline := false
 	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild := "", "", "", "", "", "", "", "", "", ""
 	pinnedReleases, sessionSince := "", ""
@@ -192,11 +195,13 @@ func run(args []string) int {
 			lintParity = true
 		case arg == "--update-baseline":
 			updateBaseline = true
+		case arg == "--dry-run":
+			dryRunUpdate = true
 		case arg == "--detached":
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
-		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix":
+		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "pylon: flag %s requires a value\n", arg)
 				return 2
@@ -238,6 +243,8 @@ func run(args []string) int {
 				annFrom = val
 			case "--path-prefix":
 				annPrefix = val
+			case "--release-version":
+				releaseVersion = val
 			case "--depth":
 				n, err := strconv.Atoi(val)
 				if err != nil || n < 0 {
@@ -610,6 +617,9 @@ func run(args []string) int {
 		docs := filterDocs(scanDocs(kbRoot, mapAll), "", "", "", "", "", strings.Join(rest, " "), limit)
 		return renderDocs(docs, format)
 
+	case "self-update":
+		return cmdSelfUpdate(kbRoot, annFrom, forceHooks, dryRunUpdate)
+
 	case "manifest":
 		if len(rest) == 0 {
 			fmt.Fprintln(os.Stderr, "pylon: manifest requires 'rules' or 'packages'")
@@ -622,6 +632,23 @@ func run(args []string) int {
 				return 0
 			}
 			return cmdManifestJSON(filepath.Join(kbRoot, "manifests", "rules.json"), rules.AllRules(), checkManifest)
+		case "product":
+			if releaseVersion == "" {
+				fmt.Fprintln(os.Stderr, "pylon: manifest product requires --release-version <v>")
+				return 2
+			}
+			m, err := install.BuildProductManifest(kbRoot, releaseVersion)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "pylon: manifest product: %v\n", err)
+				return 1
+			}
+			out, err := install.WriteProductManifest(m)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "pylon: manifest product: %v\n", err)
+				return 1
+			}
+			os.Stdout.Write(out)
+			return 0
 		case "packages":
 			if !generatesManifest(kbRoot, "packages") {
 				fmt.Fprintln(os.Stderr, "pylon: packages manifest generation is disabled by manifests.generate")
@@ -841,6 +868,50 @@ func cmdInstall(kbRoot string, force bool) int {
 // generatesManifest loads the KB config and asks whether the gates
 // maintain the named manifest; an unreadable config falls back to
 // generation on, matching the pre-toggle behavior.
+func cmdSelfUpdate(kbRoot, from string, force, dryRun bool) int {
+	if from == "" {
+		fmt.Fprintln(os.Stderr, "pylon: self-update requires --from <staged-release-dir>")
+		return 2
+	}
+	res, err := install.SelfUpdate(kbRoot, from, force, dryRun)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pylon self-update: %v\n", err)
+		return 1
+	}
+	label := "plan"
+	if !dryRun {
+		label = "update"
+	}
+	fmt.Printf("self-update %s: release %s\n", label, res.Version)
+	for _, rel := range res.Replaced {
+		fmt.Printf("  replaced %s\n", rel)
+	}
+	for _, rel := range res.Drifted {
+		fmt.Printf("  drifted  %s (your edit kept; new copy at %s.pylons-new)\n", rel, rel)
+	}
+	for _, rel := range res.Removed {
+		fmt.Printf("  removed  %s\n", rel)
+	}
+	for _, rel := range res.KeptDirty {
+		fmt.Printf("  kept     %s (you edited it; the new release dropped it)\n", rel)
+	}
+	if res.BinaryNew {
+		fmt.Printf("  binary   bin/pylon updated\n")
+	}
+	if res.BackupDir != "" {
+		fmt.Printf("  backups  %s/\n", res.BackupDir)
+	}
+	if dryRun {
+		fmt.Printf("  dry run: nothing written\n")
+	}
+	if len(res.Drifted) > 0 || len(res.KeptDirty) > 0 {
+		fmt.Fprintf(os.Stderr, "pylon self-update: %d file(s) carry your edits; inspect the .pylons-new copies and kept files, then commit\n", len(res.Drifted)+len(res.KeptDirty))
+		return 1
+	}
+	fmt.Fprintln(os.Stderr, "pylon self-update: review with git status, then commit the update")
+	return 0
+}
+
 func generatesManifest(kbRoot, name string) bool {
 	cfg, _ := config.Load(kbRoot)
 	return cfg.GeneratesManifest(name)

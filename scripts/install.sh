@@ -95,14 +95,29 @@ main() {
 	tar -xzf "$work/$kb_asset" -C "$work/stage"
 	chmod +x "$work/stage/bin/pylon"
 
-	# --- target directory (atomic-ish: only extracted content lands) ----
-	[ -e "$DEST" ] && die "$DEST already exists; remove it or pass another directory"
+	# --- target: fresh install or in-place update -----------------------
+	printf -v q '%q' "$DEST"
+	printf -v q2 '%q' "$DEST"
+	if [ -d "$DEST" ] && [ -f "$DEST/manifests/pylons.yaml" ]; then
+		# An installed pylon: hand the staged release to the NEW binary.
+		# self-update never touches user files; it three-ways every
+		# product file, backs up what it replaces under _pylons-backup,
+		# and leaves your edits as .pylons-new copies for review.
+		log "existing pylon at $DEST; updating in place"
+		if "$work/stage/bin/pylon" self-update --from "$work/stage" --pylons "$DEST"; then
+			log "update applied; review with: cd $q2 && git status"
+		else
+			die "self-update reported drift or failed; inspect $DEST (.pylons-new copies) or rerun with --force"
+		fi
+		log "done"
+		return 0
+	fi
+	[ -e "$DEST" ] && die "$DEST already exists and does not look like a pylon (no manifests/pylons.yaml); remove it or pass another directory"
 	# Rename the whole stage dir: no pre-created target to conflict with,
 	# and a failure above this line leaves nothing on disk.
 	mv "$work/stage" "$DEST"
 
 	# --- git + gates ----------------------------------------------------
-	printf -v q '%q' "$DEST"
 	if command -v git >/dev/null 2>&1; then
 		if (cd "$DEST" && git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; }); then
 			log "initialized git repository in $DEST"
@@ -112,10 +127,11 @@ main() {
 				log "hooks not wired; run: cd $q && ./bin/pylon install --pylons ."
 			fi
 			# Scaffolders commit: an untracked skeleton tracks nothing.
-			if (cd "$DEST" && git add -A && git commit -qm "chore: scaffold pylons" 2>/dev/null); then
+			if commit_err="$(cd "$DEST" && git add -A && git commit -qm "chore: scaffold pylons" 2>&1)"; then
 				log "initial commit created"
 			else
-				log "no git identity; run: cd $q && git config user.name <name> && git config user.email <email> && git add -A && git commit -m 'chore: scaffold pylons'"
+				log "initial commit failed: $commit_err"
+				log "if git identity is missing: cd $q && git config user.name <name> && git config user.email <email> && git add -A && git commit -m 'chore: scaffold pylons'"
 			fi
 		else
 			log "git init failed; run it later: cd $q && git init && ./bin/pylon install --pylons ."
