@@ -225,10 +225,10 @@ func (c Config) ProjectPath(root, alias string) string {
 }
 
 // ProjectRef returns the configured base branch for alias, defaulting to main.
+// ProjectRef returns the ref contract resolution reads. An unset
+// ref means the working tree: the checker judges the code the user
+// is about to commit, symmetric with parity and merge-danger. Set
+// ref: to pin reads to a committed tree instead.
 func (c Config) ProjectRef(alias string) string {
-	proj, ok := c.Projects[alias]
-	if !ok || proj.Ref == "" {
-		return "main"
-	}
-	return proj.Ref
+	return c.Projects[alias].Ref
 }

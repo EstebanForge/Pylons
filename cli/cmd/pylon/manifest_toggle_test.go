@@ -157,6 +157,7 @@ func seedProductTree(t *testing.T, root string) {
 		"manifests/extensions.example.json", "manifests/packages.example.json",
 		"manifests/pylons.example.yaml", "protocols/agent.md", "protocols/reflect.md",
 		"meta/MANIFESTO.md", "templates/plan.md", "extensions/_examples/pylon-ext-js",
+		"_examples/ledger/README.md",
 		"packages/AGENTS.md", "proposals/AGENTS.md", "plans/AGENTS.md",
 		"decisions/AGENTS.md", "conventions/AGENTS.md", "quirks/AGENTS.md",
 		"flows/AGENTS.md", "domain/AGENTS.md", "investigations/AGENTS.md",

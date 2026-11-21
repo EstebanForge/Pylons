@@ -58,7 +58,7 @@ var productKeepers = []string{
 }
 
 // productTrees ship whole directories: every regular file inside.
-var productTrees = []string{"meta", "templates", "extensions/_examples"}
+var productTrees = []string{"meta", "templates", "extensions/_examples", "_examples"}
 
 // ProductManifest is the release-time record of the product layer:
 // one sha256 per file, consumed by self-update for three-way drift.

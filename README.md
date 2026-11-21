@@ -71,6 +71,12 @@ Standards need a controlled language, so the corpus uses ASD-STE100 Simplified T
 
 Every session starts by reading the map (`pylon brief`, `pylon map`) instead of reverse-engineering the platform from scratch. Before the first edit, `pylon check <paths...>` names every active plan and protected glob on the same ground. While working, new quirks, conventions, and contracts get recorded as they are discovered. At the gate, every change passes `pylon lint` so a documented surface that does not exist in code fails.
 
+## Examples
+
+`_examples/` ships a miniature ledger (one machine, one plan, one quirk, and the Go code they check) plus a runnable parity plugin. Lint it, break it, and watch the checker catch the drift:
+
+    ./bin/pylon lint --pylons _examples/ledger --parity
+
 ## Quick start
 
 1. Install a pylon into your project: a plain-text map of your platform, a deterministic checker that fails when the map drifts from the code, and gate hooks that enforce it, tracked in its own git repository (downloads the `pylon` binary, unpacks the pylon into `pylons/`):

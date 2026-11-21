@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+# Example external parity plugin for Pylons.
+#
+# A parity plugin answers two ops over one JSON request line on stdin
+# and replies with one JSON line on stdout. The engine reads the
+# marked source file itself and sends its text, so the plugin stays a
+# pure function: no file access, no clock, no environment.
+#
+#   request : {"schema_version":1,"op":"states"|"transitions",
+#              "profile":...,"name":...,"options":{...},"source":"..."}
+#   states      -> {"cases":[{"name":..., "value":...}, ...]}
+#                 (omit "value" when the language has no backing value)
+#   transitions -> {"triples":[{"from":...,"event":...,"to":...}, ...]}
+#   cannot resolve -> {"cases":[],"error":"..."}   (advisory not-evaluated)
+#
+# This example parses a deliberately small canonical form so the whole
+# protocol fits on one screen:
+#
+#   // pylon:machine <id>            marks the machine region
+#   enum <id> { A, B }               the state set (states op)
+#   A -- <event> --> B               a transition (transitions op)
+#
+# Copy this file into your ledger's extensions/ directory as
+# pylon-ext-<name>, enable <name> in pylons.yaml, bind a profile with
+# "use: external:<name>", and replace the two extract functions with
+# parsing for your language. Like the shipped extractors, fail closed:
+# a line you cannot read is an error field, never a silent skip.
+
+import json
+import re
+import sys
+
+ENUM_RE = re.compile(r"enum\s+(\S+)\s*\{([^}]*)\}")
+TRANSITION_RE = re.compile(r"^(\S+)\s+--\s+(\S+)\s+-->\s+(\S+)$")
+
+
+def error(message):
+    print(json.dumps({"error": message}))
+    sys.exit(0)
+
+
+def machine_region(source, name):
+    """The text after the // pylon:machine <name> marker line."""
+    marker = "// pylon:machine " + name
+    for line in source.splitlines():
+        if line.strip() == marker:
+            return source.split(line, 1)[1]
+    return None
+
+
+def extract_states(source, name):
+    for match in ENUM_RE.finditer(source):
+        if match.group(1) == name:
+            names = [s.strip() for s in match.group(2).split(",")]
+            names = [s for s in names if s]
+            if not names:
+                error("enum %s lists no states" % name)
+            # This example language has no backing values, so the
+            # cases carry names only. Emit "value" too when your
+            # cases hold literal constants.
+            return [{"name": n} for n in names]
+    error("cannot resolve enum %s" % name)
+
+
+def extract_transitions(source, name):
+    region = machine_region(source, name)
+    if region is None:
+        error("cannot resolve machine %s: no // pylon:machine marker" % name)
+    triples = []
+    for line in region.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("//"):
+            continue
+        if ENUM_RE.match(stripped):
+            # The enum line is structural here; the states op reads it.
+            continue
+        match = TRANSITION_RE.match(stripped)
+        if not match:
+            # Fail closed: unknown lines inside the marked region are
+            # a plugin-reported error, which the engine grades as a
+            # hard unparseable-machine finding.
+            error("machine %s: unreadable line: %s" % (name, stripped[:60]))
+        triples.append({"from": match.group(1), "event": match.group(2), "to": match.group(3)})
+    if not triples:
+        error("machine %s declares no transitions" % name)
+    return triples
+
+
+def main():
+    try:
+        request = json.loads(sys.stdin.read())
+    except ValueError as exc:
+        error("invalid request JSON: %s" % exc)
+    source = request.get("source", "")
+    name = request.get("name", "")
+    if request.get("op") == "states":
+        print(json.dumps({"cases": extract_states(source, name)}))
+    elif request.get("op") == "transitions":
+        print(json.dumps({"triples": extract_transitions(source, name)}))
+    else:
+        error("unsupported op: %s" % request.get("op"))
+
+
+if __name__ == "__main__":
+    main()

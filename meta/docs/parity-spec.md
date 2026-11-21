@@ -24,7 +24,7 @@ The CLI provides the plumbing and reads the spec; users configure the rest. Two 
 1. A parity spec section in the manifest family (like `extensions:` today), binding each language to a parity profile.
 2. Machine declarations in domain-entity frontmatter, naming the code targets and the declared triples.
 
-## Example: profile binding (planned)
+## Example: profile binding
 
 ```yaml
 version: 1
@@ -90,6 +90,8 @@ machines:
 
 The profile extracts the enum case set and the transition triples from the named code targets, and the checker compares the declared sets against the extracted ones in both directions. Each `machine:` value is an identity, not a pointer: the code-side marker must carry the same id (`// pylon:machine shipment` above the map). Machine ids are unique across the whole repo.
 
+
+A runnable external plugin ships at `extensions/_examples/pylon-ext-parity`, and `_examples/ledger/` is a miniature ledger with one declared machine, an accepted plan, and a quirk.
 
 ## Working-tree semantics
 
