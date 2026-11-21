@@ -26,6 +26,6 @@ Describe what the developer or user observes when this trap triggers.
 
 Describe the root cause, race condition, or non-obvious behavior.
 
-## Resolution / Checks
+## Resolution
 
 1. Step to diagnose or recover.
