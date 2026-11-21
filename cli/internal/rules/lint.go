@@ -247,7 +247,7 @@ func lintDoc(kbRoot, rel, content string, cfg config.Config, opts LintOptions) [
 	}
 
 	body := resolve.WithoutFrontMatter(content)
-	out = append(out, checkMarkdownLinks(kbRoot, rel, body)...)
+	out = append(out, checkMarkdownLinks(cfg.Schemes, kbRoot, rel, body)...)
 	out = append(out, checkMachinePaths(rel, body)...)
 	out = append(out, checkSTE100(rel, body)...)
 
@@ -323,7 +323,7 @@ func statusMatchesFolder(rootZone, rel, status string) bool {
 	}
 }
 
-func checkMarkdownLinks(kbRoot, rel, body string) []report.Finding {
+func checkMarkdownLinks(schemes []string, kbRoot, rel, body string) []report.Finding {
 	var out []report.Finding
 	dir := filepath.Dir(filepath.Join(kbRoot, filepath.FromSlash(rel)))
 	inFence := false
@@ -338,7 +338,18 @@ func checkMarkdownLinks(kbRoot, rel, body string) []report.Finding {
 		}
 		for _, m := range mdLinkRe.FindAllStringSubmatch(line, -1) {
 			target := m[1]
-			if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "mailto:") || strings.Contains(target, "://") {
+			if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "mailto:") {
+				continue
+			}
+			if scheme, rest, ok := strings.Cut(target, "://"); ok {
+				if !slices.Contains(schemes, scheme) {
+					continue
+				}
+				// A declared scheme is recognized: the path must be
+				// well formed, resolution semantics stay external.
+				if !wellFormedURIPath(rest) {
+					out = append(out, errFinding("PYLON012", rel, idx+1, "malformed "+scheme+" link: "+target))
+				}
 				continue
 			}
 			resolved := filepath.Clean(filepath.Join(dir, filepath.FromSlash(target)))
@@ -348,6 +359,20 @@ func checkMarkdownLinks(kbRoot, rel, body string) []report.Finding {
 		}
 	}
 	return out
+}
+
+// wellFormedURIPath judges the path half of scheme://path: non-empty,
+// no leading slash, and no .. traversal segment.
+func wellFormedURIPath(rest string) bool {
+	if rest == "" || strings.HasPrefix(rest, "/") {
+		return false
+	}
+	for _, seg := range strings.Split(rest, "/") {
+		if seg == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 func checkMachinePaths(rel, body string) []report.Finding {

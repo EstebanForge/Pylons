@@ -65,3 +65,30 @@ func TestGenerateRejectsUnknownManifest(t *testing.T) {
 		t.Fatal("generate must reject manifest names outside the closed set")
 	}
 }
+
+func TestSchemesValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{"valid", "version: 1\nschemes: [legacy, atlas]\n", false},
+		{"empty ok", "version: 1\nschemes: []\n", false},
+		{"reserved repo", "version: 1\nschemes: [repo]\n", true},
+		{"reserved pylon", "version: 1\nschemes: [pylon]\n", true},
+		{"reserved http", "version: 1\nschemes: [http]\n", true},
+		{"bad grammar", "version: 1\nschemes: [1bad]\n", true},
+		{"upper", "version: 1\nschemes: [Legacy]\n", true},
+	}
+	for _, tc := range cases {
+		kb := t.TempDir()
+		writeToggleManifest(t, kb, tc.yaml)
+		_, err := Load(kb)
+		if tc.wantErr && err == nil {
+			t.Errorf("%s: want error, got none", tc.name)
+		}
+		if !tc.wantErr && err != nil {
+			t.Errorf("%s: want ok, got %v", tc.name, err)
+		}
+	}
+}

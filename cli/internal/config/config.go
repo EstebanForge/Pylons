@@ -17,6 +17,13 @@ import (
 // escape extDir or dodge PATH lookup.
 var extensionNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
+// schemeNameRe is the URI scheme grammar, lowercase. Reserved
+// schemes are the engine's own plus the external-link classes the
+// link checker handles directly.
+var schemeNameRe = regexp.MustCompile(`^[a-z][a-z0-9+.\-]*$`)
+
+var reservedSchemes = []string{"repo", "pylon", "http", "https", "mailto", "file"}
+
 // Config holds the parsed pylons.yaml registry.
 type Config struct {
 	Version    int                      `yaml:"version"`
@@ -24,6 +31,7 @@ type Config struct {
 	Protocols  map[string]string        `yaml:"protocols"`
 	Parity     *ParityConfig            `yaml:"parity"`
 	Generate   *[]string                `yaml:"generate"`
+	Schemes    []string                 `yaml:"schemes"`
 	Projects   map[string]ProjectConfig `yaml:"projects"`
 }
 
@@ -118,6 +126,14 @@ func Load(root string) (Config, error) {
 	}
 	if cfg.Projects == nil {
 		cfg.Projects = map[string]ProjectConfig{}
+	}
+	for _, sc := range cfg.Schemes {
+		if !schemeNameRe.MatchString(sc) {
+			return cfg, errors.New("schemes: invalid scheme name " + sc)
+		}
+		if slices.Contains(reservedSchemes, sc) {
+			return cfg, errors.New("schemes: " + sc + " is built in and cannot be redeclared")
+		}
 	}
 	if cfg.Generate != nil {
 		for _, g := range *cfg.Generate {
