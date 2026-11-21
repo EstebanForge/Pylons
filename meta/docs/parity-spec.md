@@ -50,37 +50,51 @@ parity:
 
 ## Example: machine declaration (planned)
 
-On `domain/shipment.md`:
+On `domain/shipment.md`, one entity carrying two machines (a lifecycle and a returns process), because real entities often hold several:
 
 ```yaml
-machine: shipment
-states:
-  - pending
-  - picked
-  - shipped
-  - delivered
-  - cancelled
-states_symbol: repo://platform-api/Domain/State.cs::ShipmentStatus
-transitions_symbol: repo://platform-api/Transitions.cs::shipment
-on_unevaluated: advisory
-initial:
-  - pending
-terminal:
-  - delivered
-  - cancelled
-transitions:
-  - {from: pending, event: pick, to: picked}
-  - {from: picked, event: ship, to: shipped}
-  - {from: shipped, event: deliver, to: delivered}
+machines:
+  - machine: shipment
+    states:
+      - pending
+      - picked
+      - shipped
+      - delivered
+      - cancelled
+    states_symbol: repo://platform-api/Domain/State.cs::ShipmentStatus
+    transitions_symbol: repo://platform-api/Transitions.cs::shipment
+    on_unevaluated: advisory
+    initial:
+      - pending
+    terminal:
+      - delivered
+      - cancelled
+    transitions:
+      - {from: pending, event: pick, to: picked}
+      - {from: picked, event: ship, to: shipped}
+      - {from: shipped, event: deliver, to: delivered}
+  - machine: returns
+    states:
+      - requested
+      - received
+      - refunded
+    transitions_symbol: repo://platform-api/Transitions.cs::returns
+    initial:
+      - requested
+    terminal:
+      - refunded
+    transitions:
+      - {from: requested, event: receive, to: received}
+      - {from: received, event: refund, to: refunded}
 ```
 
-The profile extracts the enum case set and the transition triples from the named code targets, and the checker compares the declared sets against the extracted ones in both directions. The `machine:` value is an identity, not a pointer: the code-side marker must carry the same id (`// pylon:machine shipment` above the map).
+The profile extracts the enum case set and the transition triples from the named code targets, and the checker compares the declared sets against the extracted ones in both directions. Each `machine:` value is an identity, not a pointer: the code-side marker must carry the same id (`// pylon:machine shipment` above the map). Machine ids are unique across the whole repo.
 
 ## Key constraints
 
 - Every declaration is explicit. There is no enum auto-discovery; discovery by proximity is a heuristic and violates the determinism constraint.
 - The declared format is structured frontmatter. The engine never parses a generated markdown table as source of truth.
 - A profile that cannot fully resolve a declared machine errors and fails closed. A skipped machine must never read as parity.
-- `initial:` and `terminal:` are mandatory fields on every machine declaration.
+- `initial:` and `terminal:` are mandatory fields on every machine entry. Machine ids are unique across the repo.
 - Configuration lives in the user's ledger. This ledger registers no live project and carries no machine declarations.
 - Until the spec ships, the shipped `states:` and `states_symbol:` set checks under `lint --parity` are the only parity surface. See [EXTENSIONS.md](../EXTENSIONS.md) for what is enabled today.
