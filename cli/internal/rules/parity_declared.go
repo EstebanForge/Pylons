@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -232,6 +233,8 @@ func machineCodeFindings(kbRoot, rel string, meta resolve.DocMeta, cfg config.Co
 			continue
 		}
 		out = append(out, compareTriples(rel, m, triples)...)
+		out = append(out, scanPersistedKeyWrites(kbRoot, cfg, m)...)
+		out = append(out, checkMachineVerifiedBy(kbRoot, cfg, rel, m)...)
 	}
 	return out
 }
@@ -335,6 +338,126 @@ func compareTriples(rel string, m *resolve.MachineDecl, extracted []parityTransi
 	if len(declOnly) > 0 || len(codeOnly) > 0 {
 		out = append(out, errFinding(transitionMismatchID, rel, 1,
 			fmt.Sprintf("TRANSITION_MISMATCH: declared only %q; code only %q", declOnly, codeOnly)))
+	}
+	return out
+}
+
+// bypassedWriteID is the advisory: a direct write of the machine's
+// persisted state key outside the machine surface.
+const bypassedWriteID = "PYLON059"
+
+// persistedKeyWriteRes is the write-shape per language family: a
+// field assignment (go, rust, ts, python, csharp, ruby), a php arrow
+// assignment, or a bracketed hash-key assignment.
+var persistedKeyWriteRes = []*regexp.Regexp{
+	regexp.MustCompile(`\.\s*%s\s*=[^=]`),
+	regexp.MustCompile(`->\s*%s\s*=[^=]`),
+	regexp.MustCompile(`\[\s*["']%s["']\s*]\s*=[^=]`),
+}
+
+// scanPersistedKeyWrites looks for direct writes of the machine's
+// persisted key in the project source, outside the machine surface
+// (the transitions file) and test files. Advisory: a constructor or
+// rehydration may be legitimate, and lint cannot prove intent.
+func scanPersistedKeyWrites(kbRoot string, cfg config.Config, m *resolve.MachineDecl) []report.Finding {
+	if strings.TrimSpace(m.PersistedKey) == "" || m.TransitionsSymbol == "" {
+		return nil
+	}
+	u, ok := resolve.ParseURI(m.TransitionsSymbol)
+	if !ok || u.Scheme != "repo" {
+		return nil
+	}
+	root := cfg.ProjectPath(kbRoot, u.Alias)
+	if root == "" {
+		return nil
+	}
+	surfaceRel := uriSurfacePath(u.Path)
+	key := regexp.QuoteMeta(strings.TrimSpace(m.PersistedKey))
+	res := make([]*regexp.Regexp, 0, len(persistedKeyWriteRes))
+	for _, tmpl := range persistedKeyWriteRes {
+		res = append(res, regexp.MustCompile(fmt.Sprintf(tmpl.String(), key)))
+	}
+	var out []report.Finding
+	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+		if strings.HasSuffix(name, "_test.go") || strings.HasSuffix(name, "_test.rs") || strings.HasSuffix(name, "Test.php") || strings.HasPrefix(name, "._") {
+			return nil
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == surfaceRel {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(name))
+		claimed := false
+		for _, langs := range config.BuiltinProfileExtensions {
+			if slices.Contains(langs, ext) {
+				claimed = true
+				break
+			}
+		}
+		if !claimed {
+			return nil
+		}
+		data, err := readBounded(p)
+		if err != nil {
+			return nil
+		}
+		hits := 0
+		for i, line := range strings.Split(string(data), "\n") {
+			for _, re := range res {
+				if re.MatchString(line) {
+					hits++
+					if hits == 1 {
+						out = append(out, advisoryFinding(bypassedWriteID, m.Machine, i+1,
+							fmt.Sprintf("BYPASSED_STATE_WRITE: %s in %s writes the persisted state key %q outside the machine surface; route the write through the machine", name, m.Machine, m.PersistedKey)))
+					}
+					break
+				}
+			}
+		}
+		return nil
+	})
+	return out
+}
+
+// checkMachineVerifiedBy resolves the machine's proof pointers. A
+// pointer that does not resolve is a dead proof: the not-evaluated
+// advisory names it.
+func checkMachineVerifiedBy(kbRoot string, cfg config.Config, rel string, m *resolve.MachineDecl) []report.Finding {
+	var out []report.Finding
+	for _, v := range m.VerifiedBy {
+		if strings.TrimSpace(v) == "" {
+			continue
+		}
+		u, ok := resolve.ParseURI(v)
+		if !ok || u.Scheme != "repo" {
+			out = append(out, advisoryFinding(parityNotEvaluatedID, rel, 1,
+				fmt.Sprintf("PARITY_NOT_EVALUATED: machine %s: verified_by %q is not a repo:// URI", m.Machine, v)))
+			continue
+		}
+		root := cfg.ProjectPath(kbRoot, u.Alias)
+		if root == "" {
+			out = append(out, advisoryFinding(parityNotEvaluatedID, rel, 1,
+				fmt.Sprintf("PARITY_NOT_EVALUATED: machine %s: verified_by %q names an unregistered project", m.Machine, v)))
+			continue
+		}
+		target, safe := resolve.SafeJoin(root, uriSurfacePath(u.Path))
+		if !safe {
+			out = append(out, advisoryFinding(parityNotEvaluatedID, rel, 1,
+				fmt.Sprintf("PARITY_NOT_EVALUATED: machine %s: verified_by path %q is unsafe", m.Machine, v)))
+			continue
+		}
+		if _, err := readBounded(target); err != nil {
+			out = append(out, advisoryFinding(parityNotEvaluatedID, rel, 1,
+				fmt.Sprintf("PARITY_NOT_EVALUATED: machine %s: verified_by %q does not resolve", m.Machine, v)))
+		}
 	}
 	return out
 }

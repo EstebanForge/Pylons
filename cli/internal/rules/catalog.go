@@ -74,6 +74,7 @@ var Catalog = map[string]RuleSpec{
 	"PYLON056": {ID: "PYLON056", Name: "unreachable_state", Severity: "error", Description: "A declared state is neither initial nor reachable from the initial states.", FixHint: "Add a path from the initial states, or drop the state."},
 	"PYLON057": {ID: "PYLON057", Name: "dead_state", Severity: "error", Description: "A declared state has no outgoing transitions and is not terminal.", FixHint: "Declare the state terminal, or give it an outgoing transition."},
 	"PYLON058": {ID: "PYLON058", Name: "duplicate_transition", Severity: "error", Description: "The same from-event pair is declared twice on one side.", FixHint: "Remove the duplicate triple from the declaration or the code map."},
+	"PYLON059": {ID: "PYLON059", Name: "bypassed_state_write", Severity: "advisory", Description: "The machine's persisted state key is written outside the machine surface.", FixHint: "Route the write through the machine's transition function, or declare the writer part of the surface."},
 }
 
 // AllRules returns the sorted rule catalog.

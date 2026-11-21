@@ -570,7 +570,11 @@ func run(args []string) int {
 			_ = json.NewEncoder(os.Stdout).Encode(doc)
 			return 0
 		}
-		fmt.Printf("Pylons: %s | projects: %d | extensions: %d | docs: %d\n", kbRoot, len(cfg.Projects), len(cfg.Extensions), len(docs))
+		machines := 0
+		for _, d := range docs {
+			machines += d.Machines
+		}
+		fmt.Printf("Pylons: %s | projects: %d | extensions: %d | docs: %d | machines: %d\n", kbRoot, len(cfg.Projects), len(cfg.Extensions), len(docs), machines)
 		if !fetchOK {
 			fmt.Printf("FETCH-FAILED %s\n", fetchFailedAt.UTC().Format(time.RFC3339))
 		}
@@ -950,6 +954,7 @@ type docEntry struct {
 	Package    string   `json:"package,omitempty"`
 	Tags       []string `json:"tags,omitempty"`
 	Components []string `json:"components,omitempty"`
+	Machines   int      `json:"-"`
 	Body       string   `json:"-"`
 }
 
@@ -996,6 +1001,7 @@ func scanDocs(kbRoot string, includeArchive bool) []docEntry {
 			Package:    meta.Package,
 			Tags:       meta.Tags,
 			Components: meta.Components,
+			Machines:   len(meta.Machines),
 			Body:       string(raw),
 		})
 		return nil

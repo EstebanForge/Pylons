@@ -90,6 +90,13 @@ type MachineDecl struct {
 	StatesSymbol      string           `yaml:"states_symbol"`
 	TransitionsSymbol string           `yaml:"transitions_symbol"`
 	OnUnevaluated     string           `yaml:"on_unevaluated"`
+	// PersistedKey names the persisted state field the machine owns.
+	// When set, direct writes outside the machine surface are
+	// advisory findings.
+	PersistedKey string `yaml:"persisted_key"`
+	// VerifiedBy points at the table tests proving purity and
+	// throw-on-invalid in the mapped repo's QA suite.
+	VerifiedBy StringOrList `yaml:"verified_by"`
 }
 
 // TransitionDecl is one declared (from, event, to) triple.
