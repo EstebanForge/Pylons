@@ -559,3 +559,15 @@ func errFinding(ruleID, file string, line int, msg string) report.Finding {
 		Message:  msg,
 	}
 }
+
+// advisoryFinding mirrors errFinding at advisory grade.
+func advisoryFinding(ruleID, file string, line int, msg string) report.Finding {
+	return report.Finding{
+		RuleID:   ruleID,
+		Severity: report.SeverityAdvisory,
+		Grade:    report.GradeAdvisory,
+		File:     file,
+		Line:     line,
+		Message:  msg,
+	}
+}

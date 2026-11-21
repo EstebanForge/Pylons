@@ -330,6 +330,9 @@ func run(args []string) int {
 
 	switch cmd {
 	case "lint":
+		if lintParity && docOnly {
+			fmt.Fprintln(os.Stderr, "warning: --parity is ignored with --doc-only; parity checks need the project source")
+		}
 		findings := rules.Lint(kbRoot, rules.LintOptions{
 			HasCode:       !docOnly,
 			Fix:           fix,

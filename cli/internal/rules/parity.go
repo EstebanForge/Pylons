@@ -38,11 +38,13 @@ func lintParity(kbRoot string, cfg config.Config) []report.Finding {
 	return findings
 }
 
-// parityCase is one enum member: its identifier and, when the language
-// carries one, its literal backing value.
+// parityCase is one enum member: its identifier, its literal backing
+// value when the language carries one, and whether a value was
+// present (an empty string is a value too).
 type parityCase struct {
-	name  string
-	value string
+	name   string
+	value  string
+	valued bool
 }
 
 // parityStates walks domain/ entities and checks the declared state
@@ -84,8 +86,7 @@ func checkEntityStates(kbRoot, rel string, meta resolve.DocMeta, cfg config.Conf
 		if hasSymbol {
 			missing = "states"
 		}
-		return []report.Finding{advisoryFinding(parityNotEvaluatedID, rel, 1,
-			fmt.Sprintf("PARITY_NOT_EVALUATED: the entity declares %s but not %s; parity needs both halves", missingOr(hasStates, missing), otherHalf(hasStates, missing)))}
+		return []report.Finding{parityNotEvaluated(rel, fmt.Sprintf("the entity declares %s but not %s; parity needs both halves", missing, missing))}
 	}
 	if !hasStates {
 		return nil
@@ -103,8 +104,8 @@ func checkEntityStates(kbRoot, rel string, meta resolve.DocMeta, cfg config.Conf
 	if i := strings.Index(u.Path, "::"); i >= 0 {
 		enumName = u.Path[i+2:]
 	}
-	target, ok := resolve.SafeJoin(root, filePart)
-	if !ok {
+	target, safe := resolve.SafeJoin(root, filePart)
+	if !safe {
 		return []report.Finding{parityNotEvaluated(rel, fmt.Sprintf("states_symbol path %q is unsafe", filePart))}
 	}
 	source, err := readBounded(target)
@@ -121,24 +122,6 @@ func checkEntityStates(kbRoot, rel string, meta resolve.DocMeta, cfg config.Conf
 	return compareStates(rel, meta.States, cases)
 }
 
-func missingOr(hasStates bool, missing string) string {
-	if hasStates {
-		return "states"
-	}
-	return missing
-}
-
-func otherHalf(hasStates bool, missing string) string {
-	if hasStates {
-		return missing
-	}
-	return "states"
-}
-
-func parityNotEvaluated(rel, msg string) report.Finding {
-	return advisoryFinding(parityNotEvaluatedID, rel, 1, "PARITY_NOT_EVALUATED: "+msg)
-}
-
 // compareStates: when every case carries a literal backing value the
 // comparison set is the values, else the case identifiers. Determinism
 // over guessing: a declared token must equal the extracted side
@@ -146,7 +129,7 @@ func parityNotEvaluated(rel, msg string) report.Finding {
 func compareStates(rel string, states resolve.StringOrList, cases []parityCase) []report.Finding {
 	allValued := true
 	for _, c := range cases {
-		if c.value == "" {
+		if !c.valued {
 			allValued = false
 			break
 		}
@@ -183,7 +166,7 @@ func compareStates(rel string, states resolve.StringOrList, cases []parityCase) 
 	}
 	if len(declOnly) > 0 || len(codeOnly) > 0 {
 		out = append(out, errFinding(parityStateID, rel, 1,
-			fmt.Sprintf("PARITY_STATE_MISMATCH: declared only %v; code only %v", declOnly, codeOnly)))
+			fmt.Sprintf("PARITY_STATE_MISMATCH: declared only %q; code only %q", declOnly, codeOnly)))
 	}
 	return out
 }
@@ -241,9 +224,13 @@ func parityRoutes(kbRoot string, cfg config.Config) []report.Finding {
 			}
 			continue
 		}
+		// One walk over deduped paths; a path shared by two packages
+		// costs one scan, not two.
 		paths := make([]string, 0, len(routes[alias]))
 		for _, r := range routes[alias] {
-			paths = append(paths, r.path)
+			if !slices.Contains(paths, r.path) {
+				paths = append(paths, r.path)
+			}
 		}
 		found := scanRoutePaths(root, paths)
 		for _, r := range routes[alias] {
@@ -261,7 +248,8 @@ type routeDecl struct {
 }
 
 // scanRoutePaths walks the project once and records which declared
-// route path literals appear in any source file.
+// route path literals appear in any source file. The mention can be a
+// comment or a test; the heuristic is advisory by design.
 func scanRoutePaths(root string, paths []string) map[string]bool {
 	found := map[string]bool{}
 	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
@@ -284,8 +272,9 @@ func scanRoutePaths(root string, paths []string) map[string]bool {
 		if err != nil {
 			return nil
 		}
+		content := string(data)
 		for _, path := range paths {
-			if !found[path] && strings.Contains(string(data), path) {
+			if !found[path] && strings.Contains(content, path) {
 				found[path] = true
 			}
 		}
@@ -295,14 +284,12 @@ func scanRoutePaths(root string, paths []string) map[string]bool {
 }
 
 var (
-	goConstBlockRe   = regexp.MustCompile(`(?s)const\s*\(([^)]*)\)`)
-	goConstLineRe    = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?::?\s*([A-Za-z_][\w.]*))?\s*(?:=\s*(?:(iota)|"((?:[^"\\]|\\.)*)"))?\s*$`)
-	declBlockRe      = regexp.MustCompile(`(?s)\benum\s+(\w+)[^{]*\{([^}]*)\}`)
-	goCaseValueRe    = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"`)
-	rustMemberRe     = regexp.MustCompile(`(?m)^\s*([A-Za-z_]\w*)\s*(?:=\s*"((?:[^"\\]|\\.)*)")?\s*[,{]`)
-	phpMemberRe      = regexp.MustCompile(`(?m)^\s*case\s+([A-Za-z_]\w*)\s*(?:=\s*'((?:[^'\\]|\\.)*)')?\s*;`)
-	tsMemberRe       = regexp.MustCompile(`(?m)^\s*([A-Za-z_]\w*)\s*(?:=\s*"((?:[^"\\]|\\.)*)")?\s*,?\s*$`)
-	phpEnumKeywordRe = regexp.MustCompile(`(?s)\benum\s+(\w+)\b[^{]*\{([^}]*)\}`)
+	goConstStartRe = regexp.MustCompile(`(?m)^\s*const\s*\(`)
+	goConstLineRe  = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?::?\s*([A-Za-z_][\w.]*))?\s*(?:=\s*(?:(iota)|"((?:[^"\\]|\\.)*)"))?\s*$`)
+	declEnumRe     = regexp.MustCompile(`\benum\s+(\w+)`)
+	rustMemberRe   = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*[^,}\s]+)?\s*,?\s*$`)
+	phpMemberRe    = regexp.MustCompile(`^\s*case\s+([A-Za-z_]\w*)\s*(?:=\s*['"]((?:[^'\\]|\\.)*)['"])?\s*;`)
+	tsMemberRe     = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*'((?:[^'\\]|\\.)*)'|=\s*"((?:[^"\\]|\\.)*)")?\s*,?\s*$`)
 )
 
 // extractEnum pulls the case list for enumName out of the source file
@@ -314,30 +301,61 @@ func extractEnum(langs map[string]bool, source, enumName, file string) ([]parity
 		return extractGoEnum(source, enumName)
 	}
 	if langs["rust"] && ext == ".rs" {
-		return extractBracedEnum(declBlockRe, source, enumName, rustMemberRe)
+		return extractBracedEnum("enum", source, enumName, rustMemberRe)
 	}
 	if langs["php"] && ext == ".php" {
-		return extractBracedEnum(phpEnumKeywordRe, source, enumName, phpMemberRe)
+		return extractBracedEnum("enum", source, enumName, phpMemberRe)
 	}
 	if langs["typescript"] && (ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx") {
-		return extractBracedEnum(declBlockRe, source, enumName, tsMemberRe)
+		return extractBracedEnum("enum", source, enumName, tsMemberRe)
 	}
 	return nil, fmt.Errorf("no enabled language extractor can read %s", file)
 }
 
-// extractGoEnum reads typed const blocks: `const ( Name Type = ... )`.
-// A case with a quoted value carries it; otherwise the identifier is
-// the value.
+// extractGoEnum reads every const block: `const ( ... )` with manual
+// paren matching, so comments and expressions containing ) cannot
+// truncate capture. A case with a quoted value carries it; otherwise
+// the identifier is the value. A non-blank, non-comment line inside a
+// block that parses as nothing is an error, so a case the regex cannot
+// read fails closed instead of silently dropping.
 func extractGoEnum(source, enumName string) ([]parityCase, error) {
-	block := goConstBlockRe.FindString(source)
-	if block == "" {
-		return nil, fmt.Errorf("no const block found in the states_symbol file")
+	var found bool
+	var out []parityCase
+	for _, m := range goConstStartRe.FindAllStringIndex(source, -1) {
+		open := strings.Index(source[m[0]:], "(")
+		body, ok := matchDelim(source[m[0]+open:], '(', ')')
+		if !ok {
+			continue
+		}
+		cases, err := parseGoConstBlock(body, enumName)
+		if err != nil {
+			return nil, err
+		}
+		if len(cases) > 0 {
+			found = true
+			out = cases
+		}
 	}
+	if !found {
+		return nil, fmt.Errorf("no const block declares cases of type %s", enumName)
+	}
+	return out, nil
+}
+
+func parseGoConstBlock(body, enumName string) ([]parityCase, error) {
 	var out []parityCase
 	current := ""
-	for _, line := range strings.Split(block, "\n") {
+	for _, raw := range strings.Split(body, "\n") {
+		line := stripLineComment(raw)
+		line = strings.TrimSpace(line)
+		if line == "" || line == "const (" || line == ")" {
+			continue
+		}
 		m := goConstLineRe.FindStringSubmatch(line)
-		if m == nil || strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "//") {
+		if m == nil {
+			return nil, fmt.Errorf("unreadable const case line %q", raw)
+		}
+		if m[1] == "_" {
 			continue
 		}
 		if m[2] != "" {
@@ -346,41 +364,125 @@ func extractGoEnum(source, enumName string) ([]parityCase, error) {
 		if current != enumName {
 			continue
 		}
-		if m[4] != "" {
-			out = append(out, parityCase{name: m[1], value: m[4]})
-			continue
+		valued := m[3] != "" || strings.Contains(line, "=")
+		c := parityCase{name: m[1], valued: valued}
+		if valued && m[3] == "" {
+			c.value = m[4]
 		}
-		out = append(out, parityCase{name: m[1]})
+		out = append(out, c)
 	}
 	return out, nil
 }
 
-// extractBracedEnum reads `enum Name { ... }` blocks for rust, php, and
-// typescript via per-language member regexes.
-func extractBracedEnum(blockRe *regexp.Regexp, source, enumName string, memberRe *regexp.Regexp) ([]parityCase, error) {
-	m := blockRe.FindStringSubmatch(source)
-	if m == nil || m[1] != enumName {
+// extractBracedEnum reads `enum Name { ... }` blocks for rust, php,
+// and typescript via manual brace matching over every enum occurrence,
+// so a later enum in the same file is reachable and serde attributes
+// with braces cannot truncate the body. Only comment, attribute, and
+// member lines parse; anything else fails closed.
+func extractBracedEnum(keyword, source, enumName string, memberRe *regexp.Regexp) ([]parityCase, error) {
+	var found bool
+	var out []parityCase
+	for _, m := range declEnumRe.FindAllStringSubmatchIndex(source, -1) {
+		if source[m[2]:m[3]] != enumName {
+			continue
+		}
+		open := strings.Index(source[m[1]:], "{")
+		if open < 0 {
+			continue
+		}
+		body, ok := matchDelim(source[m[1]+open:], '{', '}')
+		if !ok {
+			continue
+		}
+		cases, err := parseBracedBlock(body, memberRe, keyword)
+		if err != nil {
+			return nil, err
+		}
+		found = true
+		out = cases
+	}
+	if !found {
 		return nil, fmt.Errorf("no enum named %s found in the states_symbol file", enumName)
 	}
+	return out, nil
+}
+
+func parseBracedBlock(body string, memberRe *regexp.Regexp, keyword string) ([]parityCase, error) {
 	var out []parityCase
-	for _, line := range strings.Split(m[2], "\n") {
-		mm := memberRe.FindStringSubmatch(line)
-		if mm == nil {
+	for _, raw := range strings.Split(body, "\n") {
+		line := stripLineComment(raw)
+		line = strings.TrimSpace(line)
+		if line == "" || line == "{" || line == "}" || strings.HasPrefix(line, "#[") {
 			continue
 		}
-		out = append(out, parityCase{name: mm[1], value: mm[2]})
+		m := memberRe.FindStringSubmatch(line)
+		if m == nil {
+			return nil, fmt.Errorf("unreadable %s member line %q", keyword, raw)
+		}
+		c := parityCase{name: m[1]}
+		// The value group position differs per member regex; the last
+		// non-empty capture after the name carries the literal.
+		for i := len(m) - 1; i > 1; i-- {
+			if m[i] != "" {
+				c.value = m[i]
+				c.valued = true
+				break
+			}
+		}
+		out = append(out, c)
 	}
 	return out, nil
 }
 
-// advisoryFinding mirrors errFinding at advisory grade.
-func advisoryFinding(ruleID, file string, line int, msg string) report.Finding {
-	return report.Finding{
-		RuleID:   ruleID,
-		Severity: report.SeverityAdvisory,
-		Grade:    report.GradeAdvisory,
-		File:     file,
-		Line:     line,
-		Message:  msg,
+// matchDelim returns the text between the first opener and its
+// matching closer at depth zero.
+func matchDelim(s string, open, close byte) (string, bool) {
+	start := strings.IndexByte(s, open)
+	if start < 0 {
+		return "", false
 	}
+	depth := 0
+	for i := start; i < len(s); i++ {
+		switch s[i] {
+		case open:
+			depth++
+		case close:
+			depth--
+			if depth == 0 {
+				return s[start+1 : i], true
+			}
+		}
+	}
+	return "", false
+}
+
+// stripLineComment removes a trailing line comment that sits outside
+// any string literal.
+func stripLineComment(line string) string {
+	inSingle, inDouble := false, false
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case '\\':
+			i++
+		case '\'':
+			if !inDouble {
+				inSingle = !inSingle
+			}
+		case '"':
+			if !inSingle {
+				inDouble = !inDouble
+			}
+		case '/':
+			if i+1 < len(line) && line[i+1] == '/' && !inSingle && !inDouble {
+				return line[:i]
+			}
+		}
+	}
+	return line
+}
+
+// parityNotEvaluated is the fail-closed advisory: an entity whose
+// parity cannot be judged must never read as parity.
+func parityNotEvaluated(rel, msg string) report.Finding {
+	return advisoryFinding(parityNotEvaluatedID, rel, 1, "PARITY_NOT_EVALUATED: "+msg)
 }
