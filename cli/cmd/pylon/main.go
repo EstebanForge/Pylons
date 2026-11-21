@@ -9,7 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -35,6 +37,7 @@ Usage:
   pylon brief            [--format=human|json] [--json] [--pylons <path>]
   pylon context <paths...> [--preamble] [--format=human|json] [--json] [--pylons <path>]
   pylon context --diff-since <ref> [--manifest] [--format=human|json] [--json] [--pylons <path>]
+  pylon context --graph <package> [--depth N] [--format=human|json] [--json] [--pylons <path>]
   pylon staleness        [--package <pkg>] [--fix] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review plan <path> [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review postmortem [path] [--check-sources] [--format=human|json|sarif] [--json] [--pylons <path>]
@@ -43,6 +46,7 @@ Usage:
   pylon review rework    [--window <period>] [--package <pkg>] [--json] [--pylons <path>]
   pylon review merge-danger --body <file|-> [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review release-surface --pinned-releases <dir> [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
+  pylon review annotations --from <file|-> [--format=human|json] [--json] [--pylons <path>]
   pylon sync             [--detached] [--pylons <path>]
   pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>] [--format=human|json] [--pylons <path>]
   pylon protocol [list|<name>] [--template <path>] [--pylons <path>]
@@ -129,6 +133,8 @@ func run(args []string) int {
 	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild := "", "", "", "", "", "", "", "", "", ""
 	pinnedReleases, sessionSince := "", ""
 	sessionManifest, diffSinceSet := false, false
+	graphPkg, annFrom := "", ""
+	graphDepth := 0
 	mapType, mapTag, mapStatus, mapFolder, mapQuery := "", "", "", "", ""
 	limit := 0
 	var rest []string
@@ -184,7 +190,7 @@ func run(args []string) int {
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
-		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since":
+		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "pylon: flag %s requires a value\n", arg)
 				return 2
@@ -219,6 +225,17 @@ func run(args []string) int {
 				diffSinceSet = true
 			case "--fetch-child":
 				syncChild = val
+			case "--graph":
+				graphPkg = val
+			case "--from":
+				annFrom = val
+			case "--depth":
+				n, err := strconv.Atoi(val)
+				if err != nil || n < 0 {
+					fmt.Fprintln(os.Stderr, "pylon: --depth must be a non-negative integer")
+					return 2
+				}
+				graphDepth = n
 			case "--type":
 				mapType = val
 			case "--tag":
@@ -361,6 +378,17 @@ func run(args []string) int {
 			}
 			return cmdCapture(kbRoot, sessionSince, sessionManifest, format)
 		}
+		if graphPkg != "" {
+			if slicePlan != "" || sessionSince != "" || len(rest) != 0 {
+				fmt.Fprintln(os.Stderr, "pylon: context --graph takes a package, not other targets")
+				return 2
+			}
+			if format == report.FormatSARIF {
+				fmt.Fprintln(os.Stderr, "pylon: format sarif is not supported for the dependency graph")
+				return 2
+			}
+			return cmdGraph(kbRoot, graphPkg, graphDepth, format)
+		}
 		if slicePlan != "" {
 			if len(rest) != 0 {
 				fmt.Fprintln(os.Stderr, "pylon: context --slice takes a plan, not paths")
@@ -411,6 +439,8 @@ func run(args []string) int {
 			return renderFindings(rules.ReviewPostmortem(kbRoot, target, checkSources), format, ci)
 		case "staleness":
 			return renderFindings(rules.CheckStaleness(kbRoot, pkgArg, fix), format, ci)
+		case "annotations":
+			return cmdAnnotations(annFrom, format)
 		case "ratchet":
 			findings, err := rules.RunRatchet(kbRoot, rules.RatchetOptions{Update: ratchetUpdate, AllowExternal: allowExternal})
 			if err != nil {
@@ -1016,6 +1046,89 @@ func loadConfigOrWarn(kbRoot string) config.Config {
 		fmt.Fprintf(os.Stderr, "pylon: warning: invalid manifests/pylons.yaml: %v\n", err)
 	}
 	return cfg
+}
+
+func cmdGraph(kbRoot, pkgName string, depth int, format report.Format) int {
+	graph, err := rules.DependencyGraph(kbRoot, pkgName, depth)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: context: %v\n", err)
+		return 2
+	}
+	if format == report.FormatJSON {
+		if err := json.NewEncoder(os.Stdout).Encode(graph); err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: context: encode graph: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+	fmt.Printf("=== Dependency graph for %s (depth %d) ===\n", graph.Package, graph.Depth)
+	for _, w := range graph.Warnings {
+		fmt.Printf("  warning: %s\n", w)
+	}
+	fmt.Printf("  packages: %v\n", slices.Sorted(maps.Keys(graph.Declared)))
+	for _, pkg := range slices.Sorted(maps.Keys(graph.Declared)) {
+		if deps := graph.Declared[pkg]; len(deps) > 0 {
+			fmt.Printf("  %s declares depends_on: %v\n", pkg, deps)
+		} else {
+			fmt.Printf("  %s declares no dependencies\n", pkg)
+		}
+	}
+	for _, e := range graph.Edges {
+		fmt.Printf("  edge %s -> %s\n", e.From, e.To)
+	}
+	for _, e := range graph.Undeclared {
+		fmt.Printf("  undeclared: %s -> %s\n", e.From, e.To)
+	}
+	for _, u := range graph.Unused {
+		fmt.Printf("  unused: %s\n", u)
+	}
+	return 0
+}
+
+func cmdAnnotations(from string, format report.Format) int {
+	if from == "" {
+		fmt.Fprintln(os.Stderr, "pylon: review annotations requires --from <file|->")
+		return 2
+	}
+	var input []byte
+	var err error
+	if from == "-" {
+		input, err = io.ReadAll(os.Stdin)
+	} else {
+		input, err = os.ReadFile(from)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: review annotations: %v\n", err)
+		return 2
+	}
+	out, err := rules.Annotations(input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: review annotations: %v\n", err)
+		return 2
+	}
+	if format == report.FormatSARIF {
+		fmt.Fprintln(os.Stderr, "pylon: format sarif is not supported for annotations; they already are Check payloads")
+		return 2
+	}
+	if format == report.FormatJSON {
+		if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: review annotations: encode: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+	fmt.Print(out.Summary)
+	for _, a := range out.Annotations {
+		fmt.Printf("  %s:%d %s %s\n", a.Path, a.StartLine, a.Title, firstAnnLine(a.Message))
+	}
+	return 0
+}
+
+func firstAnnLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 func cmdCapture(kbRoot, since string, emitManifest bool, format report.Format) int {

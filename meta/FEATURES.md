@@ -352,6 +352,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `search <query>` | Full-text BM25 search across non-archived documents. | Finding docs by content | Usage errors exit 2 |
 | `aroma search\|recommend` | Structural code similarity over featurized parse trees: methods resembling the query, then the code its results share. Query from `--lines path:a-b`, `--snippet <file|->`, or `--diff <file|->` (one query per method the lines touch); corpus is registered projects by default, else `--corpus`. Zero model calls. | Exploring unfamiliar code, orienting on a diff | Never; usage, unreadable corpus, or an empty corpus exit 2 |
 | `review release-surface` | Pinned-release diff: block when a pinned deployment consumes a symbol, route, or cli surface removed or changed against its pinned tag; lockfiles under `--pinned-releases <dir>`, `--base <ref>` overrides pinning. | Release review, version-bump CI | Removed or changed consumed surfaces, unknown pin aliases, missing tags |
+| `context --graph <package>` | Dependency view: actual import edges across registered projects, declared `depends_on`, undeclared and unused divergences; `--depth N` walks transitively. | Ownership checks, agent orientation | Never; a package no doc declares exits 2 |
 | `context --diff-since <ref>` | Session capture: surfaces the diff touched whose docs did not move in the same range (committed or not); `--manifest` emits the JSON document, warnings name unreadable projects. | Session close, doc-drift checks | Never; usage errors exit 2 |
 | `lint` | Validates frontmatter, lifecycle statuses, links, the dependency graph, and STE-100 prose. | Before commit / PR | Frontmatter, links, lifecycle errors |
 | `lint --fix` | Auto-relocates misplaced docs and heals single-depth broken links. | Fixing lint errors | Unfixable errors |
@@ -365,6 +366,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `review postmortem --check-sources` | Confirms every file in a quirk's `sources:` array exists in the mapped repos. | Post-mortem validation | Missing source files |
 | `review ratchet [--update]` | Counts advisories per package and zone against the committed `manifests/ratchet.json` baseline. Rising counts block. | CI or pre-push | Advisory count above baseline |
 | `review rework [--window] [--package]` | Counts `fix:` and `refactor:` commits touching paths a `feat:` commit changed, per registered project. Report-only. | Retro and planning | Never (skips unreadable projects) |
+| `review annotations --from <file|->` | Converts lint findings (SARIF or JSON) into GitHub Check annotations plus a summary comment body; blocking errors only, capped at 50 with the total kept. | CI PR feedback (the workflow posts; the engine emits) | Never; unparsable input exits 2 |
 | `review-brief <plan>` | Assembles a self-contained review packet for fresh-context reviewers. | Peer review | Plan errors |
 | `review-brief --validate <file>` | Stage-1 validation: verifies review completeness and empty evaluations. | Review submission | Incomplete reviews |
 | `review-brief --validate-resolutions <f>` | Stage-2 validation: verifies every finding was resolved before merge. | Pre-merge verification | Unresolved findings |
@@ -416,6 +418,9 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--min-query-size <n>` | Drops queries with fewer features. Default 0. | `aroma` |
 | `--include-tests` | Keeps `_test.go` files in the corpus. | `aroma` |
 | `--lang <id>` | Picks the language front end for stdin snippets. Only `go` ships today. | `aroma` |
+| `--graph <package>` | Names the package the dependency view starts from. | `context --graph` |
+| `--depth N` | Walk depth for the graph; 1 covers the package's own components. | `context --graph` |
+| `--from <file|->` | The lint findings document (SARIF or JSON); `-` reads stdin. | `review annotations` |
 | `--pinned-releases <dir>` | Deployment directory holding `<alias> <version>` lockfiles; the pinned version resolves to a release tag. | `review release-surface` |
 | `--diff-since <ref>` | Compares history since the ref against declared surfaces. | `context` |
 | `--manifest` | Emits the session-capture manifest as JSON. | `context --diff-since` |

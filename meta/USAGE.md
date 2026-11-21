@@ -38,6 +38,7 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 | `pylon review postmortem [path]` | Check quirk sections and `sources:` existence (`--check-sources`). |
 | `pylon review ratchet` | Compare advisory counts per package/zone against `manifests/ratchet.json`; rising counts block (`--update` re-baselines after review). |
 | `pylon review rework` | Count `fix:`/`refactor:` commits touching paths a `feat:` commit changed, per registered project, report-only (`--window`, `--package`). |
+| `pylon review annotations --from <file|->` | Convert lint findings (SARIF or JSON) into GitHub Check annotations plus a summary comment body; blocking errors only, capped at 50 with the total kept. The engine emits the payload; the CI workflow posts it. |
 | `pylon review merge-danger` | Gate one `Merge danger:` body line against the closed door vocabulary and the diff's derived minimum door (`--body <file|->`, `--base <ref>`; blocking on missing, invalid, duplicate, or downgraded lines). |
 | `pylon review release-surface` | Block when a pinned deployment consumes a public surface removed or changed against its pinned release tag (`--pinned-releases <dir>`, `--base <ref>` overrides pinning; blocking on removed, changed, unknown pins, or a missing tag). |
 | `pylon sync --detached` | Start a detached background fetch when the last one is over an hour old, then fast-forward onto `origin/main` on a clean tree; never blocks. |

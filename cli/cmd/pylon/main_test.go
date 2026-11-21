@@ -57,3 +57,47 @@ func TestMergeDangerFlagPath(t *testing.T) {
 		t.Fatalf("merge-danger with a broken --base returned %d, want 0 (advisory)", code)
 	}
 }
+
+func TestGraphFlagPath(t *testing.T) {
+	// The graph flows through the CLI flag path: --graph is a value
+	// flag, --depth parses, and a missing package is a usage error.
+	dir := t.TempDir()
+	if code := run([]string{"init", dir}); code != 0 {
+		t.Fatalf("init returned %d, want 0", code)
+	}
+	if code := run([]string{"context", "--graph", "ghost", "--pylons", dir}); code != 2 {
+		t.Fatalf("graph for a package no doc declares must exit 2, got %d", code)
+	}
+	if code := run([]string{"context", "--graph", "ghost", "--depth", "notanint", "--pylons", dir}); code != 2 {
+		t.Fatalf("a non-integer --depth must exit 2, got %d", code)
+	}
+}
+
+func TestAnnotationsFlagPath(t *testing.T) {
+	// The annotation converter flows through the CLI flag path; stdin
+	// input works and unreadable input fails closed.
+	dir := t.TempDir()
+	if code := run([]string{"init", dir}); code != 0 {
+		t.Fatalf("init returned %d, want 0", code)
+	}
+	if code := run([]string{"review", "annotations", "--pylons", dir}); code != 2 {
+		t.Fatalf("annotations without --from must exit 2, got %d", code)
+	}
+	sarif := filepath.Join(dir, "lint.sarif")
+	payload := `{"runs": [{"results": [{"ruleId": "PYLON001", "level": "error",
+		"message": {"text": "broken"},
+		"locations": [{"physicalLocation": {"artifactLocation": {"uri": "packages/a.md"}, "region": {"startLine": 3}}}]}]}]}`
+	if err := os.WriteFile(sarif, []byte(payload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code := run([]string{"review", "annotations", "--from", sarif, "--pylons", dir}); code != 0 {
+		t.Fatalf("annotations from a SARIF file must exit 0, got %d", code)
+	}
+	bad := filepath.Join(dir, "bad.sarif")
+	if err := os.WriteFile(bad, []byte("not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code := run([]string{"review", "annotations", "--from", bad, "--pylons", dir}); code != 2 {
+		t.Fatalf("unparsable input must fail closed with exit 2, got %d", code)
+	}
+}
