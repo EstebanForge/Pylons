@@ -31,16 +31,22 @@ version: 1
 extensions:
   - go
 parity:
+  version: 1
   profiles:
-    # Built-in profiles: keyed by language id.
+    # Built-in binding: keyed by language id.
     go:
-      source: builtin
-    # External profiles: keyed by the plugin name, enabled like extensions.
-    csharp:
-      source: pylon-ext-csharp
+      use: builtin:go
+    # External binding for a language with no built-in profile.
+    kotlin:
+      use: external:pylon-ext-kotlin
+      options:
+        marker: "pylon:machine"
+    # Override: rebind a built-in language to your own plugin.
+    php:
+      use: external:wp-php
 ```
 
-`source: builtin` selects an in-process profile shipped with the CLI (go, rust, typescript, javascript, python, php, csharp, ruby are the planned built-in set). Any other `source:` names a drop-in plugin executable. A language with no binding yields the fail-closed advisory; it never silently passes.
+`use: builtin:<language>` selects an in-process profile shipped with the CLI (go, rust, typescript, javascript, python, php, csharp, ruby are the planned built-in set). `use: external:<plugin>` names a drop-in plugin executable and needs `--allow-external-extensions`. Rebinding a language overrides its built-in with no implicit precedence. Two profiles claiming the same file extension is a config error. A declared machine with no matching binding yields the PARITY_NOT_EVALUATED advisory; an `on_unevaluated:` knob (default advisory) can make it block. With no `parity:` section at all, an enabled builtin extension acts as an implicit builtin binding.
 
 ## Example: machine declaration (planned)
 
@@ -56,6 +62,7 @@ states:
   - cancelled
 states_symbol: repo://platform-api/Domain/State.cs::ShipmentStatus
 transitions_symbol: repo://platform-api/Transitions.cs::shipment
+on_unevaluated: advisory
 initial:
   - pending
 terminal:
@@ -67,7 +74,7 @@ transitions:
   - {from: shipped, event: deliver, to: delivered}
 ```
 
-The profile extracts the enum case set and the transition triples from the named code targets, and the checker compares the declared sets against the extracted ones in both directions.
+The profile extracts the enum case set and the transition triples from the named code targets, and the checker compares the declared sets against the extracted ones in both directions. The `machine:` value is an identity, not a pointer: the code-side marker must carry the same id (`// pylon:machine shipment` above the map).
 
 ## Key constraints
 
