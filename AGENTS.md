@@ -1,6 +1,6 @@
-# Guidelines
+# Pylons
 
-Pylons stores shared architectural context, domain knowledge, and decisions. Keep documentation accurate or delete it.
+Pylons stores shared architectural context, domain knowledge, and decisions. Keep documentation accurate or delete it. Source Code is Truth.
 
 ## Path Schemes
 
@@ -52,3 +52,6 @@ Pylons documents reference files with URI schemes, never machine paths.
 - `pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]`
 - `pylon install`
 - `pylon init [dir]`
+
+# Project AGENTS extension
+Read the contents of @AGENTS.project.md
