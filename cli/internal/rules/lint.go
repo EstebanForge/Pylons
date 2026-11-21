@@ -95,6 +95,18 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
+		// Excluded paths are outside the engine entirely: never
+		// linted, never graph docs.
+		excluded := false
+		for _, pat := range cfg.Exclude {
+			if resolve.MatchGlob(pat, rel) {
+				excluded = true
+				break
+			}
+		}
+		if excluded {
+			return nil
+		}
 		if strings.HasPrefix(d.Name(), "._") {
 			junk = append(junk, rel)
 			return nil

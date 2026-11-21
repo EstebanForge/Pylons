@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,6 +33,7 @@ type Config struct {
 	Parity     *ParityConfig            `yaml:"parity"`
 	Generate   *[]string                `yaml:"generate"`
 	Schemes    []string                 `yaml:"schemes"`
+	Exclude    []string                 `yaml:"exclude"`
 	Projects   map[string]ProjectConfig `yaml:"projects"`
 }
 
@@ -126,6 +128,16 @@ func Load(root string) (Config, error) {
 	}
 	if cfg.Projects == nil {
 		cfg.Projects = map[string]ProjectConfig{}
+	}
+	for _, pat := range cfg.Exclude {
+		if pat == "" || strings.HasPrefix(pat, "/") {
+			return cfg, errors.New("exclude: pattern must be a KB-relative glob: " + pat)
+		}
+		for _, seg := range strings.Split(pat, "/") {
+			if seg == ".." {
+				return cfg, errors.New("exclude: pattern must not traverse: " + pat)
+			}
+		}
 	}
 	for _, sc := range cfg.Schemes {
 		if !schemeNameRe.MatchString(sc) {

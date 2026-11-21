@@ -130,6 +130,7 @@ func run(args []string) int {
 	rbStdout, mapAll := false, false
 	allowExternal := os.Getenv("PYLON_ALLOW_EXTERNAL_EXTENSIONS") == "1"
 	forceHooks, ratchetUpdate, lintParity := false, false, false
+	updateBaseline := false
 	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild := "", "", "", "", "", "", "", "", "", ""
 	pinnedReleases, sessionSince := "", ""
 	sessionManifest, diffSinceSet := false, false
@@ -189,6 +190,8 @@ func run(args []string) int {
 			sessionManifest = true
 		case arg == "--parity":
 			lintParity = true
+		case arg == "--update-baseline":
+			updateBaseline = true
 		case arg == "--detached":
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
@@ -340,6 +343,21 @@ func run(args []string) int {
 			AllowExternal: allowExternal,
 			Parity:        lintParity,
 		})
+		if updateBaseline {
+			if err := rules.UpdateBaseline(kbRoot, findings); err != nil {
+				fmt.Fprintf(os.Stderr, "pylon: write baseline: %v\n", err)
+				return 1
+			}
+			fmt.Fprintln(os.Stderr, "pylon: wrote manifests/baseline.json from the current FORCED findings")
+			return 0
+		}
+		findings, accepted, stale := rules.ApplyBaseline(kbRoot, findings)
+		if accepted > 0 {
+			fmt.Printf("lint: %d finding(s) accepted by manifests/baseline.json\n", accepted)
+		}
+		if stale > 0 {
+			fmt.Fprintf(os.Stderr, "pylon: %d baseline entr(ies) no longer match; shrink with pylon lint --update-baseline\n", stale)
+		}
 		return renderFindings(findings, format, ci)
 
 	case "contract":

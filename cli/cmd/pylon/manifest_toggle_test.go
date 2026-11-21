@@ -62,3 +62,35 @@ func TestManifestDefaultStillWrites(t *testing.T) {
 		t.Fatal("manifest rules must write rules.json when generation is enabled")
 	}
 }
+
+func TestUpdateBaselineFlagPath(t *testing.T) {
+	kb := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kb, "plans"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(kb, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kb, "manifests", "pylons.yaml"), []byte("version: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kb, "plans", "bad.md"), []byte("no frontmatter\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "bin", "pylon"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(bin, "lint", "--update-baseline", "--pylons", kb).CombinedOutput()
+	if err != nil {
+		t.Fatalf("lint --update-baseline: %v\n%s", err, out)
+	}
+	if _, statErr := os.Stat(filepath.Join(kb, "manifests", "baseline.json")); statErr != nil {
+		t.Fatal("--update-baseline must write manifests/baseline.json")
+	}
+	// The seeded debt no longer blocks.
+	out, err = exec.Command(bin, "lint", "--pylons", kb).CombinedOutput()
+	if err != nil {
+		t.Fatalf("lint with a fresh baseline still failed: %v\n%s", err, out)
+	}
+}

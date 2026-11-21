@@ -92,3 +92,27 @@ func TestSchemesValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestExcludeValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{"valid", "version: 1\nexclude: [legacy/**, notes/*.md]\n", false},
+		{"empty pattern", "version: 1\nexclude: ['']\n", true},
+		{"absolute", "version: 1\nexclude: [/etc]\n", true},
+		{"traversal", "version: 1\nexclude: [../out]\n", true},
+	}
+	for _, tc := range cases {
+		kb := t.TempDir()
+		writeToggleManifest(t, kb, tc.yaml)
+		_, err := Load(kb)
+		if tc.wantErr && err == nil {
+			t.Errorf("%s: want error, got none", tc.name)
+		}
+		if !tc.wantErr && err != nil {
+			t.Errorf("%s: want ok, got %v", tc.name, err)
+		}
+	}
+}
