@@ -11,6 +11,7 @@ source_of_truth: ""
 relationships: []
 states: []
 states_symbol: ""
+machines: []
 avoid: []
 description: ""
 tags: [domain]
