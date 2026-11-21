@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/estebanforge/pylons/cli/internal/report"
 )
@@ -170,5 +172,121 @@ func mustRemove(t *testing.T, path string) {
 	t.Helper()
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReleaseSurfaceConsumptionIsPerSurface(t *testing.T) {
+	// Surface X changes while only surface Y is consumed: the gate
+	// must stay silent, and must fire only when Y itself changes.
+	fx := newReleaseSurfaceFixture(t, "---\ntitle: \"API\"\ntype: plan\nstatus: accepted\ncomponents: [app]\nticket: [T-1]\ncontract:\n  stable:\n    - kind: symbol\n      id: repo://app/src/svc.go::Process\n    - kind: symbol\n      id: repo://app/src/keep.go::Keep\n---\n\n# API\n")
+	fx.pin(t, "0.1.0", map[string]string{"consumer.go": "fmt.Sprint(Keep())\n"})
+	fx.breakSurface(t)
+	fs, err := ReleaseSurface(fx.kb, ReleaseSurfaceOptions{PinnedDir: fx.lockDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msgs := findingsOf(fs, "PYLON048"); len(msgs) != 0 {
+		t.Fatalf("a consumed sibling must not judge an unconsumed surface, got %v", msgs)
+	}
+}
+
+func TestReleaseSurfaceSubdirProject(t *testing.T) {
+	// A project rooted at a subdirectory of its repo: blob paths are
+	// project-relative, and rev-parse must resolve them from there.
+	repo := t.TempDir()
+	proj := filepath.Join(repo, "sub")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shell("git", "-C", repo, "init", "-q", "-b", "main")
+	mustWrite(t, filepath.Join(proj, "svc.go"), "package src\n\nfunc Process(x int) int {\n\treturn x + 1\n}\n")
+	shell("git", "-C", repo, "add", "-f", ".")
+	shell("git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "feat: base")
+	shell("git", "-C", repo, "tag", "0.1.0")
+	kb := t.TempDir()
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), "version: 1\nprojects:\n  app:\n    path: "+proj+"\n    ref: main\n")
+	mustWrite(t, filepath.Join(kb, "plans/feature-api.md"), "---\ntitle: \"API\"\ntype: plan\nstatus: accepted\ncomponents: [app]\nticket: [T-1]\ncontract:\n  stable:\n    - kind: symbol\n      id: repo://app/svc.go::Process\n---\n\n# API\n")
+	deploy := filepath.Join(t.TempDir(), "deploy")
+	if err := os.MkdirAll(deploy, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(deploy, "app.lock"), "app 0.1.0\n")
+	mustWrite(t, filepath.Join(deploy, "consumer.go"), "Process(1)\n")
+	mustWrite(t, filepath.Join(proj, "svc.go"), "package src\n\nfunc Process(x int) int {\n\treturn x\n}\n")
+	shell("git", "-C", repo, "add", "-f", ".")
+	shell("git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "refactor: change Process")
+	fs, err := ReleaseSurface(kb, ReleaseSurfaceOptions{PinnedDir: deploy})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := findingsOf(fs, "PYLON048")
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "RELEASE_SURFACE_CHANGED") {
+		t.Fatalf("a subdir project must be judged, got %v", msgs)
+	}
+}
+
+func TestReleaseSurfaceFifoLockfileNoHang(t *testing.T) {
+	fx := newReleaseSurfaceFixture(t, "---\ntitle: \"API\"\ntype: plan\nstatus: accepted\ncomponents: [app]\nticket: [T-1]\ncontract:\n  stable:\n    - kind: symbol\n      id: repo://app/src/svc.go::Process\n---\n\n# API\n")
+	fx.pin(t, "0.1.0", map[string]string{"consumer.go": "Process(1)\n"})
+	if err := syscall.Mkfifo(filepath.Join(fx.lockDir, "poison.lock"), 0o600); err != nil {
+		t.Skip("fifo unsupported")
+	}
+	done := make(chan []report.Finding, 1)
+	go func() {
+		fs, err := ReleaseSurface(fx.kb, ReleaseSurfaceOptions{PinnedDir: fx.lockDir})
+		if err != nil {
+			fs = nil
+		}
+		done <- fs
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the gate hung on a FIFO named *.lock")
+	}
+}
+
+func TestReleaseSurfaceLockfileCRLF(t *testing.T) {
+	fx := newReleaseSurfaceFixture(t, "---\ntitle: \"API\"\ntype: plan\nstatus: accepted\ncomponents: [app]\nticket: [T-1]\ncontract:\n  stable:\n    - kind: symbol\n      id: repo://app/src/svc.go::Process\n---\n\n# API\n")
+	mustWrite(t, filepath.Join(fx.lockDir, "app.lock"), "app 0.1.0\r\n")
+	mustWrite(t, filepath.Join(fx.lockDir, "consumer.go"), "Process(1)\n")
+	fs, err := ReleaseSurface(fx.kb, ReleaseSurfaceOptions{PinnedDir: fx.lockDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := findingsOf(fs, "PYLON048")
+	// The pinned tag exists and the surface is unchanged: silence pins
+	// the CRLF parse.
+	if len(msgs) != 0 {
+		t.Fatalf("a CRLF lockfile must parse cleanly, got %v", msgs)
+	}
+}
+
+func TestReleaseSurfaceVendoredSymbolCopy(t *testing.T) {
+	// A vendored copy counts for symbol surfaces too: the file carrying
+	// the symbol is present under the deployment tree.
+	fx := newReleaseSurfaceFixture(t, "---\ntitle: \"API\"\ntype: plan\nstatus: accepted\ncomponents: [app]\nticket: [T-1]\ncontract:\n  stable:\n    - kind: symbol\n      id: repo://app/src/svc.go::Process\n---\n\n# API\n")
+	fx.pin(t, "0.1.0", map[string]string{"vendor/src/svc.go": "package src\n\nfunc Process(x int) int {\n\treturn x + 1\n}\n"})
+	fx.breakSurface(t)
+	fs, err := ReleaseSurface(fx.kb, ReleaseSurfaceOptions{PinnedDir: fx.lockDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := findingsOf(fs, "PYLON048")
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "RELEASE_SURFACE_CHANGED") {
+		t.Fatalf("a vendored symbol copy must count as consumption, got %v", msgs)
+	}
+}
+
+func TestReleaseSurfaceDashVersionFailsClosed(t *testing.T) {
+	fx := newReleaseSurfaceFixture(t, "---\ntitle: \"API\"\ntype: plan\nstatus: accepted\ncomponents: [app]\nticket: [T-1]\ncontract:\n  stable:\n    - kind: symbol\n      id: repo://app/src/svc.go::Process\n---\n\n# API\n")
+	fx.pin(t, "--exec=evil", map[string]string{"consumer.go": "Process(1)\n"})
+	fs, err := ReleaseSurface(fx.kb, ReleaseSurfaceOptions{PinnedDir: fx.lockDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := findingsOf(fs, "PYLON048")
+	if len(msgs) == 0 || !strings.Contains(msgs[0], "RELEASE_TAG_MISSING") {
+		t.Fatalf("a dash-leading version must fail closed without reaching git as an option, got %v", msgs)
 	}
 }

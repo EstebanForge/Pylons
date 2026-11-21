@@ -27,7 +27,7 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 | `pylon check <paths...>` | Intersect target paths with `contract.editing`, `contract.unstable`, and `protected:` globs. |
 | `pylon context <paths...>` | Emit architectural slice for target files (`--preamble` adds workspace header). |
 | `pylon context --slice <plan>` | Print only one plan's contracts with resolution state, linked quirks, and linked domain terms (`--json` supported). |
-| `pylon context --diff-since <ref> [--manifest]` | Report declared surfaces the diff touched whose docs did not move in the same commit set; `--manifest` emits the JSON document. Report-only. |
+| `pylon context --diff-since <ref> [--manifest]` | Report declared surfaces the diff touched whose docs did not move in the same range; uncommitted edits count on both sides, warnings name unreadable projects, `--manifest` emits the JSON document. Report-only. Glob contract ids are out of scope. |
 | `pylon lint` | Validate frontmatter, folder lifecycle, links, STE-100, and contracts (`--changed`, `--doc-only`, `--fix`, `--ci`). Findings render a remediation line from the rule catalog. macOS AppleDouble `._*` docs are skipped when `.gitignore` covers them; otherwise they fail with a fix hint. |
 | `pylon contract <plan>` | Validate 1 plan's `contract.stable` entries against tracked projects. |
 | `pylon map` | Filterable corpus overview ranked by BM25 (`--type`, `--package`, `--tag`, `--status`, `--folder`, `--query`, `--limit`, `--all`). |
