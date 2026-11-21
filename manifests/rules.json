@@ -383,5 +383,12 @@
     "severity": "error",
     "description": "The same from-event pair is declared twice on one side.",
     "fix_hint": "Remove the duplicate triple from the declaration or the code map."
+  },
+  {
+    "id": "PYLON059",
+    "name": "bypassed_state_write",
+    "severity": "advisory",
+    "description": "The machine's persisted state key is written outside the machine surface.",
+    "fix_hint": "Route the write through the machine's transition function, or declare the writer part of the surface."
   }
 ]

@@ -144,6 +144,12 @@ func machineKB(t *testing.T, source string, mutate func(*resolve.MachineDecl)) s
 	if decl.OnUnevaluated != "" {
 		b.WriteString("    on_unevaluated: " + decl.OnUnevaluated + "\n")
 	}
+	if decl.PersistedKey != "" {
+		b.WriteString("    persisted_key: " + decl.PersistedKey + "\n")
+	}
+	for _, v := range decl.VerifiedBy {
+		b.WriteString("    verified_by: \"" + v + "\"\n")
+	}
 	if len(decl.Transitions) > 0 {
 		b.WriteString("    transitions:\n")
 		for _, tr := range decl.Transitions {
@@ -155,6 +161,18 @@ func machineKB(t *testing.T, source string, mutate func(*resolve.MachineDecl)) s
 	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"),
 		"version: 1\nextensions: [go]\nprojects:\n  svc:\n    path: "+root+"\n    ref: main\n")
 	return kb
+}
+
+
+// projectRootOf reads the fixture's registered project path.
+func projectRootOf(t *testing.T, kb string) string {
+	t.Helper()
+	cfg := cfgMust(t, kb)
+	for _, p := range cfg.Projects {
+		return p.Path
+	}
+	t.Fatal("no registered project")
+	return ""
 }
 
 func hasRule(fs []report.Finding, id string) bool {
@@ -245,5 +263,50 @@ func TestMachineExternalTransitionsExtract(t *testing.T) {
 		if f.RuleID == "PYLON053" || f.RuleID == "PYLON054" || f.RuleID == "PYLON049" {
 			t.Fatalf("a working external transitions profile must compare silently, got %+v", f)
 		}
+	}
+}
+
+func TestMachineBypassedWriteScan(t *testing.T) {
+	kb := machineKB(t, goMachineSource, func(m *resolve.MachineDecl) { m.PersistedKey = "status" })
+	// The sneaky write lives in its own file outside the machine surface.
+	root := projectRootOf(t, kb)
+	mustWrite(t, filepath.Join(root, "orders.go"), "package svc\n\nfunc sneak(w *Order) {\n\tw.status = \"shipped\"\n}\n")
+	var found *report.Finding
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
+		if f.RuleID == "PYLON059" {
+			found = &f
+			break
+		}
+	}
+	if found == nil || found.Severity != report.SeverityAdvisory {
+		t.Fatal("a direct state write outside the machine surface must yield the PYLON059 advisory")
+	}
+}
+
+func TestMachineWriteScanExemptions(t *testing.T) {
+	// The machine surface file itself and test files are exempt.
+	src := goMachineSource + `
+func sneak(t *testing.T) {
+	w.status = "shipped"
+}
+`
+	kb := machineKB(t, strings.Replace(src, "func sneak(t *testing.T)", "func sneak(x string)", 1), nil)
+	if hasRule(lintParity(kb, cfgMust(t, kb), false), "PYLON059") {
+		t.Fatal("no persisted_key means no scan")
+	}
+}
+
+func TestMachineVerifiedByUnresolvable(t *testing.T) {
+	kb := machineKB(t, goMachineSource, func(m *resolve.MachineDecl) {
+		m.VerifiedBy = []string{"repo://svc/test/nonexistent_test.go"}
+	})
+	var found bool
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
+		if f.RuleID == "PYLON049" && strings.Contains(f.Message, "verified_by") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("an unresolvable verified_by pointer must yield the not-evaluated advisory")
 	}
 }

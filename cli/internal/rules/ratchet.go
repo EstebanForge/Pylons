@@ -29,11 +29,11 @@ func ratchetBaselinePath(kbRoot string) string {
 
 // clockDrivenRules drift without any edit: package staleness
 // (PYLON015), audit reaudit dates (PYLON026), plan branches (PYLON027),
-// and cross-repo import edges (PYLON043), which move with sibling
-// repos the ratchet baseline cannot see
+// cross-repo import edges (PYLON043), and persisted-state write scans
+// (PYLON059), which move with sibling repos the ratchet baseline cannot see
 // local checkouts (PYLON027). They would make the ratchet fail with no
 // change to the corpus, so they are outside the budget.
-var clockDrivenRules = map[string]bool{"PYLON015": true, "PYLON026": true, "PYLON027": true, "PYLON043": true}
+var clockDrivenRules = map[string]bool{"PYLON015": true, "PYLON026": true, "PYLON027": true, "PYLON043": true, "PYLON059": true}
 
 // RatchetOptions controls the advisory ratchet run.
 type RatchetOptions struct {
