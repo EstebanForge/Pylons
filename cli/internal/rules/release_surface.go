@@ -6,19 +6,16 @@ package rules
 import (
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/estebanforge/pylons/cli/internal/config"
-	"github.com/estebanforge/pylons/cli/internal/resolve"
-)
-
-import (
-	"maps"
-	"slices"
-
 	"github.com/estebanforge/pylons/cli/internal/report"
+	"github.com/estebanforge/pylons/cli/internal/resolve"
 )
 
 // releaseSurfaceRuleID backs the pinned-release-diff gate.
@@ -31,14 +28,38 @@ type ReleaseSurfaceOptions struct {
 	Base      string
 }
 
+// deploymentIndex is the consumption evidence for one deployment
+// directory, walked once per run: vendored file base names plus bounded
+// text contents for word-boundary matching.
+type deploymentIndex struct {
+	names    map[string]bool
+	contents []string
+}
+
+// deploymentSkipDirs are dependency and VCS trees the walk never
+// reads. vendor/ is deliberately absent: vendored copies are exactly
+// the consumption evidence the gate exists to find.
+var deploymentSkipDirs = map[string]bool{
+	".git": true, "node_modules": true, "dist": true,
+	"target": true, "__pycache__": true, ".venv": true, "venv": true,
+	"build": true, "bin": true, "obj": true,
+}
+
+// deploymentByteBudget caps how much text one deployment dir may
+// contribute to the word-boundary index.
+const deploymentByteBudget = 64 << 20
+
 // ReleaseSurface judges public surfaces against the versions pinned
 // deployments actually run. Each deployment directory carries lockfiles
 // (one `alias version` or `alias=version` line per registered project,
 // `#` comments allowed); the pinned version resolves to a release tag in
-// the project's repository, and a surface a deployment consumes may not
-// be removed or changed between that tag and HEAD. A --base replaces
-// the tag comparison; it must be explicit, never silent.
+// the project's repository, and a surface the deployment consumes may
+// not be removed or changed between that tag and HEAD. A --base
+// replaces the tag comparison; it must be explicit, never silent.
 func ReleaseSurface(kbRoot string, opts ReleaseSurfaceOptions) ([]report.Finding, error) {
+	if strings.HasPrefix(opts.Base, "-") {
+		return nil, fmt.Errorf("--base %q is not a ref", opts.Base)
+	}
 	var findings []report.Finding
 	cfg, err := config.Load(kbRoot)
 	if err != nil {
@@ -49,6 +70,7 @@ func ReleaseSurface(kbRoot string, opts ReleaseSurfaceOptions) ([]report.Finding
 	if len(pins) == 0 && len(errs) == 0 {
 		return append(findings, notEvaluatedRelease(opts.PinnedDir)), nil
 	}
+	index := buildDeploymentIndex(opts.PinnedDir)
 	surfaces := publicContractSurfaces(kbRoot)
 	aliases := slices.Sorted(maps.Keys(pins))
 	evaluated := false
@@ -57,44 +79,45 @@ func ReleaseSurface(kbRoot string, opts ReleaseSurfaceOptions) ([]report.Finding
 		if projPath == "" {
 			continue
 		}
-		names := make([]string, 0, len(surfaces[alias]))
-		files := make(map[string]string, len(surfaces[alias]))
-		for surface, kind := range surfaces[alias] {
-			names = append(names, surfaceName(surface, kind))
-			files[surface] = uriSurfacePath(surface)
+		files := surfaceFiles(surfaces[alias])
+		if len(files) == 0 {
+			continue
 		}
+		healthy := gitHealthy(projPath)
 		for _, pin := range pins[alias] {
 			base := opts.Base
 			if base == "" {
 				resolved, err := releaseTagRef(projPath, pin.version)
 				if err != nil {
-					findings = append(findings, report.Finding{
-						RuleID:   releaseSurfaceRuleID,
-						Severity: report.SeverityError,
-						Grade:    report.GradeForced,
-						File:     pin.file,
-						Line:     pin.line,
-						Message:  fmt.Sprintf("RELEASE_TAG_MISSING: pinned version %q resolves to no release tag in project %q; a skipped deployment must never read as parity", pin.version, alias),
-					})
+					findings = append(findings, releaseFinding(pin, "", "RELEASE_TAG_MISSING",
+						fmt.Sprintf("pinned version %q resolves to no release tag in project %q; a skipped deployment must never read as parity", pin.version, alias)))
 					continue
 				}
 				base = resolved
 			}
-			evaluated = true
-			for surface, file := range files {
+			if !healthy {
+				findings = append(findings, releaseFinding(pin, "", "RELEASE_SURFACE_NOT_EVALUATED",
+					fmt.Sprintf("project %q's repository is unreadable; its pinned surfaces are unjudged", alias)))
+				continue
+			}
+			for _, surface := range slices.Sorted(maps.Keys(files)) {
+				file := files[surface]
 				atBase, baseOK := blobAt(projPath, base, file)
-				atHead, headOK := blobAt(projPath, "HEAD", file)
 				if !baseOK {
 					continue
 				}
+				evaluated = true
+				atHead, headOK := blobAt(projPath, "HEAD", file)
 				if !headOK {
-					if consumed(opts.PinnedDir, names) {
-						findings = append(findings, releaseFinding(pin, surface, "RELEASE_SURFACE_REMOVED", fmt.Sprintf("pinned deployment %q consumes %s, which exists at %s but is gone at HEAD", pin.version, surface, base)))
+					if index.consumes(surfaceName(surface, surKind(surfaces, alias, surface))) {
+						findings = append(findings, releaseFinding(pin, surface, "RELEASE_SURFACE_REMOVED",
+							fmt.Sprintf("pinned deployment consumes %s, which exists at %s but is gone at HEAD", surface, base)))
 					}
 					continue
 				}
-				if atBase != atHead && consumed(opts.PinnedDir, names) {
-					findings = append(findings, releaseFinding(pin, surface, "RELEASE_SURFACE_CHANGED", fmt.Sprintf("pinned deployment %q consumes %s, whose content differs between %s and HEAD", pin.version, surface, base)))
+				if atBase != atHead && index.consumes(surfaceName(surface, surKind(surfaces, alias, surface))) {
+					findings = append(findings, releaseFinding(pin, surface, "RELEASE_SURFACE_CHANGED",
+						fmt.Sprintf("pinned deployment consumes %s, whose content differs between %s and HEAD", surface, base)))
 				}
 			}
 		}
@@ -105,14 +128,43 @@ func ReleaseSurface(kbRoot string, opts ReleaseSurfaceOptions) ([]report.Finding
 	return findings, nil
 }
 
+// surKind looks up the base kind of one surface for name extraction.
+func surKind(surfaces map[string]map[string]string, alias, surface string) string {
+	byAlias := surfaces[alias]
+	if byAlias == nil {
+		return ""
+	}
+	return byAlias[surface]
+}
+
+// surfaceFiles reduces the alias's surfaces to one entry per file: two
+// symbols in one file drift together and must not double-report.
+func surfaceFiles(byAlias map[string]string) map[string]string {
+	files := map[string]string{}
+	for surface := range byAlias {
+		files[uriSurfacePath(surface)] = surface
+	}
+	// Keep one representative surface per file for the finding text.
+	out := map[string]string{}
+	for file, surface := range files {
+		out[surface] = file
+	}
+	return out
+}
+
 func releaseFinding(pin pinRef, surface, code, message string) report.Finding {
+	if surface != "" {
+		message = code + ": " + message + " (" + surface + ")"
+	} else {
+		message = code + ": " + message
+	}
 	return report.Finding{
 		RuleID:   releaseSurfaceRuleID,
 		Severity: report.SeverityError,
 		Grade:    report.GradeForced,
 		File:     pin.file,
 		Line:     pin.line,
-		Message:  code + ": " + message,
+		Message:  message,
 	}
 }
 
@@ -135,8 +187,8 @@ type pinRef struct {
 }
 
 // readPins parses every lockfile under the pinned-releases directory.
-// Unknown aliases fail closed: a deployment naming an unregistered
-// project cannot be judged.
+// Unknown aliases and unparsable lines fail closed: a deployment whose
+// pins cannot be read must never read as parity.
 func readPins(dir string, cfg config.Config) (map[string][]pinRef, []report.Finding) {
 	var findings []report.Finding
 	pins := map[string][]pinRef{}
@@ -145,47 +197,78 @@ func readPins(dir string, cfg config.Config) (map[string][]pinRef, []report.Find
 		return pins, nil
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".lock") {
+		if !entry.Type().IsRegular() || !strings.HasSuffix(entry.Name(), ".lock") {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		data, err := readBounded(path)
+		data, err := readManifest(path)
 		if err != nil {
+			findings = append(findings, report.Finding{
+				RuleID:   releaseSurfaceRuleID,
+				Severity: report.SeverityError,
+				Grade:    report.GradeForced,
+				File:     path,
+				Line:     1,
+				Message:  "RELEASE_PIN_MALFORMED: the lockfile cannot be read; the deployment cannot be judged",
+			})
 			continue
 		}
-		for i, line := range strings.Split(string(data), "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			}
-			line = strings.TrimPrefix(line, "alias ")
-			alias, version, ok := strings.Cut(line, "=")
-			if !ok {
-				alias, version, ok = cutFields(line)
-			}
-			if !ok {
-				continue
-			}
-			alias = strings.TrimSpace(alias)
-			version = strings.TrimSpace(version)
-			if version == "" {
-				continue
-			}
-			if _, registered := cfg.Projects[alias]; !registered {
-				findings = append(findings, report.Finding{
-					RuleID:   releaseSurfaceRuleID,
-					Severity: report.SeverityError,
-					Grade:    report.GradeForced,
-					File:     path,
-					Line:     i + 1,
-					Message:  fmt.Sprintf("RELEASE_PIN_UNKNOWN: lockfile pins %q, which is not a registered project; the deployment cannot be judged", alias),
-				})
-				continue
-			}
-			pins[alias] = append(pins[alias], pinRef{file: path, line: i + 1, version: version})
-		}
+		findings = append(findings, parseLockfile(path, string(data), cfg, pins)...)
 	}
 	return pins, findings
+}
+
+// parseLockfile reads one lockfile's pin lines into pins, failing closed
+// on lines it cannot parse.
+func parseLockfile(path, data string, cfg config.Config, pins map[string][]pinRef) []report.Finding {
+	var findings []report.Finding
+	for i, line := range strings.Split(data, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		alias, version, ok := cutFields(line)
+		if !ok {
+			alias, version, ok = strings.Cut(line, "=")
+		}
+		if !ok {
+			findings = append(findings, report.Finding{
+				RuleID:   releaseSurfaceRuleID,
+				Severity: report.SeverityError,
+				Grade:    report.GradeForced,
+				File:     path,
+				Line:     i + 1,
+				Message:  fmt.Sprintf("RELEASE_PIN_MALFORMED: pin line %q is not `alias version` or `alias=version`", line),
+			})
+			continue
+		}
+		alias = strings.TrimSpace(alias)
+		version = strings.TrimSpace(version)
+		if alias == "" || version == "" {
+			findings = append(findings, report.Finding{
+				RuleID:   releaseSurfaceRuleID,
+				Severity: report.SeverityError,
+				Grade:    report.GradeForced,
+				File:     path,
+				Line:     i + 1,
+				Message:  fmt.Sprintf("RELEASE_PIN_MALFORMED: pin line %q names an empty alias or version", line),
+			})
+			continue
+		}
+		if _, registered := cfg.Projects[alias]; !registered {
+			findings = append(findings, report.Finding{
+				RuleID:   releaseSurfaceRuleID,
+				Severity: report.SeverityError,
+				Grade:    report.GradeForced,
+				File:     path,
+				Line:     i + 1,
+				Message:  fmt.Sprintf("RELEASE_PIN_UNKNOWN: lockfile pins %q, which is not a registered project; the deployment cannot be judged", alias),
+			})
+			continue
+		}
+		pins[alias] = append(pins[alias], pinRef{file: path, line: i + 1, version: version})
+	}
+	return findings
 }
 
 // cutFields splits "alias version" on the first space.
@@ -198,63 +281,110 @@ func cutFields(line string) (string, string, bool) {
 }
 
 // releaseTagRef resolves a pinned version to a ref the project's
-// repository can answer: the version itself, a v-prefixed tag, or a raw
-// commit id.
+// repository can answer. Tags are addressed under refs/tags so a
+// same-named branch cannot shadow them; a 40-hex version is tried as a
+// raw commit id. A leading dash is a lockfile injection attempt and
+// fails closed without reaching git as an option.
 func releaseTagRef(projPath, version string) (string, error) {
 	version = strings.TrimPrefix(version, "v")
+	if version == "" || strings.HasPrefix(version, "-") {
+		return "", fmt.Errorf("invalid pinned version %q", version)
+	}
 	if len(version) == 40 {
 		if _, err := resolve.GitRun(projPath, nil, "rev-parse", "--verify", version+"^{commit}"); err == nil {
 			return version, nil
 		}
 	}
 	for _, tag := range []string{version, "v" + version} {
-		if _, err := resolve.GitRun(projPath, nil, "rev-parse", "--verify", tag+"^{commit}"); err == nil {
+		if _, err := resolve.GitRun(projPath, nil, "rev-parse", "--verify", "refs/tags/"+tag+"^{commit}"); err == nil {
 			return tag, nil
 		}
 	}
 	return "", fmt.Errorf("no tag for %q", version)
 }
 
-// blobAt reads the blob id of one project-relative file at a ref. A
-// missing file reports ok=false rather than an error: absence is the
-// removed-surface signal, not a broken gate.
+// gitHealthy proves the project repository answers git at all, so a
+// broken checkout never reads as a missing file.
+func gitHealthy(projPath string) bool {
+	_, err := resolve.GitRun(projPath, nil, "rev-parse", "--git-dir")
+	return err == nil
+}
+
+// blobAt reads the blob id of one project-relative file at a ref. The
+// ./ prefix resolves the path from the project directory, so projects
+// nested under their repository root are judged the same as root
+// projects. A missing file reports ok=false rather than an error:
+// absence is the removed-surface signal, not a broken gate.
 func blobAt(projPath, ref, file string) (string, bool) {
-	out, err := resolve.GitRun(projPath, nil, "rev-parse", ref+":"+file)
+	out, err := resolve.GitRun(projPath, nil, "rev-parse", "--verify", ref+":./"+file)
 	if err != nil {
 		return "", false
 	}
 	return strings.TrimSpace(string(out)), true
 }
 
-// consumed reports whether the deployment directory references one of
-// the surfaces: a file naming the surface, or a vendored copy of the
-// surface's own file. The deployment runs what its tree carries.
-func consumed(dir string, names []string) bool {
-	if len(names) == 0 {
-		return false
+// buildDeploymentIndex walks the deployment directory once. Non-regular
+// entries are never opened, dependency and VCS trees are skipped, and
+// the text budget bounds the index; the base-name set is unbounded.
+func buildDeploymentIndex(dir string) *deploymentIndex {
+	idx := &deploymentIndex{names: map[string]bool{}}
+	if dir == "" {
+		return idx
 	}
-	found := false
+	budget := deploymentByteBudget
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || found || d.IsDir() || !d.Type().IsRegular() {
-			return nil
-		}
-		if slices.Contains(names, filepath.Base(path)) {
-			found = true
-			return fs.SkipAll
-		}
-		data, err := readBounded(path)
 		if err != nil {
 			return nil
 		}
-		for _, name := range names {
-			if name != "" && strings.Contains(string(data), name) {
-				found = true
-				return fs.SkipAll
+		if d.IsDir() {
+			if d.Name() != "." && deploymentSkipDirs[d.Name()] {
+				return fs.SkipDir
 			}
+			return nil
 		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		idx.names[filepath.Base(path)] = true
+		if budget <= 0 {
+			return nil
+		}
+		data, err := readManifest(path)
+		if err != nil {
+			return nil
+		}
+		if len(data) > budget {
+			budget = 0
+			return nil
+		}
+		budget -= len(data)
+		idx.contents = append(idx.contents, string(data))
 		return nil
 	})
-	return found
+	return idx
+}
+
+// consumes reports whether the deployment references the surface name:
+// a vendored file with the surface's base name, or a word-boundary
+// mention in the indexed text. Substring matching would hit Running for
+// Run, so names match on identifier boundaries.
+func (idx *deploymentIndex) consumes(name string) bool {
+	if name == "" {
+		return false
+	}
+	if idx.names[name] {
+		return true
+	}
+	re, err := regexp.Compile(`\b` + regexp.QuoteMeta(name) + `\b`)
+	if err != nil {
+		return false
+	}
+	for _, content := range idx.contents {
+		if re.MatchString(content) {
+			return true
+		}
+	}
+	return false
 }
 
 // surfaceName extracts the name consumers reference: the ::fragment for
@@ -297,10 +427,7 @@ func publicContractSurfaces(kbRoot string) map[string]map[string]string {
 		}
 		for _, entry := range pf.Contract.Stable {
 			kindStr, _ := entry["kind"].(string)
-			kind := kindStr
-			if i := strings.LastIndex(kindStr, "-"); i >= 0 {
-				kind = kindStr[i+1:]
-			}
+			kind := kindOr(kindStr)
 			if kind != "symbol" && kind != "route" && kind != "cli" {
 				continue
 			}

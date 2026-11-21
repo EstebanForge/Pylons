@@ -128,7 +128,7 @@ func run(args []string) int {
 	forceHooks, ratchetUpdate := false, false
 	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild := "", "", "", "", "", "", "", "", "", ""
 	pinnedReleases, sessionSince := "", ""
-	sessionManifest := false
+	sessionManifest, diffSinceSet := false, false
 	mapType, mapTag, mapStatus, mapFolder, mapQuery := "", "", "", "", ""
 	limit := 0
 	var rest []string
@@ -216,6 +216,7 @@ func run(args []string) int {
 				pinnedReleases = val
 			case "--diff-since":
 				sessionSince = val
+				diffSinceSet = true
 			case "--fetch-child":
 				syncChild = val
 			case "--type":
@@ -345,9 +346,17 @@ func run(args []string) int {
 		return 0
 
 	case "context":
+		if diffSinceSet && sessionSince == "" {
+			fmt.Fprintln(os.Stderr, "pylon: context --diff-since requires a ref")
+			return 2
+		}
 		if sessionSince != "" {
 			if slicePlan != "" || len(rest) != 0 {
 				fmt.Fprintln(os.Stderr, "pylon: context --diff-since takes no other target")
+				return 2
+			}
+			if format == report.FormatSARIF {
+				fmt.Fprintln(os.Stderr, "pylon: format sarif is not supported for session capture")
 				return 2
 			}
 			return cmdCapture(kbRoot, sessionSince, sessionManifest, format)
@@ -421,7 +430,7 @@ func run(args []string) int {
 			findings, err := rules.ReleaseSurface(kbRoot, rules.ReleaseSurfaceOptions{PinnedDir: pinnedReleases, Base: diffBase})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "pylon: review release-surface: %v\n", err)
-				return 1
+				return 2
 			}
 			rules.Remediate(findings)
 			if err := report.Render(os.Stdout, format, findings); err != nil {
@@ -1024,6 +1033,9 @@ func cmdCapture(kbRoot, since string, emitManifest bool, format report.Format) i
 		return 0
 	}
 	fmt.Printf("=== Session capture since %s (%d declared surfaces) ===\n", manifest.Since, manifest.Examined)
+	for _, w := range manifest.Warnings {
+		fmt.Printf("  warning: %s\n", w)
+	}
 	if len(manifest.Surfaces) == 0 {
 		fmt.Println("  no stale surfaces; declared docs moved with the code")
 		return 0

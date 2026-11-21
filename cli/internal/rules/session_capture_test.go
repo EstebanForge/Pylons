@@ -4,6 +4,7 @@
 package rules
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -107,14 +108,99 @@ func TestCaptureIgnoresUntouchedSurfaces(t *testing.T) {
 func TestCaptureSkipsUnreadableProject(t *testing.T) {
 	fx := newCaptureFixture(t)
 	mustWrite(t, filepath.Join(fx.kb, "manifests/pylons.yaml"), "version: 1\nprojects:\n  app:\n    path: "+fx.repo+"\n    ref: main\n  ghost:\n    path: /nonexistent/ghost\n    ref: main\n")
+	mustWrite(t, filepath.Join(fx.kb, "plans/feature-ghost.md"), "---\ntitle: \"Ghost\"\ntype: plan\nstatus: accepted\ncomponents: [ghost]\nticket: [T-2]\ncontract:\n  stable:\n    - kind: symbol\n      id: repo://ghost/inner.go::Missing\n---\n\n# Ghost\n")
 	fx.touchCode(t)
 	manifest, err := SessionCapture(fx.kb, "HEAD~1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The readable project still reports; the missing one is skipped.
-	if len(manifest.Surfaces) == 0 {
-		t.Fatal("an unreadable sibling project must not hide the readable one's surfaces")
+	// The readable project still reports; the missing one is skipped
+	// with a warning, never silently.
+	for _, s := range manifest.Surfaces {
+		if s.Alias == "ghost" {
+			t.Fatalf("an unreadable project's surface must be skipped, got %+v", manifest.Surfaces)
+		}
+	}
+	if len(manifest.Warnings) == 0 {
+		t.Fatal("an unreadable project must produce a warning")
+	}
+}
+
+func TestCaptureNestedKBSeesItsDocs(t *testing.T) {
+	// A KB nested under a larger repository root: git prints
+	// repo-root-relative paths, but the manifest compares KB-relative
+	// docs.
+	repo := t.TempDir()
+	kb := filepath.Join(repo, "ledger")
+	if err := os.MkdirAll(kb, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shell("git", "-C", repo, "init", "-q", "-b", "main")
+	mustWrite(t, filepath.Join(repo, "src/svc.go"), "package src\n\nfunc Process(x int) int {\n\treturn x\n}\n")
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), "version: 1\nprojects:\n  app:\n    path: "+repo+"\n    ref: main\n")
+	mustWrite(t, filepath.Join(kb, "packages/app.md"), "---\ntitle: \"App\"\ntype: package\nstatus: active\ntier: core\nexposes:\n  - kind: symbol\n    id: repo://app/src/svc.go::Process\nsources:\n  - repo://app/src/svc.go\n---\n\n# App\n")
+	shell("git", "-C", repo, "add", "-fA", ".")
+	shell("git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "docs: seed")
+	mustWrite(t, filepath.Join(repo, "src/svc.go"), "package src\n\nfunc Process(x int) int {\n\treturn x + 1\n}\n")
+	shell("git", "-C", repo, "add", "-f", ".")
+	shell("git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "feat: change Process")
+	manifest, err := SessionCapture(kb, "HEAD~1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Surfaces) != 1 || manifest.Surfaces[0].Path != "src/svc.go" {
+		t.Fatalf("a nested KB must judge its own docs, got %+v", manifest.Surfaces)
+	}
+}
+
+func TestCaptureCountsUncommittedDocs(t *testing.T) {
+	// At session close the doc edit is usually uncommitted; it still
+	// clears the surface.
+	fx := newCaptureFixture(t)
+	fx.touchCode(t)
+	mustWrite(t, filepath.Join(fx.kb, "packages/app.md"), "---\ntitle: \"App\"\ntype: package\nstatus: active\ntier: core\nexposes:\n  - kind: symbol\n    id: repo://app/src/svc.go::Process\nsources:\n  - repo://app/src/svc.go\n---\n\n# App updated\n")
+	manifest, err := SessionCapture(fx.kb, "HEAD~1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range manifest.Surfaces {
+		if s.Path == "src/svc.go" {
+			t.Fatalf("an uncommitted doc edit must clear the surface, got %+v", manifest.Surfaces)
+		}
+	}
+}
+
+func TestCaptureCountsUncommittedCode(t *testing.T) {
+	fx := newCaptureFixture(t)
+	mustWrite(t, filepath.Join(fx.repo, "src/svc.go"), "package src\n\nfunc Process(x int) int {\n\treturn x\n}\n")
+	manifest, err := SessionCapture(fx.kb, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Surfaces) != 1 || manifest.Surfaces[0].Path != "src/svc.go" {
+		t.Fatalf("uncommitted code edits must count, got %+v", manifest.Surfaces)
+	}
+}
+
+func TestCaptureNestedDocPathIsReal(t *testing.T) {
+	fx := newCaptureFixture(t)
+	mustWrite(t, filepath.Join(fx.kb, "packages/sub/inner.md"), "---\ntitle: \"Inner\"\ntype: package\nstatus: active\ntier: core\nexposes:\n  - kind: symbol\n    id: repo://app/src/routes.go::handleProcess\n---\n\n# Inner\n")
+	fx.touchCode(t)
+	manifest, err := SessionCapture(fx.kb, "HEAD~1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, s := range manifest.Surfaces {
+		if s.Doc == "packages/sub/inner.md" {
+			found = true
+		}
+		if s.Doc == "packages/inner.md" {
+			t.Fatalf("doc paths must be real KB-relative paths, got %+v", manifest.Surfaces)
+		}
+	}
+	if !found {
+		t.Fatalf("the nested doc must anchor the finding, got %+v", manifest.Surfaces)
 	}
 }
 
