@@ -2,7 +2,7 @@
 
 > Power Overwhelming!
 
-Pylons is a plain-text ledger & map of your platform, checked against the code to keep the map honest. That is the whole idea. Everything else is detail stacked on those 2 halves.
+Pylons is a plain-text ledger & map of your platform, and an enforcer of the rules you lay down, checked against the code to keep the map honest. That is the whole idea. Everything else is detail stacked on those 2 halves.
 
 The map is a library of plain text files: Markdown with structured front matter, kept under version control beside the code it describes. It records what every package does, what depends on what, which interfaces are safe to build on, which decisions were already made and why, and which bugs nearly ate someone's weekend.
 
