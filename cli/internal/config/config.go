@@ -22,16 +22,18 @@ type Config struct {
 	Version    int                      `yaml:"version"`
 	Extensions []string                 `yaml:"extensions"`
 	Protocols  map[string]string        `yaml:"protocols"`
+	Parity     *ParityConfig            `yaml:"parity"`
 	Projects   map[string]ProjectConfig `yaml:"projects"`
 }
 
 // ProjectConfig describes one tracked repository or project.
 type ProjectConfig struct {
-	Path       string   `yaml:"path"`
-	Repo       string   `yaml:"repo"`
-	Ref        string   `yaml:"ref"`
-	Tier       string   `yaml:"tier"`
-	Extensions []string `yaml:"extensions"`
+	Path       string        `yaml:"path"`
+	Repo       string        `yaml:"repo"`
+	Ref        string        `yaml:"ref"`
+	Tier       string        `yaml:"tier"`
+	Extensions []string      `yaml:"extensions"`
+	Parity     *ParityConfig `yaml:"parity"`
 }
 
 // Load reads manifests/pylons.yaml from root. A missing file returns a default config.
@@ -49,6 +51,46 @@ func Load(root string) (Config, error) {
 		return cfg, err
 	}
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return cfg, err
+	}
+	// The parity subtree is closed-schema: re-decode it from a generic
+	// map so unknown keys error instead of silently disabling checks.
+	var generic map[string]any
+	if err := yaml.Unmarshal(data, &generic); err != nil {
+		return cfg, err
+	}
+	if raw, ok := generic["parity"]; ok {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return cfg, errors.New("parity must be a map")
+		}
+		cfg.Parity, err = parityFromMap("parity", m)
+		if err != nil {
+			return cfg, err
+		}
+	}
+	for alias, proj := range cfg.Projects {
+		projRaw, ok := generic["projects"].(map[string]any)
+		if !ok {
+			continue
+		}
+		entry, ok := projRaw[alias].(map[string]any)
+		if !ok {
+			continue
+		}
+		if raw, ok := entry["parity"]; ok {
+			m, ok := raw.(map[string]any)
+			if !ok {
+				return cfg, errors.New("parity for project " + alias + " must be a map")
+			}
+			proj.Parity, err = parityFromMap("projects."+alias+".parity", m)
+			if err != nil {
+				return cfg, err
+			}
+			cfg.Projects[alias] = proj
+		}
+	}
+	if err := validateParitySpecs(&cfg); err != nil {
 		return cfg, err
 	}
 	if cfg.Version == 0 {

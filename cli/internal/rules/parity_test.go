@@ -43,6 +43,14 @@ func newParityFixture(t *testing.T, lang, source, states, symbol string) (kb, ro
 	return kb, root
 }
 
+// writeDomainMessage writes the shared domain/message.md entity with a
+// state set and a symbol pointer.
+func writeDomainMessage(t *testing.T, kb, states, symbol string) {
+	t.Helper()
+	fm := "---\ntitle: \"Message\"\ntype: domain-entity\nstatus: accepted\ncreated: 2026-11-20\nupdated: 2026-11-20\nowners: [o]\nstates: " + states + "\nstates_symbol: \"" + symbol + "\"\ntags: [domain]\n---\n\n# Message\n"
+	mustWrite(t, filepath.Join(kb, "domain/message.md"), fm)
+}
+
 func cfgMust(t *testing.T, kb string) config.Config {
 	t.Helper()
 	cfg, err := config.Load(kb)
@@ -55,7 +63,7 @@ func cfgMust(t *testing.T, kb string) config.Config {
 func TestParityGoStringConstStatesMatch(t *testing.T) {
 	src := "package svc\n\ntype Status string\n\nconst (\n\tDraft Status = \"draft\"\n\tSent Status = \"sent\"\n)\n"
 	kb, _ := newParityFixture(t, "go", src, "[draft, sent]", "repo://svc/state.go::Status")
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
 			t.Fatalf("declared states must match the backing values, got %+v", f)
 		}
@@ -65,7 +73,7 @@ func TestParityGoStringConstStatesMatch(t *testing.T) {
 func TestParityGoIotaComparesNames(t *testing.T) {
 	src := "package svc\n\ntype Status int\n\nconst (\n\tDraft Status = iota\n\tSent\n)\n"
 	kb, _ := newParityFixture(t, "go", src, "[Draft, Sent]", "repo://svc/state.go::Status")
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
 			t.Fatalf("an iota enum must compare case names, got %+v", f)
 		}
@@ -75,7 +83,7 @@ func TestParityGoIotaComparesNames(t *testing.T) {
 func TestParityCountAndStateMismatch(t *testing.T) {
 	src := "package svc\n\ntype Status string\n\nconst (\n\tDraft Status = \"draft\"\n\tSent Status = \"sent\"\n\tFailed Status = \"failed\"\n)\n"
 	kb, _ := newParityFixture(t, "go", src, "[draft, sent]", "repo://svc/state.go::Status")
-	findings := lintParity(kb, cfgMust(t, kb))
+	findings := lintParity(kb, cfgMust(t, kb), false)
 	var count, state bool
 	for _, f := range findings {
 		if f.RuleID == "PYLON050" {
@@ -93,7 +101,7 @@ func TestParityCountAndStateMismatch(t *testing.T) {
 func TestParityRustEnum(t *testing.T) {
 	src := "#[derive(Debug)]\npub enum Status {\n    Draft,\n    Sent,\n}\n"
 	kb, _ := newParityFixture(t, "rust", src, "[Draft, Sent]", "repo://svc/state.rs::Status")
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
 			t.Fatalf("a rust enum must compare variant names, got %+v", f)
 		}
@@ -104,13 +112,13 @@ func TestParityNotEvaluatedFailsClosed(t *testing.T) {
 	src := "package svc\n\ntype Status string\n\nconst (\n\tDraft Status = \"draft\"\n)\n"
 	// States declared with no symbol pointer.
 	kb, _ := newParityFixture(t, "go", src, "[draft]", "")
-	findings := lintParity(kb, cfgMust(t, kb))
+	findings := lintParity(kb, cfgMust(t, kb), false)
 	if len(findings) == 0 || findings[0].RuleID != "PYLON049" {
 		t.Fatalf("states without a symbol must fail closed as not evaluated, got %+v", findings)
 	}
 	// A symbol naming an enum that does not exist must never read as parity.
 	kb2, _ := newParityFixture(t, "go", src, "[draft]", "repo://svc/state.go::Missing")
-	findings = lintParity(kb2, cfgMust(t, kb2))
+	findings = lintParity(kb2, cfgMust(t, kb2), false)
 	if len(findings) == 0 || findings[0].RuleID != "PYLON049" {
 		t.Fatalf("an unresolvable enum must fail closed, got %+v", findings)
 	}
@@ -123,7 +131,7 @@ func TestParityRouteMismatch(t *testing.T) {
 	mustWrite(t, filepath.Join(kb, "packages/svc.md"), fm)
 	// The route path present in project source: silent.
 	mustWrite(t, filepath.Join(root, "routes.go"), "package svc\n\n// GET /api/users\n")
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON052" {
 			t.Fatalf("a registered route must stay silent, got %+v", f)
 		}
@@ -133,7 +141,7 @@ func TestParityRouteMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	var route bool
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON052" {
 			route = true
 		}
@@ -146,7 +154,7 @@ func TestParityRouteMismatch(t *testing.T) {
 func TestParityTrailingCommentsParse(t *testing.T) {
 	src := "package svc\n\ntype Status string\n\nconst (\n\tDraft Status = \"draft\" // live\n\tSent Status = \"sent\"\n)\n"
 	kb, _ := newParityFixture(t, "go", src, "[draft, sent]", "repo://svc/state.go::Status")
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" || f.RuleID == "PYLON049" {
 			t.Fatalf("a commented const line must still parse, got %+v", f)
 		}
@@ -156,7 +164,7 @@ func TestParityTrailingCommentsParse(t *testing.T) {
 func TestParityUnparsableLineFailsClosed(t *testing.T) {
 	src := "package svc\n\nconst (\n\tDraft Status = \"draft\"\n\t???garbage???\n)\n"
 	kb, _ := newParityFixture(t, "go", src, "[draft]", "repo://svc/state.go::Status")
-	findings := lintParity(kb, cfgMust(t, kb))
+	findings := lintParity(kb, cfgMust(t, kb), false)
 	if len(findings) == 0 || findings[0].RuleID != "PYLON049" {
 		t.Fatalf("an unparseable case line must fail closed, got %+v", findings)
 	}
@@ -165,7 +173,7 @@ func TestParityUnparsableLineFailsClosed(t *testing.T) {
 func TestParitySecondConstBlock(t *testing.T) {
 	src := "package svc\n\nconst (\n\tA Kind = iota\n)\n\nconst (\n\tDraft Status = \"draft\"\n\tSent Status = \"sent\"\n)\n"
 	kb, _ := newParityFixture(t, "go", src, "[draft, sent]", "repo://svc/state.go::Status")
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON049" || f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
 			t.Fatalf("an enum in a later const block must be found, got %+v", f)
 		}
@@ -175,7 +183,7 @@ func TestParitySecondConstBlock(t *testing.T) {
 func TestParityBlankIdentifierSkipped(t *testing.T) {
 	src := "package svc\n\nconst (\n\t_ Status = \"pad\"\n\tDraft Status = \"draft\"\n\tSent Status = \"sent\"\n)\n"
 	kb, _ := newParityFixture(t, "go", src, "[draft, sent]", "repo://svc/state.go::Status")
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
 			t.Fatalf("a padding blank identifier must not count as a case, got %+v", f)
 		}
@@ -185,7 +193,7 @@ func TestParityBlankIdentifierSkipped(t *testing.T) {
 func TestParityTSSingleQuotes(t *testing.T) {
 	src := "export enum Status {\n  Draft = 'draft',\n  Sent = 'sent',\n}\n"
 	kb, _ := newParityFixture(t, "typescript", src, "[draft, sent]", "repo://svc/state.ts::Status")
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON049" || f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
 			t.Fatalf("single-quoted enum values must compare, got %+v", f)
 		}
@@ -195,7 +203,7 @@ func TestParityTSSingleQuotes(t *testing.T) {
 func TestParityRustNoTrailingComma(t *testing.T) {
 	src := "#[derive(Debug)]\npub enum Status {\n    Draft,\n    Sent\n}\n"
 	kb, _ := newParityFixture(t, "rust", src, "[Draft, Sent]", "repo://svc/state.rs::Status")
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
 			t.Fatalf("a last variant without a comma must compare, got %+v", f)
 		}
@@ -205,7 +213,7 @@ func TestParityRustNoTrailingComma(t *testing.T) {
 func TestParityEmptyStringValueIsValued(t *testing.T) {
 	src := "package svc\n\nconst (\n\tDraft Status = \"\"\n\tSent Status = \"sent\"\n)\n"
 	kb, _ := newParityFixture(t, "go", src, "[draft, sent]", "repo://svc/state.go::Status")
-	findings := lintParity(kb, cfgMust(t, kb))
+	findings := lintParity(kb, cfgMust(t, kb), false)
 	var count, emptyState, draftState bool
 	for _, f := range findings {
 		if f.RuleID == "PYLON049" {
@@ -229,7 +237,7 @@ func TestParityEmptyStringValueIsValued(t *testing.T) {
 func TestParityDuplicateDeclaredStates(t *testing.T) {
 	src := "package svc\n\nconst (\n\tDraft Status = \"draft\"\n)\n"
 	kb, _ := newParityFixture(t, "go", src, "[draft, draft]", "repo://svc/state.go::Status")
-	findings := lintParity(kb, cfgMust(t, kb))
+	findings := lintParity(kb, cfgMust(t, kb), false)
 	var count bool
 	for _, f := range findings {
 		if f.RuleID == "PYLON050" {
@@ -244,9 +252,164 @@ func TestParityDuplicateDeclaredStates(t *testing.T) {
 func TestParityPhpEnum(t *testing.T) {
 	src := "<?php\nenum Status: string {\n    case Draft = 'draft';\n    case Sent = 'sent';\n}\n"
 	kb, _ := newParityFixture(t, "php", src, "[draft, sent]", "repo://svc/state.php::Status")
-	for _, f := range lintParity(kb, cfgMust(t, kb)) {
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
 		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
 			t.Fatalf("a php enum must compare backing values, got %+v", f)
 		}
+	}
+}
+
+func TestParityProfileClaimsExtension(t *testing.T) {
+	kb, root := t.TempDir(), t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.mod"), "module example.com/svc\n")
+	mustWrite(t, filepath.Join(root, "state.custom"),
+		"package svc\n\ntype Status string\n\nconst (\n\tDraft Status = \"draft\"\n\tSent Status = \"sent\"\n)\n")
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), `version: 1
+extensions: [go]
+parity:
+  version: 1
+  profiles:
+    go:
+      use: builtin:go
+      extensions:
+        - .custom
+projects:
+  svc:
+    path: `+root+`
+    ref: main
+`)
+	writeDomainMessage(t, kb, "[draft, sent]", "repo://svc/state.custom::Status")
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
+		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
+			t.Fatalf("a profile-claimed extension must extract, got %+v", f)
+		}
+	}
+}
+
+func TestParityExplicitSectionDisablesImplicit(t *testing.T) {
+	kb, _ := newParityFixture(t, "go", "package svc\n\ntype Status string\n\nconst (\n\tDraft Status = \"draft\"\n)\n",
+		"[draft]", "repo://svc/state.go::Status")
+	// Bind only rust: the go entity must no longer resolve implicitly.
+	manifest := filepath.Join(kb, "manifests/pylons.yaml")
+	body, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withParity := strings.Replace(string(body), "version: 1\n", "version: 1\nparity:\n  version: 1\n  profiles:\n    rust:\n      use: builtin:rust\n", 1)
+	mustWrite(t, manifest, withParity)
+	var found bool
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
+		if f.RuleID == "PYLON049" && strings.Contains(f.Message, "no parity profile binds go") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("an unbound language under an explicit section must yield the not-evaluated advisory")
+	}
+}
+
+func TestParityBuiltinWithoutExtractor(t *testing.T) {
+	kb, root := t.TempDir(), t.TempDir()
+	mustWrite(t, filepath.Join(root, "state.py"), "class Status(enum.Enum):\n    DRAFT = 1\n")
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), `version: 1
+extensions: [python]
+parity:
+  version: 1
+  profiles:
+    python:
+      use: builtin:python
+projects:
+  svc:
+    path: `+root+`
+    ref: main
+`)
+	writeDomainMessage(t, kb, "[DRAFT]", "repo://svc/state.py::Status")
+	var found bool
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
+		if f.RuleID == "PYLON049" && strings.Contains(f.Message, "no in-process extractor") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("a builtin binding without an extractor must yield the not-evaluated advisory naming the gap")
+	}
+}
+
+func newParityExternalFixture(t *testing.T, pluginBody, symbol string) (kb string, root string) {
+	t.Helper()
+	kb, root = t.TempDir(), t.TempDir()
+	mustWrite(t, filepath.Join(root, "state.kt"), "enum class Status { DRAFT, SENT }\n")
+	if err := os.MkdirAll(filepath.Join(kb, "extensions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kb, "extensions", "pylon-ext-kotlin"), []byte(pluginBody), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), `version: 1
+extensions: [kotlin]
+parity:
+  version: 1
+  profiles:
+    kotlin:
+      use: external:kotlin
+      extensions:
+        - .kt
+projects:
+  svc:
+    path: `+root+`
+    ref: main
+`)
+	writeDomainMessage(t, kb, "[draft, sent]", symbol)
+	return kb, root
+}
+
+func TestParityExternalProfileDisabledByDefault(t *testing.T) {
+	kb, _ := newParityExternalFixture(t, "#!/bin/sh\nprintf '{\"cases\":[{\"name\":\"Draft\",\"value\":\"draft\"}]}'\n",
+		"repo://svc/state.kt::Status")
+	var found bool
+	for _, f := range lintParity(kb, cfgMust(t, kb), false) {
+		if f.RuleID == "PYLON049" && strings.Contains(f.Message, "external extensions disabled") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("an external profile without the opt-in must yield the not-evaluated advisory with the cause")
+	}
+}
+
+func TestParityExternalProfileExtracts(t *testing.T) {
+	kb, _ := newParityExternalFixture(t, "#!/bin/sh\nIFS= read -r line\nprintf '{\"cases\":[{\"name\":\"Draft\",\"value\":\"draft\"},{\"name\":\"Sent\",\"value\":\"sent\"}]}'\n",
+		"repo://svc/state.kt::Status")
+	for _, f := range lintParity(kb, cfgMust(t, kb), true) {
+		if f.RuleID == "PYLON050" || f.RuleID == "PYLON051" || f.RuleID == "PYLON049" {
+			t.Fatalf("a working external profile must extract, got %+v", f)
+		}
+	}
+}
+
+func TestParityExternalPluginVerdictError(t *testing.T) {
+	kb, _ := newParityExternalFixture(t, "#!/bin/sh\nprintf '{\"cases\":[],\"error\":\"cannot resolve Status\"}'\n",
+		"repo://svc/state.kt::Status")
+	var found bool
+	for _, f := range lintParity(kb, cfgMust(t, kb), true) {
+		if f.RuleID == "PYLON049" && strings.Contains(f.Message, "cannot resolve Status") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("a plugin that reports it cannot resolve must surface its error, never read as parity")
+	}
+}
+
+func TestParityExternalBadOutput(t *testing.T) {
+	kb, _ := newParityExternalFixture(t, "#!/bin/sh\nprintf 'not json at all'\n", "repo://svc/state.kt::Status")
+	var found bool
+	for _, f := range lintParity(kb, cfgMust(t, kb), true) {
+		if f.RuleID == "PYLON049" && strings.Contains(f.Message, "invalid extension JSON") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("a plugin emitting garbage must yield the not-evaluated advisory with the cause")
 	}
 }

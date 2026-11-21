@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Reference external parity plugin. Reads one JSON request line on
+# stdin and writes one JSON response line on stdout. It extracts
+# nothing real; it demonstrates the wire contract for plugin authors
+# and serves the protocol tests. The "Missing" symbol exercises the
+# plugin-verdict error path.
+IFS= read -r line || exit 1
+case "$line" in
+  *'"name":"Missing"'*)
+    printf '{"cases":[],"error":"cannot resolve Missing"}'
+    ;;
+  *)
+    printf '{"cases":[{"name":"Draft","value":"draft"},{"name":"Sent","value":"sent"}]}'
+    ;;
+esac
