@@ -3,7 +3,7 @@
 # the directory you name), with the pylon binary and its own git
 # repository.
 #
-#   curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | bash
 #   curl -fsSL ... | bash -s -- my-kb                  # custom directory
 #   curl -fsSL ... | PYLONS_VERSION=0.2.0 bash        # pinned version
 #

@@ -76,7 +76,7 @@ Every session starts by reading the map (`pylon brief`, `pylon map`) instead of 
 1. Install a pylon into your project: a plain-text map of your platform, a deterministic checker that fails when the map drifts from the code, and gate hooks that enforce it, tracked in its own git repository (downloads the `pylon` binary, unpacks the pylon into `pylons/`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | bash
 ```
 
 2. Register tracked repositories and extensions in `pylons/manifests/pylons.yaml`.
