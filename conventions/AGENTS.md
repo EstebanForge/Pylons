@@ -6,7 +6,7 @@ status: active
 
 # Conventions
 
-This folder holds cross-project engineering patterns and closed vocabularies (including `vocabulary.md`).
+This folder holds the team's cross-project engineering patterns and conventions.
 
 ## Rules
 

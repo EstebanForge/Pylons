@@ -20,7 +20,7 @@ Pylons documents reference files with URI schemes, never machine paths.
 4. **Keep decisions immutable.** Never edit accepted ADRs in place. Write a new ADR that supersedes the old decision.
 5. **Archive terminal documents.** Set `status: shipped` (with `artifact:`) or `status: abandoned` and move to `plans/archive/`.
 6. **Use Simplified Technical English (ASD-STE100).** Write direct technical English. Limit procedural sentences to 20 words and descriptive sentences to 25 words. Use active voice and present tense.
-7. **Use closed vocabularies.** Frontmatter `status:` accepts only the values listed in `conventions/vocabulary.md`.
+7. **Use closed vocabularies.** Frontmatter `status:` accepts only the values listed in `manifests/vocabulary.json`.
 8. **Honor check grades.** `FORCED` (exit 1) stops work. `ADVISORY` (exit 0) informs and lets work proceed.
 
 ## CLI Commands

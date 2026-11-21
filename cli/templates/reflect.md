@@ -16,7 +16,7 @@ Run this protocol periodically (weekly or monthly) to keep Pylons (`{{.Root}}`) 
 
 - **Code is truth**: Verify every claim, symbol, route, CLI command, event, schema, and file path against source code on each project's configured base branch (`ref:` in `pylons.yaml` or package frontmatter, defaulting to `main`), never against other docs or unverified `status: shipped` claims.
 - **Self-contained paths**: Run all checks via `{{.Bin}}`.
-- **Closed vocabularies**: Follow `pylon://conventions/vocabulary.md` for `status:`, `remediation:`, `guard:`, and folder placement.
+- **Closed vocabularies**: Follow `pylon://manifests/vocabulary.json` for `status:`, `remediation:`, `guard:`, and folder placement.
 - **Immutable decisions**: Never edit accepted decision bodies or renumber `DNNNN-*` files. When superseding or deprecating, update only `status:` and move to `decisions/archive/`.
 - **ASD-STE100**: Every scanned `.md` file you create or edit must pass ASD-STE100 (active voice, present tense, <= 20 words per procedural sentence, <= 25 words per descriptive sentence, no suppression markers).
 - **URI schemes**: Use `repo://<alias>[@<branch>]/<path>` and `pylon://<path>` per `AGENTS.md`, never local machine paths.
@@ -36,7 +36,7 @@ Run this protocol periodically (weekly or monthly) to keep Pylons (`{{.Root}}`) 
 | `packages/` | Phase 3 | `pylons.yaml` registered `repo://` checkouts | `retired` move to `packages/archive/` |
 | `references/` | Phase 3 | Code, hooks, 3rd-party docs | `superseded` / `retired` move to `references/archive/` |
 | `quirks/`, `flows/`, `domain/` | Phase 4 | Code, tests, `review postmortem` | Retired / superseded docs move to `<zone>/archive/` |
-| `skills/`, `prompts/`, `templates/` | Phase 4 | Frontmatter, paths, `conventions/vocabulary.md` | Promote mature prompts to `skills/` |
+| `skills/`, `prompts/`, `templates/` | Phase 4 | Frontmatter, paths, `manifests/vocabulary.json` | Promote mature prompts to `skills/` |
 | `meta/`, `manifests/` | Phase 5 | `manifest rules`, `manifest packages` | Refresh indexes and record pass in `meta/` |
 
 ## Working Ledger
@@ -115,7 +115,7 @@ Track counts and paths across phases:
    - Run `{{.Bin}} check` and `{{.Bin}} context` on hot paths to confirm no stale `FORCED` warnings remain.
 2. **Skills, Prompts, and Templates**:
    - Check `skills/` for valid frontmatter, triggers, dead paths, and overlap with `conventions/`.
-   - Check `prompts/` for prompts ready to promote to `skills/`, and verify `templates/` match `conventions/vocabulary.md`.
+   - Check `prompts/` for prompts ready to promote to `skills/`, and verify `templates/` match `manifests/vocabulary.json`.
 3. **Deduplicate, Summarize, and Prune**:
    - Merge overlapping docs and update incoming links.
    - Condense verbose docs into high-signal facts and tables without stripping frontmatter contracts, `sources:`, `verified_by:`, or linked anchors.

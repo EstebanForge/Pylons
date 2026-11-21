@@ -14,7 +14,7 @@
     "references": ["active", "superseded", "retired"],
     "flows": ["active"],
     "quirks": ["active"],
-    "domain/entities": ["proposed", "accepted", "changed"],
+    "domain": ["proposed", "accepted", "changed"],
     "tickets": ["open", "in-progress", "blocked", "done", "wontfix"]
   },
   "contract_kinds": {
