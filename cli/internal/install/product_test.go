@@ -28,14 +28,14 @@ func writeProductTree(t *testing.T, root string) {
 	t.Helper()
 	zoneSeeds := []string{
 		"packages", "proposals", "plans", "decisions", "conventions",
-		"quirks", "flows", "domain", "investigations", "audits",
+		"quirks", "domain", "investigations", "audits",
 		"references", "tickets", "prompts", "skills",
 	}
 	keepers := []string{
 		"packages/archive", "plans/archive",
 		"decisions/proposals", "decisions/archive",
 		"conventions/proposals", "conventions/archive",
-		"quirks/archive", "flows/archive",
+		"quirks/archive",
 		"domain/entities", "domain/archive",
 		"investigations/archive", "audits/archive",
 		"references/archive", "tickets/archive",

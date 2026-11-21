@@ -84,14 +84,6 @@ Every card answers in the same order: **What** names the feature, **The pain** n
 - **How it works**: Each entity declares `avoid:` anti-terms: the near-synonyms that must not name the concept. Documentation, reviews, and generated code stay on the canonical term.
 - **Guard**: The closed value sets live in `manifests/vocabulary.json`. An entity with an empty `avoid:` list fires `PYLON039`.
 
-#### Transaction flows (`flows/`)
-
-- **What**: Sequence diagrams for the transactions that cross packages and services, end to end.
-- **The pain**: From one repository's code you cannot see a whole transaction. A developer or agent misses a lifecycle step and ships a partial state update that only fails under real data.
-- **How it works**: Each flow documents actors, entry points, writes, dispatched events, and external calls for one lifecycle.
-- **For agents**: Agents review the complete lifecycle before modifying any single package in it.
-- **Guard**: `pylon lint` validates structure, frontmatter, and links.
-
 #### Conventions (`conventions/`)
 
 - **What**: Platform-wide patterns for the recurring jobs: helpers, boundaries, models, release automation. How things are built here, written down once.

@@ -5,7 +5,7 @@ status: active
 created: 2026-11-20
 updated: 2026-11-20
 owners:
-  - esteban
+  - Pylons
 sources: []
 description: "Formal schema, manifest, and wire examples for drop-in pylon-ext-<name> plugins."
 tags: [reference, schema, extensions]

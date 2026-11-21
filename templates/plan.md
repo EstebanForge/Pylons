@@ -5,7 +5,7 @@ status: proposed
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 owners:
-  - owner-handle
+  - Pylons
 ticket: []
 artifact: ""
 target_release: ""

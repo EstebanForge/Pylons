@@ -5,7 +5,7 @@ status: active
 created: 2026-11-20
 updated: 2026-11-21
 owners:
-  - esteban
+  - Pylons
 sources: []
 description: "Schema and examples for the declarative parity spec: language profiles, machine declarations, and transition triples."
 tags: [reference, schema, parity]

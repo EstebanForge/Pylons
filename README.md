@@ -35,7 +35,6 @@ A pylon is organized by rate of change. Slow-moving knowledge sits apart from fa
 | Decisions | `decisions/` | Architecture Decision Records, immutable once accepted (`decisions/proposals/`, `decisions/archive/`). |
 | Conventions | `conventions/` | Cross-project patterns and closed vocabularies (`conventions/proposals/`, `conventions/archive/`). |
 | Domain | `domain/` | Ubiquitous language and domain entity definitions. |
-| Flows | `flows/` | Mermaid sequence diagrams for cross-component transactions. |
 | Quirks | `quirks/` | Append-only ledger of verified traps: symptom, cause, resolution, and affected contracts. |
 | Investigations | `investigations/` | Structured debugging records for complex bugs (`investigations/archive/`). |
 | Tickets | `tickets/` | Local work items: bugs, tasks, improvements, and chores (`tickets/archive/`). |

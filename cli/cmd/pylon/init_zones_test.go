@@ -14,7 +14,7 @@ func TestInitSeedsZoneAgentGuides(t *testing.T) {
 		t.Fatalf("cmdInit exit = %d", code)
 	}
 	for _, zone := range []string{
-		"packages", "proposals", "plans", "decisions", "quirks", "flows",
+		"packages", "proposals", "plans", "decisions", "quirks",
 		"domain", "investigations", "audits", "references", "tickets",
 		"prompts", "skills", "conventions",
 	} {

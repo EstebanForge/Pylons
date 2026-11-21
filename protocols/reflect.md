@@ -35,7 +35,7 @@ Run this protocol periodically (weekly or monthly) to keep Pylons (`{{.Root}}`) 
 | `tickets/` | Phase 2 | Local work items and plans | `done` / `wontfix` move to `tickets/archive/` |
 | `packages/` | Phase 3 | `pylons.yaml` registered `repo://` checkouts | `retired` move to `packages/archive/` |
 | `references/` | Phase 3 | Code, hooks, 3rd-party docs | `superseded` / `retired` move to `references/archive/` |
-| `quirks/`, `flows/`, `domain/` | Phase 4 | Code, tests, `review postmortem` | Retired / superseded docs move to `<zone>/archive/` |
+| `quirks/`, `domain/` | Phase 4 | Code, tests, `review postmortem` | Retired / superseded docs move to `<zone>/archive/` |
 | `skills/`, `prompts/`, `templates/` | Phase 4 | Frontmatter, paths, `manifests/vocabulary.json` | Promote mature prompts to `skills/` |
 | `meta/`, `manifests/` | Phase 5 | `manifest rules`, `manifest packages` | Refresh indexes and record pass in `meta/` |
 
@@ -111,7 +111,7 @@ Track counts and paths across phases:
 
 1. **Quirks, Flows, and Domain**:
    - Run `{{.Bin}} review postmortem --check-sources`. Verify `sources:` and `contracts:` exist in code; move retired or obsolete quirks to `quirks/archive/`.
-   - Verify `flows/*.md` and `domain/**/*.md` match current code (`entities/` status: `proposed` -> `accepted` when shipped); move superseded or retired docs to `<zone>/archive/`.
+   - Verify `domain/**/*.md` matches current code (`entities/` status: `proposed` -> `accepted` when shipped); move superseded or retired docs to `<zone>/archive/`.
    - Run `{{.Bin}} check` and `{{.Bin}} context` on hot paths to confirm no stale `FORCED` warnings remain.
 2. **Skills, Prompts, and Templates**:
    - Check `skills/` for valid frontmatter, triggers, dead paths, and overlap with `conventions/`.

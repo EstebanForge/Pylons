@@ -5,7 +5,7 @@ status: accepted
 created: 2026-11-21
 updated: 2026-11-21
 owners:
-  - example
+  - Pylons
 components: [svc]
 source_of_truth: "the transitions map in svc/shipments.go"
 states: [pending, picked, shipped]

@@ -7,7 +7,7 @@ reproducible: always
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 owners:
-  - owner-handle
+  - Pylons
 ticket: []
 components: []
 links: []

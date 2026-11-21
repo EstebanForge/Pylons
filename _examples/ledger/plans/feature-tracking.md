@@ -5,7 +5,7 @@ status: accepted
 created: 2026-11-21
 updated: 2026-11-21
 owners:
-  - example
+  - Pylons
 ticket: [EX-1]
 artifact: ""
 target_release: ""

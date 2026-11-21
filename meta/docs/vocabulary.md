@@ -5,7 +5,7 @@ status: active
 created: 2026-11-21
 updated: 2026-11-21
 owners:
-  - esteban
+  - Pylons
 sources: []
 description: "The closed value sets Pylons frontmatter fields accept, and the machine-readable registry at manifests/vocabulary.json."
 tags: [reference, schema, vocabulary]
@@ -29,7 +29,6 @@ The `status:` field records where a document sits in its lifecycle. Allowed valu
 | `investigations/` | `active`, `resolved`, `abandoned` |
 | `packages/` | `active`, `deprecated`, `retired` |
 | `references/` | `active`, `superseded`, `retired` |
-| `flows/` | `active` |
 | `quirks/` | `active` |
 | `domain/entities/` | `proposed`, `accepted`, `changed` |
 | `tickets/` | `open`, `in-progress`, `blocked`, `done`, `wontfix` |

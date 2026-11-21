@@ -5,7 +5,7 @@ status: active
 created: 2026-11-20
 updated: 2026-11-20
 owners:
-  - esteban
+  - Pylons
 sources: []
 description: "Schema and examples for manifests/pylons.yaml, the per-ledger configuration file."
 tags: [reference, config, schema]

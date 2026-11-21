@@ -756,7 +756,7 @@ func renderFindings(findings []report.Finding, format report.Format, ci bool) in
 	return 0
 }
 
-var scaffoldDirs = []string{"packages", "packages/archive", "proposals", "plans/archive", "decisions/proposals", "decisions/archive", "conventions", "conventions/proposals", "conventions/archive", "quirks/archive", "flows/archive", "domain/entities", "domain/archive", "investigations/archive", "audits/archive", "references/archive", "tickets/archive", "prompts", "skills", "templates", "manifests", "protocols", "extensions"}
+var scaffoldDirs = []string{"packages", "packages/archive", "proposals", "plans/archive", "decisions/proposals", "decisions/archive", "conventions", "conventions/proposals", "conventions/archive", "quirks/archive", "domain/entities", "domain/archive", "investigations/archive", "audits/archive", "references/archive", "tickets/archive", "prompts", "skills", "templates", "manifests", "protocols", "extensions"}
 
 func cmdInit(dir string) int {
 	cfgPath := filepath.Join(dir, "manifests", "pylons.yaml")

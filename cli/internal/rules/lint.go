@@ -278,7 +278,6 @@ var allowedStatuses = map[string][]string{
 	"investigations": {"active", "resolved", "abandoned"},
 	"packages":       {"active", "deprecated", "retired"},
 	"references":     {"active", "superseded", "retired"},
-	"flows":          {"active"},
 	"quirks":         {"active"},
 	"domain":         {"proposed", "accepted", "changed"},
 	"tickets":        {"open", "in-progress", "blocked", "done", "wontfix"},
