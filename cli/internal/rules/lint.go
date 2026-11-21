@@ -26,6 +26,9 @@ type LintOptions struct {
 	Fix           bool
 	ChangedOnly   bool
 	AllowExternal bool
+	// Parity runs the opt-in declared-vs-code set checks on top of the
+	// standard pass.
+	Parity bool
 }
 
 var (
@@ -141,6 +144,9 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 	findings = append(findings, scanLifecycleRules(kbRoot, docs, cfg, opts.HasCode)...)
 	if opts.HasCode {
 		findings = append(findings, lintImportBoundaries(kbRoot, cfg, changedSet)...)
+	}
+	if opts.Parity && opts.HasCode {
+		findings = append(findings, lintParity(kbRoot, cfg)...)
 	}
 	return findings
 }

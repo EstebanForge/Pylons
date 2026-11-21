@@ -9,6 +9,8 @@ owners:
 components: []
 source_of_truth: ""
 relationships: []
+states: []
+states_symbol: ""
 avoid: []
 description: ""
 tags: [domain]

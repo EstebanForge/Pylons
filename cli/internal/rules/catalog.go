@@ -64,6 +64,10 @@ var Catalog = map[string]RuleSpec{
 	"PYLON046": {ID: "PYLON046", Name: "contract_no_scenario", Severity: "advisory", Description: "A slice plan's behavior contract has no covering declared scenario.", FixHint: "Add a scenario entry with given/when/expect and covers naming the contract id."},
 	"PYLON047": {ID: "PYLON047", Name: "merge_danger", Severity: "error", Description: "The pull request body lacks a valid merge danger line, or the derived minimum door outranks the author door.", FixHint: "Add 'Merge danger: <one-way|two-way> | blast radius: <scope>' to the body (conventions/pr-template.md)."},
 	"PYLON048": {ID: "PYLON048", Name: "release_surface", Severity: "error", Description: "A pinned deployment consumes a public surface that is removed or changed against the pinned release tag, or a pin cannot be judged.", FixHint: "Restore the surface at HEAD or cut and ship a new release for the pinned deployment; unregistered pins fail closed."},
+	"PYLON049": {ID: "PYLON049", Name: "parity_not_evaluated", Severity: "advisory", Description: "A parity declaration has one half without the other, or the declared enum cannot be resolved; a skipped set must never read as parity.", FixHint: "Declare states and states_symbol together, and point states_symbol at a repo:// file and enum name that exists."},
+	"PYLON050": {ID: "PYLON050", Name: "parity_count_mismatch", Severity: "error", Description: "The declared state count differs from the code enum's case count.", FixHint: "Align the states list with the enum's cases in the same change."},
+	"PYLON051": {ID: "PYLON051", Name: "parity_state_mismatch", Severity: "error", Description: "A state token appears on only one side of the declared-vs-code comparison.", FixHint: "Align the states list with the enum's cases in the same change."},
+	"PYLON052": {ID: "PYLON052", Name: "parity_route_mismatch", Severity: "advisory", Description: "No source line in the mapped project mentions the declared route path.", FixHint: "Register the route in the mapped project, or drop the expose entry."},
 }
 
 // AllRules returns the sorted rule catalog.
