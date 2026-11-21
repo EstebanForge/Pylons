@@ -94,3 +94,112 @@ func TestAnnotationsCapAtFifty(t *testing.T) {
 		t.Fatalf("the summary must report the truncation, got %q", r.Summary)
 	}
 }
+
+func TestAnnotationsEmptyRunsIsClean(t *testing.T) {
+	r, err := Annotations([]byte(`{"runs": []}`))
+	if err != nil {
+		t.Fatalf("a valid SARIF with empty runs is a clean run, got %v", err)
+	}
+	if r.Total != 0 || len(r.Annotations) != 0 {
+		t.Fatalf("empty runs must be an empty report, got %+v", r)
+	}
+}
+
+func TestAnnotationsNullInputFailsClosed(t *testing.T) {
+	if _, err := Annotations([]byte(`null`)); err == nil {
+		t.Fatal("a JSON null must fail closed, never read as a clean run")
+	}
+}
+
+func TestAnnotationsMissingLocationStaysOutOfAnnotations(t *testing.T) {
+	// GitHub rejects a whole annotation batch over one empty path, so
+	// a result without a location counts in the totals but never
+	// annotates.
+	sarif := `{"runs": [{"results": [
+		{"ruleId": "PYLON001", "level": "error", "message": {"text": "no location"}},
+		{"ruleId": "PYLON001", "level": "error", "message": {"text": "located"},
+		 "locations": [{"physicalLocation": {"artifactLocation": {"uri": "packages/a.md"}, "region": {"startLine": 2}}}]}
+	]}]}`
+	r, err := Annotations([]byte(sarif))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Total != 2 || len(r.Annotations) != 1 {
+		t.Fatalf("the locationless result must stay out of annotations, got %+v", r)
+	}
+	if !strings.Contains(r.Summary, "x2") {
+		t.Fatalf("the summary must count all findings of the rule, got %q", r.Summary)
+	}
+}
+
+func TestAnnotationsStripsFileScheme(t *testing.T) {
+	sarif := `{"runs": [{"results": [{"ruleId": "PYLON001", "level": "error", "message": {"text": "m"},
+		"locations": [{"physicalLocation": {"artifactLocation": {"uri": "file:///srv/kb/packages/a.md"}, "region": {"startLine": 1}}}]}]}]}`
+	r, err := Annotations([]byte(sarif))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(r.Annotations[0].Path, "file://") {
+		t.Fatalf("the uri scheme must not reach the annotation path, got %q", r.Annotations[0].Path)
+	}
+}
+
+func TestAnnotationsSanitizesHostileText(t *testing.T) {
+	sarif := `{"runs": [{"results": [{"ruleId": "PYLON001", "level": "error", "message": {"text": "\u001b[31mred ` + "`bad`" + ` ping @everyone"},
+		"locations": [{"physicalLocation": {"artifactLocation": {"uri": "f.md"}, "region": {"startLine": 1}}}]}]}]}`
+	r, err := Annotations([]byte(sarif))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := r.Annotations[0]
+	if strings.ContainsRune(a.Message, 0x1b) {
+		t.Fatalf("control characters must not reach the annotation, got %q", a.Message)
+	}
+	if strings.Contains(r.Summary, "\x1b") || strings.Contains(r.Summary, "@everyone") || strings.Contains(r.Summary, "`bad`") {
+		t.Fatalf("the summary must not carry raw backticks, mentions, or escapes, got %q", r.Summary)
+	}
+}
+
+func TestAnnotationsTitleCapped(t *testing.T) {
+	sarif := `{"runs": [{"results": [{"ruleId": "` + strings.Repeat("R", 300) + `", "level": "error", "message": {"text": "m"},
+		"locations": [{"physicalLocation": {"artifactLocation": {"uri": "f.md"}, "region": {"startLine": 1}}}]}]}]}`
+	r, err := Annotations([]byte(sarif))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len([]rune(r.Annotations[0].Title)); got > 255 {
+		t.Fatalf("the title must fit the GitHub cap, got %d runes", got)
+	}
+}
+
+func TestAnnotationsSummaryCountsTruncatedFindings(t *testing.T) {
+	var results []string
+	for i := 0; i < 30; i++ {
+		results = append(results, `{"ruleId": "PYLONAAA", "level": "error", "message": {"text": "a"},
+			"locations": [{"physicalLocation": {"artifactLocation": {"uri": "f.md"}, "region": {"startLine": 1}}}]}`)
+	}
+	for i := 0; i < 22; i++ {
+		results = append(results, `{"ruleId": "PYLONBBB", "level": "error", "message": {"text": "b"},
+			"locations": [{"physicalLocation": {"artifactLocation": {"uri": "f.md"}, "region": {"startLine": 1}}}]}`)
+	}
+	sarif := `{"runs": [{"results": [` + strings.Join(results, ",") + `]}]}`
+	r, err := Annotations([]byte(sarif))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Summary, "`PYLONAAA` x30") || !strings.Contains(r.Summary, "`PYLONBBB` x22") {
+		t.Fatalf("per-rule counts must cover every finding, not only the annotated ones, got %q", r.Summary)
+	}
+}
+
+func TestAnnotationsSARIFCarriesFixHint(t *testing.T) {
+	sarif := `{"runs": [{"results": [{"ruleId": "PYLON001", "level": "error", "message": {"text": "m"},
+		"locations": [{"physicalLocation": {"artifactLocation": {"uri": "f.md"}, "region": {"startLine": 1}}}]}]}]}`
+	r, err := Annotations([]byte(sarif))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Annotations[0].Message, "Fix:") {
+		t.Fatalf("the SARIF path must carry the catalog fix hint like the JSON path, got %q", r.Annotations[0].Message)
+	}
+}

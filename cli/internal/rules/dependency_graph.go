@@ -119,17 +119,12 @@ func DependencyGraph(kbRoot, pkgName string, depth int) (GraphReport, error) {
 						g.Warnings = append(g.Warnings, fmt.Sprintf("component %q is claimed by no packages/ doc", edge.target))
 						continue
 					}
-					covered := false
 					for _, targetPkg := range targetDeps {
 						if deps[targetPkg] {
-							covered = true
+							touched[targetPkg] = true
+							continue
 						}
-					}
-					if !covered {
-						g.Undeclared = append(g.Undeclared, GraphEdge{From: pd.fm.Package, To: targetDeps[0]})
-					}
-					if !touched[targetDeps[0]] {
-						touched[targetDeps[0]] = true
+						g.Undeclared = append(g.Undeclared, GraphEdge{From: pd.fm.Package, To: targetPkg})
 					}
 					g.Nodes = append(g.Nodes, GraphNode{Alias: edge.target, Package: targetDeps[0]})
 					neighbor, isPkg := pkgByName[targetDeps[0]]
@@ -140,9 +135,19 @@ func DependencyGraph(kbRoot, pkgName string, depth int) (GraphReport, error) {
 				}
 			}
 			for _, d := range pd.fm.DependsOn {
-				if !touched[d] {
-					g.Unused = append(g.Unused, pd.fm.Package+":"+d)
+				if touched[d] {
+					continue
 				}
+				depDoc, ok := pkgByName[d]
+				if !ok {
+					g.Warnings = append(g.Warnings, fmt.Sprintf("dependency %q has no packages/ doc", d))
+					continue
+				}
+				if len(depDoc.fm.Components) == 0 {
+					g.Warnings = append(g.Warnings, fmt.Sprintf("dependency %q declares no components to import", d))
+					continue
+				}
+				g.Unused = append(g.Unused, pd.fm.Package+":"+d)
 			}
 			g.Edges = append(g.Edges, actual...)
 		}
@@ -150,6 +155,8 @@ func DependencyGraph(kbRoot, pkgName string, depth int) (GraphReport, error) {
 	}
 	g.Nodes = dedupeNodes(g.Nodes)
 	g.Edges = dedupeEdges(g.Edges)
+	slices.Sort(g.Warnings)
+	g.Warnings = slices.Compact(g.Warnings)
 	g.Undeclared = dedupeEdges(g.Undeclared)
 	slices.Sort(g.Unused)
 	g.Unused = slices.Compact(g.Unused)

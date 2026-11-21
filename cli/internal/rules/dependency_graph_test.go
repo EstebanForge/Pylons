@@ -140,3 +140,104 @@ func TestDependencyGraphDefaultDepthIsOne(t *testing.T) {
 		t.Fatalf("depth 0 must mean the default depth 1, got %+v nodes", g.Nodes)
 	}
 }
+
+func TestDependencyGraphMultiOwnerAlias(t *testing.T) {
+	// An alias claimed by two packages splits into per-owner edges:
+	// the declared owner is touched, the other reads as undeclared,
+	// and no false unused report appears.
+	kb := t.TempDir()
+	xa := t.TempDir()
+	if err := os.MkdirAll(xa, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(xa, "go.mod"), "module example.com/xa\n")
+	mustWrite(t, filepath.Join(xa, "main.go"), "package xa\n")
+	app := t.TempDir()
+	if err := os.MkdirAll(app, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(app, "go.mod"), "module example.com/app\n")
+	mustWrite(t, filepath.Join(app, "main.go"), "package app\n\nimport _ \"example.com/xa\"\n")
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"),
+		"version: 1\nextensions: [go]\nprojects:\n  app:\n    path: "+app+"\n    ref: main\n  xa:\n    path: "+xa+"\n    ref: main\n")
+	mkPkg := func(name string, comps, deps string) {
+		mustWrite(t, filepath.Join(kb, "packages/"+name+".md"),
+			"---\ntitle: \""+name+"\"\ntype: package\nstatus: active\ntier: core\npackage: "+name+"\ncomponents: "+comps+"\ndepends_on: "+deps+"\n---\n\n# "+name+"\n")
+	}
+	mkPkg("app", "[app]", "[extra]")
+	mkPkg("core", "[xa]", "[]")
+	mkPkg("extra", "[xa]", "[]")
+	g, err := DependencyGraph(kb, "app", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(g.Unused) != 0 {
+		t.Fatalf("the declared owner extra must be touched, got unused=%v", g.Unused)
+	}
+	if len(g.Undeclared) != 1 || g.Undeclared[0].From != "app" || g.Undeclared[0].To != "core" {
+		t.Fatalf("the other owner core must read as undeclared, got %+v", g.Undeclared)
+	}
+}
+
+func TestDependencyGraphWarningsDeduped(t *testing.T) {
+	// One unclaimed alias imported by several files yields one
+	// warning, not one per import occurrence.
+	kb := t.TempDir()
+	orphan := t.TempDir()
+	if err := os.MkdirAll(orphan, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(orphan, "go.mod"), "module example.com/orphan\n")
+	app := t.TempDir()
+	if err := os.MkdirAll(app, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(app, "go.mod"), "module example.com/app\n")
+	mustWrite(t, filepath.Join(app, "a.go"), "package app\n\nimport _ \"example.com/orphan\"\n")
+	mustWrite(t, filepath.Join(app, "b.go"), "package app\n\nimport _ \"example.com/orphan\"\n")
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"),
+		"version: 1\nextensions: [go]\nprojects:\n  app:\n    path: "+app+"\n    ref: main\n  orphan:\n    path: "+orphan+"\n    ref: main\n")
+	mustWrite(t, filepath.Join(kb, "packages/app.md"),
+		"---\ntitle: \"App\"\ntype: package\nstatus: active\ntier: core\npackage: app\ncomponents: [app]\ndepends_on: []\n---\n\n# App\n")
+	g, err := DependencyGraph(kb, "app", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(g.Warnings) != 1 {
+		t.Fatalf("identical warnings must dedupe, got %d: %v", len(g.Warnings), g.Warnings)
+	}
+}
+
+func TestDependencyGraphUnscannableDepsWarnNotUnused(t *testing.T) {
+	// A dependency with no scannable components, or no packages/ doc
+	// at all, warns instead of reading as a false unused dependency.
+	kb := t.TempDir()
+	leaf := t.TempDir()
+	if err := os.MkdirAll(leaf, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(leaf, "go.mod"), "module example.com/leaf\n")
+	mustWrite(t, filepath.Join(leaf, "main.go"), "package leaf\n")
+	ghost := t.TempDir()
+	if err := os.MkdirAll(ghost, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(ghost, "go.mod"), "module example.com/ghost\n")
+	mustWrite(t, filepath.Join(ghost, "main.go"), "package ghost\n")
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"),
+		"version: 1\nextensions: [go]\nprojects:\n  top:\n    path: "+leaf+"\n    ref: main\n")
+	mustWrite(t, filepath.Join(kb, "packages/top.md"),
+		"---\ntitle: \"Top\"\ntype: package\nstatus: active\ntier: core\npackage: top\ncomponents: [top]\ndepends_on: [hollow, phantom]\n---\n\n# Top\n")
+	mustWrite(t, filepath.Join(kb, "packages/hollow.md"),
+		"---\ntitle: \"Hollow\"\ntype: package\nstatus: active\ntier: core\npackage: hollow\ncomponents: []\ndepends_on: []\n---\n\n# Hollow\n")
+	g, err := DependencyGraph(kb, "top", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(g.Unused) != 0 {
+		t.Fatalf("deps without components must warn, not read unused, got %v", g.Unused)
+	}
+	if len(g.Warnings) != 2 {
+		t.Fatalf("both unscannable deps must warn, got %v", g.Warnings)
+	}
+}

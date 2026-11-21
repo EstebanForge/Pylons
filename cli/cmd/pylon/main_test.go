@@ -71,6 +71,17 @@ func TestGraphFlagPath(t *testing.T) {
 	if code := run([]string{"context", "--graph", "ghost", "--depth", "notanint", "--pylons", dir}); code != 2 {
 		t.Fatalf("a non-integer --depth must exit 2, got %d", code)
 	}
+	// Exclusive modes refuse each other; --depth and --graph "" fail
+	// their own presence checks.
+	if code := run([]string{"context", "--graph", "a", "--diff-since", "HEAD", "--pylons", dir}); code != 2 {
+		t.Fatalf("--graph with --diff-since must exit 2, got %d", code)
+	}
+	if code := run([]string{"context", "--depth", "2", "--pylons", dir}); code != 2 {
+		t.Fatalf("--depth without --graph must exit 2, got %d", code)
+	}
+	if code := run([]string{"context", "--graph", "", "--pylons", dir}); code != 2 {
+		t.Fatalf("an empty --graph value must exit 2, got %d", code)
+	}
 }
 
 func TestAnnotationsFlagPath(t *testing.T) {
@@ -99,5 +110,8 @@ func TestAnnotationsFlagPath(t *testing.T) {
 	}
 	if code := run([]string{"review", "annotations", "--from", bad, "--pylons", dir}); code != 2 {
 		t.Fatalf("unparsable input must fail closed with exit 2, got %d", code)
+	}
+	if code := run([]string{"review", "annotations", "--from", sarif, "--format", "sarif", "--pylons", dir}); code != 2 {
+		t.Fatalf("sarif output must be rejected before reading input, got %d", code)
 	}
 }
