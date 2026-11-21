@@ -7,6 +7,18 @@ extensions:
   - go
   - rust
 
+# Gate-maintained manifests. Absent means both are maintained;
+# an exact list hands the rest to foreign tooling.
+# generate: [rules]
+
+# Extra URI schemes this ledger recognizes. Well-formed declared
+# links pass; malformed ones fail. Resolution semantics stay yours.
+# schemes: [legacy, atlas]
+
+# KB-relative globs removed from the engine entirely: never linted,
+# never graph docs.
+# exclude: [legacy/**]
+
 # Optional custom protocol template overrides (defaults to protocols/<name>.md, then compiled-in templates).
 protocols:
   reflect: protocols/reflect.md

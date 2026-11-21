@@ -57,6 +57,9 @@ projects:
 | `projects` | yes | Map of alias to project. The alias keys every `repo://<alias>/...` URI. |
 | `projects.<alias>.path` | yes | Checkout path relative to the ledger root. |
 | `projects.<alias>.repo` | no | Repository URL for documentation value. |
+| `generate` | no | Manifests the gate hooks maintain: `rules`, `packages`. Absent means both; an exact list disables the rest. |
+| `schemes` | no | Extra URI schemes the ledger recognizes; declared-scheme links are checked for well-formedness. |
+| `exclude` | no | KB-relative globs never linted and never indexed. |
 | `projects.<alias>.ref` | no | Git ref the checker reads when resolving the project's code. |
 | `projects.<alias>.tier` | no | Package tier hint: `development` or `production`. |
 | `projects.<alias>.extensions` | no | Extension ids enabled for this project only. |

@@ -90,6 +90,11 @@ machines:
 
 The profile extracts the enum case set and the transition triples from the named code targets, and the checker compares the declared sets against the extracted ones in both directions. Each `machine:` value is an identity, not a pointer: the code-side marker must carry the same id (`// pylon:machine shipment` above the map). Machine ids are unique across the whole repo.
 
+
+## Working-tree semantics
+
+Parity extraction reads the working tree on both sides: the declared frontmatter is KB content in the tree, and the code extraction reads the checked-out source. This is deliberate symmetry. Contract resolution honors a project's `ref:`, so a `ref:`-pinned ledger compares contracts against the pin and machines against the checkout. Run parity gates where the working tree is the truth, and treat `ref:` pinning as the contract-layer complement.
+
 ## Machine discipline
 
 The convention a user's ledger declares alongside machine declarations: one closed state set per lifecycle, in a backed enum in the target language; one backed event enum beside it; one pure transition map. Side effects live outside transitions; lint cannot prove purity, so that rule is convention prose plus a table test in the mapped repo's QA suite (`verified_by:` names it). An invalid transition throws; the table test proves it, not lint. No parallel boolean flags (`isLoading` beside `isSuccess`); a review-lens rule, not an engine rule. Persisted transitions use a compare-and-swap on the stored state, because background workers may run concurrently.
