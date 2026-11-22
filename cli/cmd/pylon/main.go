@@ -615,7 +615,7 @@ func run(args []string) int {
 		return 0
 
 	case "map":
-		docs := filterDocs(scanDocs(kbRoot, mapAll), mapType, pkgArg, mapTag, mapStatus, mapFolder, mapQuery, limit)
+		docs := filterDocs(scanDocs(kbRoot, mapAll), mapType, pkgArg, mapTag, mapStatus, mapFolder, mapQuery, limit, queryProjectAliases(kbRoot))
 		return renderDocs(docs, format)
 
 	case "search":
@@ -623,7 +623,7 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, "pylon: search requires <query>")
 			return 2
 		}
-		docs := filterDocs(scanDocs(kbRoot, mapAll), "", "", "", "", "", strings.Join(rest, " "), limit)
+		docs := filterDocs(scanDocs(kbRoot, mapAll), "", "", "", "", "", strings.Join(rest, " "), limit, queryProjectAliases(kbRoot))
 		return renderDocs(docs, format)
 
 	case "self-update":
@@ -1101,6 +1101,8 @@ type docEntry struct {
 	Tags       []string `json:"tags,omitempty"`
 	Components []string `json:"components,omitempty"`
 	Machines   int      `json:"-"`
+	Owners     []string `json:"-"`
+	Updated    string   `json:"-"`
 	Body       string   `json:"-"`
 }
 
@@ -1148,6 +1150,8 @@ func scanDocs(kbRoot string, includeArchive bool) []docEntry {
 			Tags:       meta.Tags,
 			Components: meta.Components,
 			Machines:   len(meta.Machines),
+			Owners:     meta.Owners,
+			Updated:    meta.Updated,
 			Body:       string(raw),
 		})
 		return nil
@@ -1156,7 +1160,7 @@ func scanDocs(kbRoot string, includeArchive bool) []docEntry {
 	return docs
 }
 
-func filterDocs(docs []docEntry, typ, pkg, tag, status, folder, query string, limit int) []docEntry {
+func filterDocs(docs []docEntry, typ, pkg, tag, status, folder, query string, limit int, projs []string) []docEntry {
 	var filtered []docEntry
 	for _, d := range docs {
 		if typ != "" && d.Type != typ {
@@ -1181,14 +1185,24 @@ func filterDocs(docs []docEntry, typ, pkg, tag, status, folder, query string, li
 		bmDocs := make([]resolve.BM25Doc, 0, len(filtered))
 		byPath := make(map[string]docEntry, len(filtered))
 		for _, d := range filtered {
-			bmDocs = append(bmDocs, resolve.BM25Doc{ID: d.Path, Text: d.Title + " " + strings.Join(d.Tags, " ") + " " + d.Body})
+			bmDocs = append(bmDocs, resolve.BM25Doc{ID: d.Path, Text: indexText(d)})
 			byPath[d.Path] = d
 		}
 		idx := resolve.NewBM25Index(bmDocs)
-		hits := idx.Search(query, limit)
-		ranked := make([]docEntry, 0, len(hits))
+		hits := idx.Search(query, 0)
+		ids := make([]string, 0, len(hits))
+		scores := make(map[string]float64, len(hits))
 		for _, h := range hits {
-			ranked = append(ranked, byPath[h.ID])
+			ids = append(ids, h.ID)
+			scores[h.ID] = h.Score
+		}
+		docs := make([]docEntry, 0, len(hits))
+		for _, id := range ids {
+			docs = append(docs, byPath[id])
+		}
+		ranked := rerank(ids, scores, docs, projs, docTokens(query))
+		if limit > 0 && len(ranked) > limit {
+			ranked = ranked[:limit]
 		}
 		return ranked
 	}
@@ -1197,6 +1211,17 @@ func filterDocs(docs []docEntry, typ, pkg, tag, status, folder, query string, li
 		filtered = filtered[:limit]
 	}
 	return filtered
+}
+
+// indexText situates a document for retrieval: structured metadata rides
+// a deterministic header so queries find a document by its frontmatter
+// fields, while the YAML block itself never scores.
+func indexText(d docEntry) string {
+	header := strings.Join(slices.Concat(
+		[]string{d.Title, d.Type, d.Status, d.Package},
+		d.Tags, d.Components, d.Owners,
+	), " ")
+	return header + " " + resolve.WithoutFrontMatter(d.Body)
 }
 
 func renderDocs(docs []docEntry, format report.Format) int {
