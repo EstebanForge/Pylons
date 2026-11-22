@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/estebanforge/pylons/cli/internal/report"
@@ -252,5 +253,52 @@ func TestBaselineStaleCountReports(t *testing.T) {
 	_, _, stale = ApplyBaseline(kb, nil)
 	if stale != 1 {
 		t.Fatalf("an over-accepted entry must report stale, stale=%d", stale)
+	}
+}
+
+func TestBaselineKeepsPathNumbersDistinct(t *testing.T) {
+	kb := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kb, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := forcedFinding("plans/a.md", "broken internal link: plans/0042.md")
+	b := forcedFinding("plans/b.md", "broken internal link: plans/0043.md")
+	if err := UpdateBaseline(kb, []report.Finding{a, b}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(kb, "manifests", "baseline.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "0042") || !strings.Contains(string(data), "0043") {
+		t.Fatal("path numbers must survive into the baseline, not collapse into one key")
+	}
+
+	// Swapping 0043 for 0099 is new debt, not the accepted entry.
+	kept, accepted, _ := ApplyBaseline(kb, []report.Finding{
+		forcedFinding("plans/b.md", "broken internal link: plans/0099.md"),
+	})
+	if accepted != 0 || len(kept) != 1 {
+		t.Fatalf("a renumbered target must not be accepted: accepted=%d kept=%d", accepted, len(kept))
+	}
+}
+
+func TestBaselineSumsDuplicateBudgetKeys(t *testing.T) {
+	kb := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kb, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeBaselineFile(t, kb, []BaselineEntry{
+		{Rule: "PYLON006", File: "plans/a.md", Message: "same debt", Count: 2},
+		{Rule: "PYLON006", File: "plans/a.md", Message: "same debt", Count: 2},
+	})
+	kept, accepted, stale := ApplyBaseline(kb, mkFindings(forcedFinding("plans/a.md", "same debt"), 3))
+	if accepted != 3 || len(kept) != 0 {
+		t.Fatalf("duplicate budget keys must sum: accepted=%d kept=%d", accepted, len(kept))
+	}
+	// One phantom unit remains (budget 4, three findings): the
+	// over-accepted debt reports stale so --update-baseline heals it.
+	if stale != 1 {
+		t.Errorf("stale = %d, want 1", stale)
 	}
 }

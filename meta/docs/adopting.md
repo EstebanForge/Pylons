@@ -20,7 +20,7 @@ A ledger can predate Pylons: its own frontmatter conventions, its own URI scheme
 2. Write the smallest `manifests/pylons.yaml` that names your reality. Register your code repositories under `projects:`, and declare your own link schemes under `schemes:` so links the engine cannot resolve stay recognized instead of dark.
 3. Decide who maintains the manifests. `generate: []` hands a manifest to foreign tooling; an absent `generate:` means the gates maintain both. A manifest the gates do not maintain never reports drift.
 4. Point `exclude:` at anything the engine should not judge, and configure `decision_prefix:` if your accepted-decision files are not named `DNNNN-slug.md`.
-5. Absorb the accepted debt once: `pylon lint --update-baseline`. The baseline is a readable ledger of what you accepted, with counts; anything not in it still fails. Re-run it after paid debt shrinks.
+5. Absorb the accepted debt once: `pylon lint --update-baseline`. The baseline is a readable ledger of what you accepted, with counts; anything not in it still fails. Re-run it after paid debt shrinks. Path-numbered entries stay distinct, so renumbering a file is new debt, not a free pass.
 6. Wire the gates last: `pylon install --pylons .` writes the hook shims, or chains the engine into your own hook template with one line: `bin/pylon gate pre-commit || exit 1`. See [INSTALL.md](../INSTALL.md), section 6.
 7. Update with `pylon self-update --from <staged-release>` or `scripts/install.sh` again. Product files three-way against the release; your edits come back as `.pylons-new` copies; user files are never touched.
 
@@ -36,7 +36,7 @@ A ledger can predate Pylons: its own frontmatter conventions, its own URI scheme
 
 ## What configuration cannot absorb
 
-- Doc types the engine has no checks for still produce unknown-key advisories (PYLON064). The key registry in `manifests/vocabulary.json` is the closed list; extend templates to teach the engine new types.
+- Legacy keys survive one advisory pass (PYLON064). A doc type the engine does not know falls back to the union of known keys, so only keys unknown everywhere are flagged; on a known type an out-of-template key is flagged individually. Either extend the template or drop the key; the registry in `manifests/vocabulary.json` stays the closed list.
 - Hook ownership is binary: either your hook template chains the engine, or the shipped shims own `.githooks/`. An external tool that regenerates hook files will overwrite the shims, so the chain line in your own template is the durable path.
 - Contract resolution needs registered projects. `repo://` surfaces that name unregistered aliases fail closed (PYLON003); register the projects or drop the pointers.
 

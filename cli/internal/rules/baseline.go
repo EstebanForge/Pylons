@@ -20,9 +20,11 @@ import (
 // as the debt is paid; entries that no longer match are reported so
 // the file cannot rot.
 
-// volatileNumRe strips digits from messages so count drift inside a
-// message (a sentence now at 26 words) keeps the same fingerprint.
-var volatileNumRe = regexp.MustCompile(`[0-9]+`)
+// volatileNumRe strips word counts from messages so count drift
+// inside a message (a sentence now at 26 words) keeps the same key.
+// Digits anywhere else stay literal: path-numbered targets such as
+// plans/0042.md must not collapse into one key and swap silently.
+var volatileNumRe = regexp.MustCompile(`[0-9]+ words`)
 
 // Baseline is the on-disk accepted-debt ledger. Entries carry the
 // finding itself, not a hash, so reviewers can read what debt the
@@ -44,7 +46,7 @@ type BaselineEntry struct {
 // baselineKey groups findings the way the baseline judges them: the
 // message with volatile digits stripped, no line number.
 func baselineKey(f report.Finding) string {
-	return f.RuleID + "\x00" + f.File + "\x00" + volatileNumRe.ReplaceAllString(f.Message, "#")
+	return f.RuleID + "\x00" + f.File + "\x00" + volatileNumRe.ReplaceAllString(f.Message, "# words")
 }
 
 func baselinePath(kbRoot string) string {
@@ -117,8 +119,8 @@ func ApplyBaseline(kbRoot string, findings []report.Finding) (kept []report.Find
 	budget := map[string]int{}
 	entryExists := map[string]bool{}
 	for _, e := range b.Accepted {
-		key := e.Rule + "\x00" + e.File + "\x00" + volatileNumRe.ReplaceAllString(e.Message, "#")
-		budget[key] = e.Count
+		key := e.Rule + "\x00" + e.File + "\x00" + volatileNumRe.ReplaceAllString(e.Message, "# words")
+		budget[key] += e.Count
 		entryExists[key] = true
 	}
 	matched := map[string]int{}

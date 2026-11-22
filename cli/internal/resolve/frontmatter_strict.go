@@ -52,13 +52,18 @@ func UnionKeys() map[string]bool {
 var engineReadKeys = []string{"links", "supersedes"}
 
 func knownKeySet(docType string) map[string]bool {
-	keys, ok := TemplateKeys[docType]
-	if !ok {
-		keys = nil
-	}
-	out := make(map[string]bool, len(keys)+len(engineReadKeys))
-	for _, k := range keys {
-		out[k] = true
+	out := make(map[string]bool, len(engineReadKeys)+8)
+	if typeKeys, ok := TemplateKeys[docType]; ok {
+		for _, k := range typeKeys {
+			out[k] = true
+		}
+	} else {
+		// A custom or legacy doc type falls back to the union of
+		// known keys: only keys unknown everywhere are advisory, so
+		// an unrecognized type cannot mass-fire on title or type.
+		for k := range UnionKeys() {
+			out[k] = true
+		}
 	}
 	for _, k := range engineReadKeys {
 		out[k] = true

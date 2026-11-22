@@ -4,8 +4,10 @@
 package install
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -199,18 +201,20 @@ func TestSelfUpdateFailsClosedOnStagedMismatch(t *testing.T) {
 
 func TestSelfUpdateLegacyInstallNeverSilentlyOverwrites(t *testing.T) {
 	kb, staged := t.TempDir(), t.TempDir()
-	// No manifests/product.json: a pre-manifest install.
+	// No manifests/product.json: a pre-manifest install. The user has
+	// edited a product file, and the identical rest must be skipped.
 	writeProductTree(t, kb)
+	write(t, filepath.Join(kb, "AGENTS.md"), "# my own rules\n")
 	buildStaged(t, staged, "1.1.0", nil)
 
 	res, err := SelfUpdate(kb, staged, false, false)
 	if err != nil {
 		t.Fatalf("SelfUpdate legacy: %v", err)
 	}
-	if len(res.Drifted) == 0 {
-		t.Fatal("a legacy install must treat existing product files as drifted")
+	if len(res.Drifted) != 1 || res.Drifted[0] != "AGENTS.md" {
+		t.Fatalf("Drifted = %v; a legacy edit must be treated as drift", res.Drifted)
 	}
-	if readInstalled(t, kb, "AGENTS.md") != "# guidelines\n" {
+	if readInstalled(t, kb, "AGENTS.md") != "# my own rules\n" {
 		t.Error("legacy drift must keep user content")
 	}
 }
@@ -232,4 +236,119 @@ func TestSelfUpdateDryRunTouchesNothing(t *testing.T) {
 		t.Error("a dry run must not write")
 	}
 	requireNoFile(t, kb, "_pylons-backup")
+}
+
+func TestSelfUpdateWritesNewProductManifest(t *testing.T) {
+	kb, staged := t.TempDir(), t.TempDir()
+	buildInstalled(t, kb, "1.0.0")
+	buildStaged(t, staged, "1.1.0", func(dir string) {
+		write(t, filepath.Join(dir, "meta", "MANIFESTO.md"), "manifesto v2\n")
+	})
+
+	if _, err := SelfUpdate(kb, staged, false, false); err != nil {
+		t.Fatalf("SelfUpdate: %v", err)
+	}
+	if !strings.Contains(readInstalled(t, kb, "manifests/product.json"), "1.1.0") {
+		t.Error("the installed product manifest must carry the new version")
+	}
+}
+
+func TestSelfUpdateSecondHopHasNoFalseDrift(t *testing.T) {
+	kb, staged := t.TempDir(), t.TempDir()
+	buildInstalled(t, kb, "1.0.0")
+	buildStaged(t, staged, "1.1.0", func(dir string) {
+		write(t, filepath.Join(dir, "meta", "MANIFESTO.md"), "manifesto v2\n")
+	})
+	if _, err := SelfUpdate(kb, staged, false, false); err != nil {
+		t.Fatalf("first hop: %v", err)
+	}
+
+	buildStaged(t, staged, "1.2.0", func(dir string) {
+		write(t, filepath.Join(dir, "meta", "MANIFESTO.md"), "manifesto v3\n")
+	})
+	res, err := SelfUpdate(kb, staged, false, false)
+	if err != nil {
+		t.Fatalf("second hop: %v", err)
+	}
+	if len(res.Drifted) != 0 {
+		t.Fatalf("second hop Drifted = %v; files the first hop replaced must not report drift", res.Drifted)
+	}
+	if readInstalled(t, kb, "meta/MANIFESTO.md") != "manifesto v3\n" {
+		t.Error("the second hop must apply its staged content")
+	}
+}
+
+func TestSelfUpdateSkipsIdenticalContent(t *testing.T) {
+	kb, staged := t.TempDir(), t.TempDir()
+	buildInstalled(t, kb, "1.0.0")
+	buildStaged(t, staged, "1.1.0", nil)
+
+	res, err := SelfUpdate(kb, staged, false, false)
+	if err != nil {
+		t.Fatalf("SelfUpdate: %v", err)
+	}
+	if len(res.Replaced) != 0 {
+		t.Fatalf("Replaced = %v; identical content must not be rewritten", res.Replaced)
+	}
+	// The manifest is the one file that always changes: its backup is
+	// the only one the hop needs.
+	if _, err := os.Stat(filepath.Join(kb, "_pylons-backup", "1.0.0", "manifests", "product.json")); err != nil {
+		t.Errorf("the old manifest must be backed up: %v", err)
+	}
+	if !strings.Contains(readInstalled(t, kb, "manifests/product.json"), "1.1.0") {
+		t.Error("the manifest must still move to the new version")
+	}
+}
+
+func craftManifest(t *testing.T, dir, version string, files map[string]string) {
+	t.Helper()
+	data, err := json.Marshal(stagedManifest{Version: version, Files: files})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "manifests", "product.json"), string(data))
+}
+
+func TestSelfUpdateRejectsUnsafeStagedManifestKeys(t *testing.T) {
+	kb, staged := t.TempDir(), t.TempDir()
+	buildInstalled(t, kb, "1.0.0")
+	evil := filepath.Join(filepath.Dir(staged), "evil.txt")
+	write(t, evil, "payload")
+	data, err := os.ReadFile(evil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	craftManifest(t, staged, "9.9.9", map[string]string{"../evil.txt": sha256Hex(data)})
+	writeProductTree(t, staged)
+
+	if _, err := SelfUpdate(kb, staged, false, false); err == nil {
+		t.Fatal("a ../ manifest key must be rejected")
+	}
+	requireNoFile(t, kb, "evil.txt")
+	if _, err := os.Stat(evil); err != nil {
+		t.Errorf("the escape target itself must be untouched: %v", err)
+	}
+}
+
+func TestSelfUpdateRejectsUnsafeInstalledManifestKeys(t *testing.T) {
+	kb, staged := t.TempDir(), t.TempDir()
+	evil := filepath.Join(filepath.Dir(kb), "outside.txt")
+	write(t, evil, "keep me")
+	data, err := os.ReadFile(evil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeProductTree(t, kb)
+	craftManifest(t, kb, "1.0.0", map[string]string{"../outside.txt": sha256Hex(data)})
+	buildStaged(t, staged, "1.1.0", nil)
+
+	if _, err := SelfUpdate(kb, staged, false, false); err == nil {
+		t.Fatal("an installed manifest with a ../ key must be rejected")
+	}
+	if _, err := os.Stat(evil); err != nil {
+		t.Errorf("the removal-list escape target must survive: %v", err)
+	}
 }

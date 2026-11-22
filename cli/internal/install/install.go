@@ -36,6 +36,9 @@ type Result struct {
 	DriftedHooks []string
 	HooksPathSet bool
 	BinaryOK     bool
+	// PreviousHooksPath carries the core.hooksPath value a --force
+	// takeover replaced, so the handover stays reversible.
+	PreviousHooksPath string
 }
 
 // EnsureHooks writes missing .githooks scripts into the git toplevel of
@@ -63,6 +66,9 @@ func EnsureHooks(kbRoot string, force bool) (Result, error) {
 	currentPath := strings.TrimSpace(string(curBytes))
 	if err == nil && currentPath != "" && currentPath != ".githooks" && !force {
 		return res, fmt.Errorf("%w: %s (use pylon install --force to replace)", ErrHooksPathConflict, currentPath)
+	}
+	if err == nil && currentPath != "" && currentPath != ".githooks" && force {
+		res.PreviousHooksPath = currentPath
 	}
 
 	if err := os.MkdirAll(filepath.Join(top, ".githooks"), 0o755); err != nil {

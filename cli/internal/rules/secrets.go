@@ -19,10 +19,13 @@ var secretProviderRes = []*regexp.Regexp{
 	regexp.MustCompile(`github_pat_[A-Za-z0-9_]{22,}`),
 	regexp.MustCompile(`(^|[^A-Za-z0-9])sk-ant-[A-Za-z0-9_-]{20,}`),
 	regexp.MustCompile(`xox[abprs]-[A-Za-z0-9-]{10,}`),
-	regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`),
+	regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY( BLOCK)?-----`),
 }
 
-var secretAssignmentRe = regexp.MustCompile(`(?i)(password|passwd|secret|token|api_?key)[[:space:]]*[=:][[:space:]]*["']?[A-Za-z0-9/+_.-]{12,}`)
+// The bridge class covers the shapes real files use: a JSON closing
+// quote ("password":), an ENV suffix (SECRET_KEY=), and an optional
+// bearer scheme before the value.
+var secretAssignmentRe = regexp.MustCompile(`(?i)(password|passwd|secret|token|api[_-]?key|authorization)[^:=\n]{0,4}[=:][[:space:]]*(bearer[[:space:]]+)?["']?[A-Za-z0-9/+_.-]{12,}`)
 
 // secretAllowMarker exempts exactly the line it sits on. Reference
 // docs quote real provider example keys (the AWS docs key is a known

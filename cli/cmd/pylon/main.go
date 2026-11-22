@@ -31,7 +31,7 @@ import (
 const usage = `pylon validates and queries a Pylons pylon: the plain-text map of a platform, checked against its code.
 
 Usage:
-  pylon lint             [--changed] [--doc-only] [--fix] [--parity] [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
+  pylon lint             [--changed] [--doc-only] [--fix] [--parity] [--update-baseline] [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
   pylon contract <plan>  [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
   pylon check <paths...> [--stop-block] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon brief            [--format=human|json] [--json] [--pylons <path>]
@@ -842,6 +842,8 @@ func cmdInit(dir string) int {
 	return 0
 }
 
+const hookChainLine = "bin/pylon gate pre-commit || exit 1 (and bin/pylon gate pre-push || exit 1)"
+
 func cmdInstall(kbRoot string, force bool) int {
 	if kbRoot == "" {
 		fmt.Fprintln(os.Stderr, "pylon: could not locate manifests/pylons.yaml")
@@ -866,9 +868,15 @@ func cmdInstall(kbRoot string, force bool) int {
 	// when they are not; refuse and point at the takeover flag.
 	if len(res.DriftedHooks) > 0 && len(res.SkippedHooks) == 0 && len(res.WroteHooks) == 0 {
 		fmt.Fprintf(os.Stderr, "pylon install: every gate hook is foreign; the pylon gates will not run\n")
-		fmt.Fprintf(os.Stderr, "pylon install: chain the engine into your own hook template with: bin/pylon gate pre-commit || exit 1 (and bin/pylon gate pre-push || exit 1)\n")
+		fmt.Fprintf(os.Stderr, "pylon install: chain the engine into your own hook template with: %s\n", hookChainLine)
 		fmt.Fprintf(os.Stderr, "pylon install: %s in .githooks differ from the shipped gates; inspect them, or take over with pylon install --force (foreign copies land as .bak)\n", strings.Join(res.DriftedHooks, ", "))
 		return 1
+	}
+	if len(res.DriftedHooks) > 0 {
+		fmt.Fprintf(os.Stderr, "pylon install: a foreign hook owns %s; chain the engine into it with: %s\n", strings.Join(res.DriftedHooks, ", "), hookChainLine)
+	}
+	if res.PreviousHooksPath != "" {
+		fmt.Printf("pylon install: replaced core.hooksPath (was: %s)\n", res.PreviousHooksPath)
 	}
 	if res.HooksPathSet {
 		fmt.Printf("pylon install: enabled core.hooksPath .githooks\n")

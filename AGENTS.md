@@ -26,7 +26,7 @@ Pylons documents reference files with URI schemes, never machine paths.
 
 ## CLI Commands
 
-- `pylon lint [--changed] [--doc-only] [--fix] [--parity] [--ci] [--format=human|json|sarif]`
+- `pylon lint [--changed] [--doc-only] [--fix] [--parity] [--update-baseline] [--ci] [--format=human|json|sarif]`
 - `pylon contract <plan> [--ci] [--format=human|json|sarif]`
 - `pylon check <paths...> [--stop-block] [--format=human|json|sarif]`
 - `pylon brief [--format=human|json]`

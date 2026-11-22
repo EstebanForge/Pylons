@@ -118,3 +118,35 @@ func TestSecretAllowMarkerSkipsLine(t *testing.T) {
 		t.Fatalf("the allow marker must exempt only its own line: %v", ids)
 	}
 }
+
+func TestSecretProviderPgpBlockForces(t *testing.T) {
+	src := "```\n-----BEGIN PGP PRIVATE KEY BLOCK-----\n-----BEGIN OPENSSH PRIVATE KEY-----\n```\n"
+	fs := scanSecrets(secretDoc(src))
+	ids := secretIDs(fs)
+	if len(ids["PYLON060"]) != 2 {
+		t.Fatalf("PGP and OpenSSH private-key headers must force, got %v", ids)
+	}
+}
+
+func TestSecretAssignmentShapesAdvisory(t *testing.T) {
+	src := strings.Join([]string{
+		"```json",
+		`"password": "Hunter2Hunter2Hunter2"`,
+		"```",
+		"",
+		"SECRET_KEY=abcdef123456abcdef",
+		"api-key: gh-tokens-1234567890ab",
+		"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+		"",
+	}, "\n")
+	fs := scanSecrets(secretDoc(src))
+	ids := secretIDs(fs)
+	if len(ids["PYLON061"]) != 4 {
+		t.Fatalf("JSON, ENV, dash-key, and bearer shapes must advise, got %v", ids)
+	}
+	for _, f := range fs {
+		if f.Severity != report.SeverityAdvisory || f.Grade != report.GradeAdvisory {
+			t.Fatalf("PYLON061 must stay advisory, got %v/%v", f.Severity, f.Grade)
+		}
+	}
+}

@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
+
+var windowsDriveRe = regexp.MustCompile(`^[A-Za-z]:`)
 
 // SelfUpdate applies a staged release to an installed pylon. The
 // staged directory holds the new KB skeleton (with its
@@ -59,6 +62,11 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 		return res, fmt.Errorf("staged manifests/product.json is empty")
 	}
 	res.Version = newM.Version
+	for rel := range newM.Files {
+		if unsafeManifestPath(rel) {
+			return res, fmt.Errorf("staged manifest has unsafe path %q", rel)
+		}
+	}
 
 	// Fail closed before touching anything: every staged file must
 	// match the release manifest.
@@ -79,6 +87,11 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 			return res, fmt.Errorf("installed manifests/product.json is unreadable: %w", err)
 		}
 		oldM = parsed.Files
+		for rel := range oldM {
+			if unsafeManifestPath(rel) {
+				return res, fmt.Errorf("installed manifest has unsafe path %q", rel)
+			}
+		}
 	}
 
 	diskHash := func(rel string) (string, bool) {
@@ -106,6 +119,9 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 			continue
 		}
 		cur, exists := diskHash(rel)
+		if exists && cur == newM.Files[rel] {
+			continue
+		}
 		if !exists || cur == oldM[rel] {
 			res.Replaced = append(res.Replaced, rel)
 		} else if force {
@@ -191,6 +207,22 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 		}
 	}
 
+	// The new manifest is the new truth: write it so the next update
+	// compares against the hashes actually installed, not the ones
+	// from the release two hops ago.
+	if backupRoot == "" {
+		backupRoot = filepath.Join(kbRoot, "_pylons-backup", oldVersionLabel(kbRoot))
+		res.BackupDir, _ = filepath.Rel(kbRoot, backupRoot)
+	}
+	if _, err := os.Stat(filepath.Join(kbRoot, "manifests", "product.json")); err == nil {
+		if err := backupFile(kbRoot, backupRoot, "manifests/product.json"); err != nil {
+			return res, err
+		}
+	}
+	if err := atomicWrite(filepath.Join(kbRoot, "manifests", "product.json"), stagedData, 0o644); err != nil {
+		return res, err
+	}
+
 	// The binary goes last: everything else must be in place before
 	// the tool that will run the next update is swapped.
 	if res.BinaryNew {
@@ -199,6 +231,9 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 			return res, err
 		}
 		dst := filepath.Join(kbRoot, "bin", "pylon")
+		if cur, err := os.ReadFile(dst); err == nil && sha256Hex(cur) == sha256Hex(bin) {
+			return res, nil
+		}
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return res, err
 		}
@@ -254,4 +289,23 @@ func atomicWrite(dst string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	return os.Rename(name, dst)
+}
+
+// unsafeManifestPath reports a release-manifest key that must never
+// be joined onto the KB root: absolute paths, parent segments,
+// Windows drive forms, and backslashes can all escape the KB.
+func unsafeManifestPath(rel string) bool {
+	if rel == "" || strings.Contains(rel, "\\") {
+		return true
+	}
+	clean := filepath.FromSlash(rel)
+	if filepath.IsAbs(clean) || windowsDriveRe.MatchString(clean) {
+		return true
+	}
+	for _, seg := range strings.Split(rel, "/") {
+		if seg == ".." || seg == "" {
+			return true
+		}
+	}
+	return false
 }

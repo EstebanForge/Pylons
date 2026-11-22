@@ -231,3 +231,16 @@ func TestStructuralLineNumbersAreFileRelative(t *testing.T) {
 		t.Fatalf("line numbers must be file-relative, got %v", m.ParseErrors)
 	}
 }
+
+func TestUnknownDocTypeFallsBackToUnionKeys(t *testing.T) {
+	// A custom or legacy doc type must not mass-fire the advisory on
+	// keys that are known somewhere in the schema; only genuinely
+	// unknown keys are advisory.
+	m, ok := strictParse(t, "title: r\ntype: runbook\nstatus: active\ncreated: 2026-11-01\nupdated: 2026-11-01\ntags: [x]\npackage: legacy-dep\nseverity: high\nwat: 1")
+	if !ok {
+		t.Fatalf("unknown keys must not block: %v", m.ParseErrors)
+	}
+	if len(m.Unknown) != 1 || m.Unknown[0] != "wat" {
+		t.Fatalf("only the genuinely unknown key must fire, got %v", m.Unknown)
+	}
+}

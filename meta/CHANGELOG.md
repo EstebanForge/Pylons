@@ -40,6 +40,15 @@ Roadmap build-out. Every lint finding now carries a remediation line sourced fro
 - Added `meta/` documentation.
 - Licensed as Apache-2.0
 
+## 2026-11-22
+
+- Self-update writes the staged product manifest, so a second hop compares against the hashes actually installed; identical content is skipped instead of rewritten, and the binary swap checks its own hash.
+- Self-update rejects release-manifest keys that could escape the ledger (absolute paths, parent segments, drive forms), on both the staged and the installed side.
+- Baseline keys keep path numbers literal, so renumbered targets are new debt instead of silent swaps; duplicate budget entries in a hand-edited baseline sum.
+- Unknown doc types fall back to the union of known frontmatter keys, so a custom type no longer mass-fires unknown-key advisories on title or type.
+- Secret scanning recognizes PGP private-key blocks and the JSON, ENV-suffixed, dash-key, and bearer assignment shapes; install records a replaced core.hooksPath and names the chain line when a foreign hook shares the gate.
+- The lint usage line documents --update-baseline.
+
 ## 2026-01-26: Origin
 
 - Initial design of the living-map-ledger model, typed contracts, controlled language (ASD-STE100), and deterministic CLI verification loop.
