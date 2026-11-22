@@ -6,7 +6,7 @@ created: 2026-11-19
 updated: 2026-11-21
 ---
 
-# Meta docs index
+# Pylons docs index
 
 Documentation about Pylons and the `pylon` CLI.
 
