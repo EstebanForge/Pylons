@@ -203,7 +203,7 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 
 - **The pain**: Wordy, ambiguous documentation burns context tokens and reads differently to every session, so two agents "obey" the same doc two different ways.
 - **How it works**: Pylons mandates ASD-STE100, the aerospace controlled-English standard: short sentences, active voice, closed vocabulary, hard sentence caps per document. It reads identically to a human and to a model.
-- **Guard**: `pylon lint` enforces sentence limits, voice, and vocabulary across the corpus. `--stats` reports compliance per document.
+- **Guard**: `pylon lint` enforces sentence limits, voice, and vocabulary across the corpus.
 
 #### Two grades only: `FORCED` and `ADVISORY`
 
@@ -269,6 +269,30 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 - **The pain**: A map that requires a build chain to install gets skipped. Adoption dies in the setup instructions.
 - **How it works**: `install.sh` detects the platform, downloads the release artifacts, verifies them against `checksums.txt`, extracts into `./pylons`, runs `git init`, wires the gate hooks, and scaffolds an initial commit. Windows users download the binary directly.
 - **For agents**: Nothing to build. The agent registers repositories in `pylons/manifests/pylons.yaml` and starts checking against real code.
+
+#### Secret shapes (`PYLON060`, `PYLON061`)
+
+- **The pain**: Credentials leak into docs through examples and pasted logs. Deleting the line does not remove it from git history.
+- **How it works**: Every lint run scans the corpus for six closed provider shapes, private-key blocks included, as `FORCED` errors. Assignment shapes (JSON, ENV, dash-key, bearer) advise on the rest. Findings name the file and line, never the value. One `pylons-allow-secret` marker exempts exactly its own line, and these rules never enter the baseline.
+- **Guard**: `pylon explain PYLON060`. Blocking exit 1.
+
+#### The gate guard (`pylon review gate-surface`)
+
+- **The pain**: A PR that widens what the gates ignore (exclude lists, hook files, closed vocabularies) silences every check downstream.
+- **How it works**: One command diffs the merge against a hardcoded surface list: gate manifests, `.githooks/`, `templates/`, and added gate knobs in `pylons.yaml`. Each touched surface is a `FORCED` finding the baseline cannot absorb.
+- **Guard**: `pylon review gate-surface --base <ref>`; `PYLON062` blocks, `PYLON063` advises on an unreadable base.
+
+#### Strict frontmatter
+
+- **The pain**: A typo in frontmatter used to fail silently and disable checks the author believed were active.
+- **How it works**: Frontmatter decodes node-first. Anchors, aliases, merge keys, and custom tags fail closed with line numbers. Unknown keys are per-type advisories (`PYLON064`); the closed payloads (machines, transitions, contract entries, scenarios) reject unknown sub-keys hard.
+- **Guard**: `PYLON001` names the reason, `PYLON064` names the key.
+
+#### The readable baseline (`manifests/baseline.json`)
+
+- **The pain**: Adoption means years of accepted debt. An opaque accept-list hides what was swallowed, and renumbered debt could swap silently.
+- **How it works**: `pylon lint --update-baseline` records accepted `FORCED` findings as readable entries with counts. Matched findings stop blocking while anything new still fails. Stale entries are reported so the file only shrinks. Path numbers stay literal, so a renumbered target is new debt.
+- **Guard**: Secret and gate-surface rules never enter it. A foreign baseline blocks with `PYLON001`.
 
 ### 3.5 The rest of the ledger
 
@@ -344,9 +368,10 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `aroma search\|recommend` | Structural code similarity over featurized parse trees: methods resembling the query, then the code its results share. Query from `--lines path:a-b`, `--snippet <file|->`, or `--diff <file|->` (one query per method the lines touch); corpus is registered projects by default, else `--corpus`. Zero model calls. | Exploring unfamiliar code, orienting on a diff | Never; usage, unreadable corpus, or an empty corpus exit 2 |
 | `review release-surface` | Pinned-release diff: block when a pinned deployment consumes a symbol, route, or cli surface removed or changed against its pinned tag; lockfiles under `--pinned-releases <dir>`, `--base <ref>` overrides pinning. | Release review, version-bump CI | Removed or changed consumed surfaces, unknown pin aliases, missing tags |
 | `review gate-surface` | Guard the guard: block when a diff touches suppression or closed-set manifests, the shipped hooks, the declared-schema templates, or a widened gate knob in `pylons.yaml`. | PR review, CI | Any changed gate surface; under `--ci` an unreadable base fails the run |
+| `review merge-danger` | Validates the merge-danger line in a PR body against the closed door vocabulary, derives the minimum door from each project's own diff, and refuses a declared downgrade. | Pre-merge gate | Missing, invalid, unpaired, or downgraded door; unreadable diffs advise |
 | `context --graph <package>` | Dependency view: actual import edges across registered projects, declared `depends_on`, undeclared and unused divergences; `--depth N` walks transitively. | Ownership checks, agent orientation | Never; a package no doc declares exits 2 |
 | `context --diff-since <ref>` | Session capture: surfaces the diff touched whose docs did not move in the same range (committed or not); `--manifest` emits the JSON document, warnings name unreadable projects. | Session close, doc-drift checks | Never; usage errors exit 2 |
-| `lint` | Validates frontmatter, lifecycle statuses, links, the dependency graph, and STE-100 prose. | Before commit / PR | Frontmatter, links, lifecycle errors |
+| `lint` | Validates frontmatter (strict decode), lifecycle statuses, links, the dependency graph, machine declarations, secret shapes, and STE-100 prose. Applies the FORCED baseline. | Before commit / PR | Frontmatter, links, lifecycle, secret, and parity errors |
 | `lint --fix` | Auto-relocates misplaced docs and heals single-depth broken links. | Fixing lint errors | Unfixable errors |
 | `lint --changed` | Pre-commit fast path: validates staged git files only. | Git pre-commit gate | Errors in staged files |
 | `lint --parity` | Declared-vs-code parity on top of the standard pass: domain `states:` against the enum at `states_symbol` (backing values when every case carries one, else case names); `machines:` transition triples against the marked code map (go map literal, php const array, rust match arms, or an external plugin); route exposes against project source mentions (advisory). Opt-in flag. | Typed-contract and machine drift | Mismatch, unreachable, dead, duplicate, and unparseable errors; an unbound language, transport failure, or missing half stays advisory (or errors via `on_unevaluated:`) and never reads as parity |
@@ -365,6 +390,8 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `review-brief --validate <file>` | Stage-1 validation: verifies review completeness and empty evaluations. | Review submission | Incomplete reviews |
 | `review-brief --validate-resolutions <f>` | Stage-2 validation: verifies every finding was resolved before merge. | Pre-merge verification | Unresolved findings |
 | `manifest [packages\|rules]` | Compiles machine-readable JSON manifests. | Tooling build | Schema failure |
+| `manifest product --release-version <v>` | Writes the release product manifest (the managed-file allowlist `self-update` verifies against) to stdout. | Release build | Missing product layer |
+| `self-update --from <dir>` | Applies a staged release: verifies staged hashes fail-closed, three-ways product files (drift returns `.pylons-new` copies), writes the new product manifest, and swaps the binary last. | Upgrading an installed pylon | Drifted product files, no `--from` |
 | `manifest --check` | Verifies the committed manifests match the compiled catalogs without writing. | CI verification | Catalog drift |
 | `protocol [list\|<name>]` | Lists or renders shipped CLI protocols (`pylon reflect`, `pylon protocol agent`). | Session rituals | Unknown protocol |
 | `extensions [list\|schema]` | Lists built-in language extensions and the custom-extension schema. | Enabling code extraction | Unknown extension |
@@ -384,18 +411,18 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--changed` | Fast pre-commit mode: inspects only staged git files. | `lint` |
 | `--stop-block` | Formats `FORCED` collision findings as agent stop blocks. | `check` |
 | `--preamble` | Prepends the cache-friendly architecture preamble. | `context` |
-| `--stats` | Emits the STE-100 suppression and violation report. Report-only; exits 0. | `lint` |
 | `--check-sources` | Verifies that all paths declared in quirk `sources:` exist. | `review postmortem` |
 | `--check` | Verifies the committed manifests match the compiled catalogs without writing. | `manifest` |
 | `--package <pkg>` | Scopes execution to a single package. | `staleness`, `review staleness`, `review rework`, `map` |
 | `--update` | Rewrites the advisory baseline from a fresh lint run. | `review ratchet` |
+| `--update-baseline` | Rewrites `manifests/baseline.json` from the current FORCED findings. | `lint` |
 | `--window <period>` | History window for rework counting: `90d`, `12w`, `1y`, or bare days. | `review rework` |
 | `--pylons <path>` | Explicit path to the ledger, bypassing auto-discovery. | All ledger commands |
 | `--stdout` | Prints the generated review brief to stdout instead of writing a file. | `review-brief` |
 | `--validate <file>` | Validates that a returned review packet contains required evaluations. | `review-brief` |
 | `--validate-resolutions <f>` | Validates that all findings in a review packet are resolved. | `review-brief` |
-| `--base <ref>` | Base git ref for diff comparisons. | `review-brief` |
-| `--force` | Overwrites a conflicting `core.hooksPath` and drifted hook files. | `install` |
+| `--base <ref>` | Base git ref for diff comparisons. | `review-brief`, `review merge-danger`, `review gate-surface`, `review release-surface` |
+| `--force` | Overwrites a conflicting `core.hooksPath` and drifted hook files. | `install`, `self-update` |
 | `--type <types>` | Filters documents by comma-separated type list. | `map` |
 | `--tag <tags>` | Filters documents by comma-separated tag list. | `map` |
 | `--folder <dir>` | Filters documents by folder path. | `map` |
@@ -414,7 +441,11 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--lang <id>` | Picks the language front end for stdin snippets. Only `go` ships today. | `aroma` |
 | `--graph <package>` | Names the package the dependency view starts from. | `context --graph` |
 | `--depth N` | Walk depth for the graph; 1 covers the package's own components. | `context --graph` |
-| `--from <file|->` | The lint findings document (SARIF or JSON); `-` reads stdin. | `review annotations` |
+| `--from <file\|->` | The lint findings document (SARIF or JSON); `-` reads stdin. | `review annotations` |
+| `--from <dir>` | The staged release directory to apply. | `self-update` |
+| `--dry-run` | Prints the update plan without writing. | `self-update` |
+| `--release-version <v>` | Versions the product manifest written to stdout. | `manifest product` |
+| `--body <file\|->` | The PR body to validate; `-` reads stdin. | `review merge-danger` |
 | `--path-prefix <p>` | Prefix for annotation paths when the KB lives in a repo subdirectory. | `review annotations` |
 | `--pinned-releases <dir>` | Deployment directory holding `<alias> <version>` lockfiles; the pinned version resolves to a release tag. | `review release-surface` |
 | `--diff-since <ref>` | Compares history since the ref against declared surfaces. | `context` |
@@ -425,6 +456,6 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | Code | Meaning | Action required |
 |---|---|---|
 | `0` | Success or advisory-only findings. | Proceed with the workflow. |
-| `1` | Blocking finding (`FORCED` collision, broken contract, lint error, ratchet regression). | Fix the violation or coordinate with the conflicting plan owner. |
-| `2` | Usage or runtime setup error (unknown command, invalid flag or window, unreadable baseline, unresolvable package filter). | Check syntax via `pylon --help`. |
+| `1` | Blocking finding (`FORCED` collision, broken contract, lint error, ratchet regression, foreign baseline). | Fix the violation or coordinate with the conflicting plan owner. |
+| `2` | Usage or runtime setup error (unknown command, invalid flag or window, unresolvable package filter). | Check syntax via `pylon --help`. |
 | `3` | Environment failure (no `manifests/pylons.yaml` found). | Run from the ledger root or pass `--pylons <path>`. |
