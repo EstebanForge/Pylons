@@ -38,18 +38,6 @@ All features, rules, and commands in Pylons and the `pylon` CLI must be 100% det
 - **Consumer**: A maintainer accepts the candidate by commit. The loop ends in executable enforcement or accepted prose, never in a repeated comment. No auto-commit: candidate patch only, per the Explicitly Not Adopted list.
 - **Objective**: Never write the same comment twice. A recurring review finding becomes a check, a falsifier, or a convention. Extends the `knowledge-utility` pattern-promotion idea: input here is review findings, not document citations.
 
-### index-term-expansion
-- **Deterministic Mechanism**: Append linked domain-term titles and tags into the context header from `search-index-hygiene`. One hop only: terms named in a document's `links:`, plus `domain/` term matches in prose (the graph `PYLON005` already forces to exist). No recursion.
-- **Where**: Header construction beside `filterDocs`; reuse the doc graph `scanDocs` already loads.
-- **Tests**: A document citing a term without naming it in prose must still surface for queries on that term's synonyms.
-- **Objective**: Glossary-defined vocabulary makes a document retrievable before its prose uses the vocabulary.
-
-### query-expansion
-- **Deterministic Mechanism**: When the invocation names a file path or a registered package, expand the query before ranking: resolve the path through `normalizeCheckTarget`, add the owning package's name and components, add dependency-graph neighbor names at depth one. Human output labels the expansion terms; JSON carries them as an explicit field.
-- **Where**: The `pylon search` dispatch in `cli/cmd/pylon/main.go`.
-- **Tests**: A query naming a project source file must rank the owning domain entity first, with no manual query terms.
-- **Objective**: The caller's working context improves recall, deterministically.
-
 ## Explicitly Not Adopted
 
 - **Hosted context runtime.** The agent harness owns sessions. No external portal dependency.
