@@ -4,8 +4,6 @@
 package rules
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -28,8 +26,8 @@ var volatileNumRe = regexp.MustCompile(`[0-9]+`)
 
 // Baseline is the on-disk accepted-debt ledger. Entries carry the
 // finding itself, not a hash, so reviewers can read what debt the
-// ledger accepted; Count carries multiplicity because fingerprints
-// deliberately collapse repeated messages in one file.
+// ledger accepted; Count carries multiplicity because one entry
+// groups repeated messages in one file.
 type Baseline struct {
 	Version  int             `json:"version"`
 	Accepted []BaselineEntry `json:"accepted"`
@@ -51,15 +49,6 @@ func baselineKey(f report.Finding) string {
 
 func baselinePath(kbRoot string) string {
 	return filepath.Join(kbRoot, "manifests", "baseline.json")
-}
-
-// Fingerprint identifies one accepted finding: rule, file, and the
-// message with volatile digits stripped. Line numbers are excluded
-// on purpose; edits above the finding must not orphan the entry.
-func Fingerprint(f report.Finding) string {
-	stable := f.RuleID + "\x00" + f.File + "\x00" + volatileNumRe.ReplaceAllString(f.Message, "#")
-	sum := sha256.Sum256([]byte(stable))
-	return hex.EncodeToString(sum[:])
 }
 
 // baselineExemptRules never enter the baseline: a suppressed secret
@@ -98,7 +87,7 @@ func UpdateBaseline(kbRoot string, findings []report.Finding) error {
 		}
 		return strings.Compare(a.Message, b.Message)
 	})
-	data, err := json.MarshalIndent(Baseline{Version: 2, Accepted: accepted}, "", "  ")
+	data, err := json.MarshalIndent(Baseline{Version: 1, Accepted: accepted}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -115,11 +104,11 @@ func ApplyBaseline(kbRoot string, findings []report.Finding) (kept []report.Find
 		return findings, 0, 0
 	}
 	var b Baseline
-	if json.Unmarshal(data, &b) != nil || b.Version != 2 {
-		// A v1 file predates counts and would suppress by hash alone;
-		// it must be regenerated, loudly.
+	if json.Unmarshal(data, &b) != nil || b.Version != 1 {
+		// The version field guards foreign files only; the format
+		// always carried counts, and nothing predates it.
 		reject := errFinding("PYLON001", "manifests/baseline.json", 1,
-			"baseline format is not version 2; regenerate with pylon lint --update-baseline")
+			"baseline format is not version 1; regenerate with pylon lint --update-baseline")
 		out := findings[:0:0]
 		out = append(out, findings...)
 		out = append(out, reject)

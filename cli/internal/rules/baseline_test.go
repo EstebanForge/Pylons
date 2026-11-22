@@ -16,21 +16,6 @@ func forcedFinding(file, msg string) report.Finding {
 	return report.Finding{RuleID: "PYLON006", Severity: report.SeverityError, Grade: report.GradeForced, File: file, Message: msg}
 }
 
-func TestFingerprintIgnoresVolatileCounts(t *testing.T) {
-	a := Fingerprint(forcedFinding("plans/x.md", "sentence has 25 words"))
-	b := Fingerprint(forcedFinding("plans/x.md", "sentence has 26 words"))
-	if a != b {
-		t.Fatal("digit stripping must make count drift fingerprint-stable")
-	}
-	c := Fingerprint(forcedFinding("plans/x.md", "sentence has 25 words"))
-	if a != c {
-		t.Fatal("same finding must fingerprint identically")
-	}
-	if Fingerprint(forcedFinding("plans/y.md", "sentence has 25 words")) == a {
-		t.Fatal("a different file must fingerprint differently")
-	}
-}
-
 func TestApplyBaselineSplitsFindings(t *testing.T) {
 	kb := t.TempDir()
 	matched := forcedFinding("plans/x.md", "sentence has 25 words")
@@ -110,7 +95,7 @@ func TestBaselineRoundTripSuppresses(t *testing.T) {
 
 func writeBaselineFile(t *testing.T, kb string, entries []BaselineEntry) {
 	t.Helper()
-	b := Baseline{Version: 2, Accepted: entries}
+	b := Baseline{Version: 1, Accepted: entries}
 	data, err := json.Marshal(b)
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +134,7 @@ func TestApplyBaselineNeverSuppressesExemptRules(t *testing.T) {
 	}
 }
 
-func TestBaselineV2RoundTripCounts(t *testing.T) {
+func TestBaselineRoundTripCounts(t *testing.T) {
 	kb := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(kb, "manifests"), 0o755); err != nil {
 		t.Fatal(err)
@@ -177,8 +162,8 @@ func TestBaselineV2RoundTripCounts(t *testing.T) {
 	if json.Unmarshal(raw, &disk) != nil {
 		t.Fatalf("baseline must stay human-readable JSON: %v", err)
 	}
-	if disk.Version != 2 {
-		t.Fatalf("version = %d, want 2", disk.Version)
+	if disk.Version != 1 {
+		t.Fatalf("version = %d, want 1", disk.Version)
 	}
 	if len(disk.Accepted) != 2 || disk.Accepted[0].Count != 3 || disk.Accepted[1].Count != 1 {
 		t.Fatalf("counts wrong: %+v", disk.Accepted)
@@ -198,6 +183,24 @@ func TestBaselineV2RoundTripCounts(t *testing.T) {
 	}
 }
 
+func TestBaselineCountDriftStillMatches(t *testing.T) {
+	kb := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kb, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	baselined := forcedFinding("plans/a.md", "sentence has 25 words")
+	if err := UpdateBaseline(kb, []report.Finding{baselined}); err != nil {
+		t.Fatal(err)
+	}
+	// The sentence drifted from 25 to 26 words; the entry must still
+	// match, because volatile digits never take part in the key.
+	drifted := forcedFinding("plans/a.md", "sentence has 26 words")
+	kept, accepted, stale := ApplyBaseline(kb, []report.Finding{drifted})
+	if accepted != 1 || len(kept) != 0 || stale != 0 {
+		t.Fatalf("count drift must keep the entry: accepted=%d kept=%d stale=%d", accepted, len(kept), stale)
+	}
+}
+
 func mkFindings(f report.Finding, n int) []report.Finding {
 	out := make([]report.Finding, n)
 	for i := range out {
@@ -206,23 +209,18 @@ func mkFindings(f report.Finding, n int) []report.Finding {
 	return out
 }
 
-func TestBaselineV1RejectedLoudly(t *testing.T) {
+func TestBaselineForeignVersionRejected(t *testing.T) {
 	kb := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(kb, "manifests"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(baselinePath(kb), []byte(`{"version": 1, "fingerprints": ["deadbeef"}`+""+`]
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// Correct the JSON body: the literal above must be valid v1 JSON.
-	if err := os.WriteFile(baselinePath(kb), []byte("{\"version\": 1, \"fingerprints\": [\"deadbeef\"]}\n"), 0o644); err != nil {
+	if err := os.WriteFile(baselinePath(kb), []byte("{\"version\": 999, \"accepted\": []}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	f := forcedFinding("plans/a.md", "sentence exceeds 25 words under ASD-STE100")
 	kept, accepted, _ := ApplyBaseline(kb, []report.Finding{f})
 	if accepted != 0 {
-		t.Fatalf("a v1 baseline must suppress nothing, accepted=%d", accepted)
+		t.Fatalf("a foreign baseline must suppress nothing, accepted=%d", accepted)
 	}
 	found := false
 	for _, k := range kept {
@@ -231,11 +229,11 @@ func TestBaselineV1RejectedLoudly(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("a v1 baseline must surface a loud finding, kept=%v", kept)
+		t.Fatalf("a foreign baseline must surface a loud finding, kept=%v", kept)
 	}
 }
 
-func TestBaselineV2StaleCountReports(t *testing.T) {
+func TestBaselineStaleCountReports(t *testing.T) {
 	kb := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(kb, "manifests"), 0o755); err != nil {
 		t.Fatal(err)
