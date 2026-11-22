@@ -68,3 +68,6 @@ These fields accept values only from the sets in the JSON `closed_sets` map. No 
 | `guard:` | quirks | `lint-rule`, `convention`, `test`, `accepted-risk` |
 
 Free-form fields (`description:`, `artifact:`, `scope:`, `criteria:`, `ticket:`, `superseded_by:`, `source_of_truth:`, `relationships:`, `guardrail:`) carry prose, links, or lists and accept any content.
+
+
+The registry also carries `frontmatter_keys`: the top-level frontmatter keys each doc type knows. The engine collects unknown keys as an advisory (PYLON064) and mirrors this section through a test. See [machine-contract.md](machine-contract.md).

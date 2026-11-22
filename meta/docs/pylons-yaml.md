@@ -71,3 +71,8 @@ projects:
 - One alias can register one project; alias names are stable identifiers, so renaming one breaks every `repo://` URI that names it.
 - The extension system is configured here too. See [EXTENSIONS.md](../EXTENSIONS.md) for the language list and plugin installation.
 - The `parity:` section configures the parity spec in this same manifest family. See [parity-spec.md](parity-spec.md) for the closed schema, and `manifests/parity.json` for its JSON schema.
+## How this schema moves
+
+Adding a key or a value is free and needs no version bump. Removing a key, renaming a key, or changing a value's meaning bumps `version` and lands in the changelog. No migration layer ships.
+
+The per-type frontmatter key registry lives in `manifests/vocabulary.json` under `frontmatter_keys` and mirrors the engine. See [machine-contract.md](machine-contract.md) for the full contract: what machines read, the closed prose exceptions, and strict frontmatter decoding.

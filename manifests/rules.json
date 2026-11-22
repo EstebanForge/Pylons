@@ -390,5 +390,40 @@
     "severity": "advisory",
     "description": "The machine's persisted state key is written outside the machine surface.",
     "fix_hint": "Route the write through the machine's transition function, or declare the writer part of the surface."
+  },
+  {
+    "id": "PYLON060",
+    "name": "secret_shape",
+    "severity": "error",
+    "description": "A provider-shaped credential appears in a ledger document.",
+    "fix_hint": "Rotate the credential; deleting the line does not remove it from git history."
+  },
+  {
+    "id": "PYLON061",
+    "name": "secret_assignment",
+    "severity": "advisory",
+    "description": "A line looks like an assigned secret value.",
+    "fix_hint": "Rotate it if real, or reword the example so it cannot read as a live value."
+  },
+  {
+    "id": "PYLON062",
+    "name": "gate_surface_changed",
+    "severity": "error",
+    "description": "The diff touches a surface the checker itself relies on.",
+    "fix_hint": "Revert or walk the change through the ledger owners; gate surfaces decide what the checker may silence."
+  },
+  {
+    "id": "PYLON063",
+    "name": "gate_surface_not_evaluated",
+    "severity": "advisory",
+    "description": "The gate surface check could not run against the requested base.",
+    "fix_hint": "Pin --base to a reachable ref so the check can run."
+  },
+  {
+    "id": "PYLON064",
+    "name": "frontmatter_unknown_key",
+    "severity": "advisory",
+    "description": "The frontmatter carries keys no check reads for this doc type.",
+    "fix_hint": "Remove the key or declare it in the type's template; no check reads it."
   }
 ]

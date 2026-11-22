@@ -75,6 +75,11 @@ var Catalog = map[string]RuleSpec{
 	"PYLON057": {ID: "PYLON057", Name: "dead_state", Severity: "error", Description: "A declared state has no outgoing transitions and is not terminal.", FixHint: "Declare the state terminal, or give it an outgoing transition."},
 	"PYLON058": {ID: "PYLON058", Name: "duplicate_transition", Severity: "error", Description: "The same from-event pair is declared twice on one side.", FixHint: "Remove the duplicate triple from the declaration or the code map."},
 	"PYLON059": {ID: "PYLON059", Name: "bypassed_state_write", Severity: "advisory", Description: "The machine's persisted state key is written outside the machine surface.", FixHint: "Route the write through the machine's transition function, or declare the writer part of the surface."},
+	"PYLON060": {ID: "PYLON060", Name: "secret_shape", Severity: "error", Description: "A provider-shaped credential appears in a ledger document.", FixHint: "Rotate the credential; deleting the line does not remove it from git history."},
+	"PYLON061": {ID: "PYLON061", Name: "secret_assignment", Severity: "advisory", Description: "A line looks like an assigned secret value.", FixHint: "Rotate it if real, or reword the example so it cannot read as a live value."},
+	"PYLON062": {ID: "PYLON062", Name: "gate_surface_changed", Severity: "error", Description: "The diff touches a surface the checker itself relies on.", FixHint: "Revert or walk the change through the ledger owners; gate surfaces decide what the checker may silence."},
+	"PYLON063": {ID: "PYLON063", Name: "gate_surface_not_evaluated", Severity: "advisory", Description: "The gate surface check could not run against the requested base.", FixHint: "Pin --base to a reachable ref so the check can run."},
+	"PYLON064": {ID: "PYLON064", Name: "frontmatter_unknown_key", Severity: "advisory", Description: "The frontmatter carries keys no check reads for this doc type.", FixHint: "Remove the key or declare it in the type's template; no check reads it."},
 }
 
 // AllRules returns the sorted rule catalog.

@@ -44,13 +44,21 @@ func Fingerprint(f report.Finding) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// baselineExemptRules never enter the baseline: a suppressed secret
+// would hide every later secret of the same kind in the file, and a
+// silenced gate surface defeats the guard itself.
+var baselineExemptRules = map[string]bool{
+	"PYLON060": true,
+	"PYLON062": true,
+}
+
 // UpdateBaseline writes the current FORCED findings as the accepted
 // set. A config-error finding is never recorded: a broken
 // manifests/pylons.yaml must always block.
 func UpdateBaseline(kbRoot string, findings []report.Finding) error {
 	var fps []string
 	for _, f := range findings {
-		if f.Grade != report.GradeForced || f.File == "manifests/pylons.yaml" {
+		if f.Grade != report.GradeForced || f.File == "manifests/pylons.yaml" || baselineExemptRules[f.RuleID] {
 			continue
 		}
 		fps = append(fps, Fingerprint(f))

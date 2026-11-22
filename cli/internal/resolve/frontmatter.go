@@ -65,6 +65,11 @@ type DocMeta struct {
 	Sources    []string     `yaml:"sources"`
 	Ticket     []any        `yaml:"ticket"`
 	Avoid      StringOrList `yaml:"avoid"`
+	// Parse artifacts, never user data: Unknown holds top-level keys
+	// this doc type's parser does not know (the unknown-key advisory),
+	// ParseErrors holds strict-decode failures with line numbers.
+	Unknown     []string `yaml:"-"`
+	ParseErrors []string `yaml:"-"`
 	// State parity: the declared closed set and where the backed
 	// enum lives in the mapped project.
 	States       StringOrList `yaml:"states"`
@@ -179,13 +184,12 @@ func WithoutFrontMatter(content string) string {
 	return content
 }
 
-// ParseDocMeta extracts common frontmatter fields into out.
+// ParseDocMeta extracts common frontmatter fields into out. Decoding
+// is strict: anchors, aliases, merge keys, and custom tags fail
+// closed, unknown keys inside closed payloads fail closed, and
+// unknown top-level keys land in out.Unknown for the advisory rule.
 func ParseDocMeta(content string, out *DocMeta) bool {
-	front := ExtractFrontMatter(content)
-	if front == "" {
-		return false
-	}
-	return yaml.Unmarshal([]byte(front), out) == nil
+	return strictFrontMatter(content, out)
 }
 
 // ParsePlanFrontMatter extracts plan frontmatter into out.

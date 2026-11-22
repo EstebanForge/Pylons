@@ -196,3 +196,43 @@ func seedManifest(t *testing.T, root, version string) {
 		t.Fatal(err)
 	}
 }
+
+func TestGateSurfaceFlagPath(t *testing.T) {
+	// The guard flows through the CLI flag path: a diff touching a
+	// gate surface exits 1, a clean diff exits 0, and an unreadable
+	// base degrades to the advisory at exit 0.
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifests", "pylons.yaml"), []byte("version: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun := func(args ...string) string {
+		t.Helper()
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+		return string(out)
+	}
+	gitRun("init", "-q", "-b", "main")
+	gitRun("config", "user.email", "t@example.com")
+	gitRun("config", "user.name", "t")
+	gitRun("add", "-Af", ".")
+	gitRun("commit", "-qm", "base")
+	if err := os.WriteFile(filepath.Join(dir, "manifests", "ratchet.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun("add", "-Af", ".")
+	gitRun("commit", "-qm", "touch ratchet")
+	if code := run([]string{"review", "gate-surface", "--base", "HEAD~1", "--pylons", dir}); code != 1 {
+		t.Fatalf("gate-surface over a touched ratchet must exit 1, got %d", code)
+	}
+	if code := run([]string{"review", "gate-surface", "--base", "HEAD", "--pylons", dir}); code != 0 {
+		t.Fatalf("gate-surface over a clean diff must exit 0, got %d", code)
+	}
+	if code := run([]string{"review", "gate-surface", "--base", "no-such-ref", "--pylons", dir}); code != 0 {
+		t.Fatalf("an unreadable base must stay advisory at exit 0, got %d", code)
+	}
+}

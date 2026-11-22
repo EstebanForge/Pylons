@@ -76,6 +76,7 @@ func runReviewBrief(kbRoot, planArg, base string, stdout bool, validatePath, val
 		fmt.Fprintf(&b, "- `editing` `%s`\n", formatContractGlob(e))
 	}
 	b.WriteString("\n## Findings\n\n")
+	b.WriteString("One `### F<n>` block per finding. State the trigger concretely: the input, then the result it causes. A finding whose trigger cannot be shown concretely is trivial by definition; do not file it.\n\n")
 
 	if stdout {
 		fmt.Print(b.String())

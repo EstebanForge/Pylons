@@ -155,6 +155,7 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 	findings = append(findings, scanPlanAndQuirkRules(kbRoot, docs, cfg, opts)...)
 	findings = append(findings, scanLifecycleRules(kbRoot, docs, cfg, opts.HasCode)...)
 	findings = append(findings, scanMachineDeclarations(docs)...)
+	findings = append(findings, scanSecrets(docs)...)
 	if opts.HasCode {
 		findings = append(findings, lintImportBoundaries(kbRoot, cfg, changedSet)...)
 	}
@@ -231,8 +232,16 @@ func lintDoc(kbRoot, rel, content string, cfg config.Config, opts LintOptions) [
 	var out []report.Finding
 	var meta resolve.DocMeta
 	if !resolve.ParseDocMeta(content, &meta) || strings.TrimSpace(meta.Title) == "" || strings.TrimSpace(meta.Type) == "" {
-		out = append(out, errFinding("PYLON001", rel, 1, "missing or invalid frontmatter (requires title and type)"))
+		msg := "missing or invalid frontmatter (requires title and type)"
+		if len(meta.ParseErrors) > 0 {
+			msg = "invalid frontmatter: " + meta.ParseErrors[0]
+		}
+		out = append(out, errFinding("PYLON001", rel, 1, msg))
 		return out
+	}
+	if len(meta.Unknown) > 0 {
+		out = append(out, advisoryFinding("PYLON064", rel, 1,
+			"unknown frontmatter keys for type "+meta.Type+": "+strings.Join(meta.Unknown, ", ")))
 	}
 
 	// Zone entry guides (AGENTS.md / README.md) are reference docs, not zone lifecycle items.

@@ -46,6 +46,7 @@ Usage:
   pylon review rework    [--window <period>] [--package <pkg>] [--json] [--pylons <path>]
   pylon review merge-danger --body <file|-> [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review release-surface --pinned-releases <dir> [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
+  pylon review gate-surface [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review annotations --from <file|-> [--path-prefix <p>] [--format=human|json] [--json] [--pylons <path>]
   pylon sync             [--detached] [--pylons <path>]
   pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>] [--format=human|json] [--pylons <path>]
@@ -471,7 +472,7 @@ func run(args []string) int {
 
 	case "review":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "pylon: review requires subcommand: plan | postmortem | staleness | ratchet | rework | merge-danger | release-surface")
+			fmt.Fprintln(os.Stderr, "pylon: review requires subcommand: plan | postmortem | staleness | ratchet | rework | merge-danger | release-surface | gate-surface")
 			return 2
 		}
 		switch rest[0] {
@@ -512,6 +513,16 @@ func run(args []string) int {
 				fmt.Fprintf(os.Stderr, "pylon: review release-surface: %v\n", err)
 				return 2
 			}
+			rules.Remediate(findings)
+			if err := report.Render(os.Stdout, format, findings); err != nil {
+				return 2
+			}
+			if report.HasBlocking(findings) {
+				return 1
+			}
+			return 0
+		case "gate-surface":
+			findings := rules.GateSurface(kbRoot, diffBase)
 			rules.Remediate(findings)
 			if err := report.Render(os.Stdout, format, findings); err != nil {
 				return 2

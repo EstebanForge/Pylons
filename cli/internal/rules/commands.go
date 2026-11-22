@@ -321,5 +321,8 @@ func BuildPackagesManifest(kbRoot string) []PackageManifestEntry {
 		return nil
 	})
 	slices.SortFunc(out, func(a, b PackageManifestEntry) int { return strings.Compare(a.Path, b.Path) })
+	if out == nil {
+		out = []PackageManifestEntry{}
+	}
 	return out
 }
