@@ -630,7 +630,7 @@ func run(args []string) int {
 		query := strings.Join(rest, " ")
 		cfg := loadConfigOrWarn(kbRoot)
 		docs := scanDocs(kbRoot, mapAll)
-		expanded := expandQueryTerms(kbRoot, cfg, docs, docTokens(query))
+		expanded := expandQueryTerms(kbRoot, cfg, docs, strings.Fields(query))
 		full := query
 		if len(expanded) > 0 {
 			full = query + " " + strings.Join(expanded, " ")
