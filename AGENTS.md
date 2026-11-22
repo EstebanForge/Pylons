@@ -26,39 +26,40 @@ Pylons documents reference files with URI schemes, never machine paths.
 
 ## CLI Commands
 
-- `pylon lint [--changed] [--doc-only] [--fix] [--parity] [--update-baseline] [--ci] [--format=human|json|sarif]`
-- `pylon contract <plan> [--ci] [--format=human|json|sarif]`
-- `pylon check <paths...> [--stop-block] [--format=human|json|sarif]`
-- `pylon brief [--format=human|json]`
-- `pylon context <paths...> [--preamble] [--format=human|json]`
-- `pylon context --diff-since <ref> [--manifest]`
-- `pylon context --graph <package> [--depth N]`
-- `pylon review plan <path>`
-- `pylon review postmortem [path] [--check-sources]`
-- `pylon review staleness [--package <pkg>] [--fix]`
-- `pylon review ratchet [--update]`
-- `pylon review rework [--window <period>] [--package <pkg>]`
-- `pylon review merge-danger --body <file|-> [--base <ref>]`
-- `pylon review release-surface --pinned-releases <dir> [--base <ref>]`
-- `pylon review gate-surface [--base <ref>]`
-- `pylon review annotations --from <file|-> [--path-prefix <p>]`
-- `pylon harvest pr --diff <patch|-> [--metadata <json>] [--record <file>]`
-- `pylon review retro --findings <file|-> [--window <period>] [--min <n>] [--shape <s>]`
-- `pylon sync [--detached]`
-- `pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>]`
-- `pylon protocol [list|<name>] [--template <path>]`
-- `pylon reflect [--template <path>]`
-- `pylon extensions [list|schema] [--format=human|json]`
-- `pylon map [--type <t>] [--package <p>] [--tag <t>] [--status <s>] [--folder <dir>] [--query <q>] [--limit <n>] [--all]`
-- `pylon search <query> [--limit <n>] [--all]`
-- `pylon gate pre-commit|pre-push`
-- `pylon manifest [rules|packages|product] [--check]`
-- `pylon self-update --from <dir> [--dry-run] [--force]`
-- `pylon explain <rule_id>`
-- `pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]`
-- `pylon install`
-- `pylon init [dir]`
-- `pylon new <type> <name> [--title <t>] [--number]`
+- `pylon lint [--changed] [--doc-only] [--fix] [--parity] [--update-baseline] [--ci] [--format=human|json|sarif]` - judge the ledger, or the staged docs, against every rule.
+- `pylon contract <plan> [--ci] [--format=human|json|sarif]` - resolve one plan's typed contracts against real code.
+- `pylon check <paths...> [--stop-block] [--format=human|json|sarif]` - ground-check specific paths before editing them.
+- `pylon brief [--format=human|json]` - one-line orientation: root, projects, extensions, doc count.
+- `pylon context <paths...> [--preamble] [--format=human|json]` - load the docs and contracts that surround given paths.
+- `pylon context --diff-since <ref> [--manifest]` - list surfaces whose code moved since a ref but whose docs did not.
+- `pylon context --graph <package> [--depth N]` - compare a package's actual import graph against its declared `depends_on`.
+- `pylon staleness [--package <pkg>] [--fix]` - find documents past their zone's age gate.
+- `pylon review plan <path>` - judge one plan's structure and contract entries.
+- `pylon review postmortem [path] [--check-sources]` - judge quirk postmortems and verify their cited sources.
+- `pylon review staleness [--package <pkg>] [--fix]` - the staleness pass as a review lens.
+- `pylon review ratchet [--update]` - block when advisory counts rise above the recorded baseline.
+- `pylon review rework [--window <period>] [--package <pkg>]` - measure fix and refactor churn over feat-changed paths.
+- `pylon review merge-danger --body <file|-> [--base <ref>]` - validate a PR body's declared merge door against the derived blast radius.
+- `pylon review release-surface --pinned-releases <dir> [--base <ref>]` - compare pinned release surfaces against HEAD.
+- `pylon review gate-surface [--base <ref>]` - flag edits to the gates themselves.
+- `pylon review annotations --from <file|-> [--path-prefix <p>]` - convert findings into GitHub check annotations for CI.
+- `pylon harvest pr --diff <patch|-> [--metadata <json>] [--record <file>]` - extract symbol and quirk candidates from a merged PR's diff.
+- `pylon review retro --findings <file|-> [--window <period>] [--min <n>] [--shape <s>]` - turn repeated review findings into one promotion candidate.
+- `pylon sync [--detached]` - fetch origin in the background and fast-forward when the tree is clean.
+- `pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>]` - generate a reviewer packet for a plan.
+- `pylon protocol [list|<name>] [--template <path>]` - render an agent protocol (`reflect` is the hygiene pass; `agent` is the session loop).
+- `pylon reflect [--template <path>]` - run the hygiene reflection protocol.
+- `pylon extensions [list|schema]` - list enabled language extensions and their contract kinds.
+- `pylon map [--type <t>] [--package <p>] [--tag <t>] [--status <s>] [--folder <dir>] [--query <q>] [--limit <n>] [--all]` - find documents by zone, status, or query.
+- `pylon search <query> [--limit <n>] [--all]` - full-text query over the indexed ledger.
+- `pylon gate pre-commit|pre-push` - the commit and push gates, callable directly; the shipped hooks exec these.
+- `pylon manifest [rules|packages|product] [--check]` - write or verify the generated manifest schemas.
+- `pylon self-update --from <dir> [--dry-run] [--force]` - apply a staged release, protecting user edits.
+- `pylon explain <rule_id>` - print one rule's semantics and fix hint.
+- `pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]` - structural code-similarity search over indexed projects.
+- `pylon install` - wire the gate hooks into this ledger's git repository.
+- `pylon init [dir]` - scaffold a fresh pylon.
+- `pylon new <type> <name> [--title <t>] [--number]` - create a typed document from the ledger's own template.
 
-# Project AGENTS extension
+
 Read the contents of @AGENTS.project.md
