@@ -247,9 +247,151 @@ func TestNewCoversEveryTemplate(t *testing.T) {
 		known[strings.TrimSuffix(e.Name(), ".md")] = true
 	}
 	for _, docType := range newDocTypes {
+		if _, err := os.Stat(filepath.Join("../../../templates", docType.template+".md")); err != nil {
+			t.Errorf("table entry %s has no template: %v", docType.typ, err)
+		}
 		delete(known, docType.template)
 	}
 	if len(known) > 0 {
 		t.Fatalf("templates without a pylon new entry: %v", known)
+	}
+}
+
+func TestNewDecisionPrefixFailsClosed(t *testing.T) {
+	kb := newSandboxKB(t)
+	if err := os.WriteFile(filepath.Join(kb, "manifests", "pylons.yaml"), []byte("version: 1\ndecision_prefix: \"../../evil\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, ec := runNew(t, kb, "decision", "escape", "--number")
+	if ec != 2 {
+		t.Fatalf("a hostile prefix must be a usage error, got exit %d: %s", ec, out)
+	}
+	if _, err := os.Stat(filepath.Join(kb, "decisions", "proposals", "escape.md")); !os.IsNotExist(err) {
+		t.Fatal("nothing may be written when the prefix is hostile")
+	}
+	if _, err := os.Stat(filepath.Dir(filepath.Join(kb, "..", "evil0001-escape.md"))); err == nil {
+		t.Log("checked outside path")
+	}
+}
+
+func TestNewTitleRejectsControlAndBadUTF8(t *testing.T) {
+	kb := newSandboxKB(t)
+	if _, ec := runNew(t, kb, "quirk", "injected", "--title", "line1\nline2: x"); ec != 2 {
+		t.Fatalf("a newline title must be refused, got exit %d", ec)
+	}
+	if _, err := os.Stat(filepath.Join(kb, "quirks", "injected.md")); !os.IsNotExist(err) {
+		t.Fatal("nothing may be written for a rejected title")
+	}
+	if _, ec := runNew(t, kb, "quirk", "injected2", "--title", "bad\xffutf8"); ec != 2 {
+		t.Fatalf("invalid UTF-8 title must be refused, got exit %d", ec)
+	}
+}
+
+func TestNewNumberFollowsSymlinkedDecisions(t *testing.T) {
+	kb := newSandboxKB(t)
+	real := filepath.Join(kb, "real-decisions")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(real, "D0077-z.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(kb, "decisions")); err != nil {
+		t.Fatal(err)
+	}
+	if _, ec := runNew(t, kb, "decision", "through-link", "--number"); ec != 0 {
+		t.Fatal("numbered creation failed")
+	}
+	if _, err := os.Stat(filepath.Join(real, "proposals", "D0078-through-link.md")); err != nil {
+		t.Fatal("the scan must follow a symlinked decisions directory")
+	}
+}
+
+func TestNewPlanRequiresTypePrefix(t *testing.T) {
+	kb := newSandboxKB(t)
+	if _, ec := runNew(t, kb, "plan", "big-plan"); ec != 2 {
+		t.Fatalf("an unprefixed plan must be refused, got exit %d", ec)
+	}
+	if _, ec := runNew(t, kb, "plan", "feature-big-plan"); ec != 0 {
+		t.Fatal("a prefixed plan must be created")
+	}
+}
+
+func TestNewMalformedTemplateFailsClosed(t *testing.T) {
+	kb := newSandboxKB(t)
+	if err := os.WriteFile(filepath.Join(kb, "templates", "quirk.md"), []byte("---\r\ntitle: \"{{Quirk title}}\"\r\n---\r\nbody\r\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ec := runNew(t, kb, "quirk", "crlf"); ec != 2 {
+		t.Fatalf("a CRLF template must fail closed, got exit %d", ec)
+	}
+	if err := os.WriteFile(filepath.Join(kb, "templates", "quirk.md"), []byte("no frontmatter at all\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ec := runNew(t, kb, "quirk", "nofm"); ec != 2 {
+		t.Fatalf("a frontmatter-less template must fail closed, got exit %d", ec)
+	}
+}
+
+func TestNewNumberIgnoresNonCanonicalFiles(t *testing.T) {
+	kb := newSandboxKB(t)
+	dec := filepath.Join(kb, "decisions")
+	if err := os.MkdirAll(dec, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"D12345678-sixdigit.md", "D+500-signed.md"} {
+		if err := os.WriteFile(filepath.Join(dec, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, ec := runNew(t, kb, "decision", "clean", "--number"); ec != 0 {
+		t.Fatal("numbered creation failed")
+	}
+	if _, err := os.Stat(filepath.Join(dec, "proposals", "D0001-clean.md")); err != nil {
+		t.Fatal("non-canonical decision files must not inflate the numbering")
+	}
+}
+
+func TestNewTightensSlugNames(t *testing.T) {
+	kb := newSandboxKB(t)
+	for _, name := range []string{"x-", "a--b"} {
+		if _, ec := runNew(t, kb, "quirk", name); ec != 2 {
+			t.Fatalf("name %q must be refused, got exit %d", name, ec)
+		}
+	}
+}
+
+func TestNewRefusesExtraArgs(t *testing.T) {
+	kb := newSandboxKB(t)
+	if _, ec := runNew(t, kb, "quirk", "x", "extra"); ec != 2 {
+		t.Fatalf("extra arguments must be a usage error, got exit %d", ec)
+	}
+}
+
+func TestNewMissingTemplateIsIOError(t *testing.T) {
+	kb := newSandboxKB(t)
+	if err := os.RemoveAll(filepath.Join(kb, "templates")); err != nil {
+		t.Fatal(err)
+	}
+	out, ec := runNew(t, kb, "quirk", "none")
+	if ec != 1 {
+		t.Fatalf("a missing template is an environment error, got exit %d", ec)
+	}
+	if !strings.Contains(out, "templates") {
+		t.Fatalf("the error must point at templates/, got %s", out)
+	}
+}
+
+func TestNewFillsTitlePlaceholdersInBody(t *testing.T) {
+	kb := newSandboxKB(t)
+	if _, ec := runNew(t, kb, "quirk", "storm-drain", "--title", "Storm drain"); ec != 0 {
+		t.Fatal("creation failed")
+	}
+	body, _ := os.ReadFile(filepath.Join(kb, "quirks", "storm-drain.md"))
+	if strings.Contains(string(body), "{{Quirk title}}") {
+		t.Fatal("the template title placeholder must be substituted in the body")
+	}
+	if !strings.Contains(string(body), "# Storm drain") {
+		t.Fatal("the body heading must carry the title")
 	}
 }

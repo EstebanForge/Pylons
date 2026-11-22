@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -226,5 +228,58 @@ func TestWPHookFamilyForms(t *testing.T) {
 		if v := reg.Resolve(proj, Kind("wp-hook"), tag); !v.Resolved {
 			t.Fatalf("%s must resolve: %s", tag, v.Detail)
 		}
+	}
+}
+
+func TestWPHookMultilineCallIsConsistentlyUnresolved(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "multi.php")
+	if err := os.WriteFile(src, []byte("<?php\nadd_action(\n    'multi/line',\n    'cb'\n);\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry([]string{"php"}, "")
+	v := reg.Resolve(root, Kind("wp-hook"), "multi/line")
+	if v.Resolved {
+		t.Fatal("multi-line hook calls are out of scope by design; the worktree walk must not resolve what the ref path cannot")
+	}
+}
+
+func TestWPHookNestedExcludedDirsConsistent(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "src", "vendor")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "h.php"), []byte("<?php add_action('deep/nested', 'cb');\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	priv := filepath.Join(root, "pkg", "_priv")
+	if err := os.MkdirAll(priv, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(priv, "p.php"), []byte("<?php add_action('deep/priv', 'cb');\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry([]string{"php"}, "")
+	for _, tag := range []string{"deep/nested", "deep/priv"} {
+		if v := reg.Resolve(root, Kind("wp-hook"), tag); v.Resolved {
+			t.Fatalf("%s must stay excluded at every depth", tag)
+		}
+	}
+}
+
+func TestWPHookSinglePatternServesBothEngines(t *testing.T) {
+	// The shipped pattern must compile as RE2 AND parse as POSIX ERE,
+	// so one string serves the worktree walk and git grep alike.
+	if strings.Contains(wpHookPattern, `\b`) || strings.Contains(wpHookPattern, "(?:") {
+		t.Fatalf("wpHookPattern carries engine-specific syntax: %s", wpHookPattern)
+	}
+	if _, err := regexp.Compile(wpHookPattern); err != nil {
+		t.Fatalf("wpHookPattern must compile as RE2: %v", err)
+	}
+	cmd := exec.Command("git", "grep", "--no-index", "-E", "-e", wpHookPattern, "--", "missing.php")
+	_ = cmd.Run() // exit 1 (no match) is fine; exit 2 (bad pattern) is not
+	if code := cmd.ProcessState.ExitCode(); code > 1 {
+		t.Fatalf("git rejected the pattern (exit %d); it must parse as POSIX ERE", code)
 	}
 }

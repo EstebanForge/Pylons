@@ -1,5 +1,5 @@
 ---
-title: "Meta Docs Index"
+title: "Pylons Docs Index"
 type: meta
 status: active
 created: 2026-11-19

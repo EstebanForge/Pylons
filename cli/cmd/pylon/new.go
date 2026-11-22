@@ -4,12 +4,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // newDocType maps a ledger document type to its template file, its
@@ -39,14 +42,33 @@ var newDocTypes = []newDocType{
 	{typ: "ticket", template: "ticket", dir: "tickets", status: "open"},
 }
 
-// isSlugName accepts kebab-case names only: lowercase letters,
-// digits, and inner dashes.
+// newSlugRe is kebab-case: lowercase letters and digits joined by
+// single inner dashes, no leading or trailing dash.
+var newSlugRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// newPlanPrefixes mirrors the PYLON038 filename rule for plans and
+// proposals; the catalog's FixHint names the same set.
+var newPlanPrefixes = []string{"feature-", "refactor-", "chore-", "docs-", "perf-"}
+
+// newPrefixRe is the decision-numbering prefix: the same shape
+// config.Load validates, re-checked here because new reads the
+// prefix through the warn-and-continue config path.
+var newPrefixRe = regexp.MustCompile(`^[A-Z]{1,4}$`)
+
+// isSlugName reports whether name is a usable ledger slug.
 func isSlugName(name string) bool {
-	if len(name) == 0 || name[0] == '-' {
+	return newSlugRe.MatchString(name)
+}
+
+// isPlainTitle rejects control characters and invalid UTF-8: the
+// title is written into a YAML scalar, and anything outside printable
+// text would corrupt the frontmatter on disk.
+func isPlainTitle(title string) bool {
+	if !utf8.ValidString(title) {
 		return false
 	}
-	for _, r := range name {
-		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+	for _, r := range title {
+		if r < 0x20 || r == 0x7f {
 			return false
 		}
 	}
@@ -73,10 +95,14 @@ func cmdNew(kbRoot, docType, name, title string, numbered bool) int {
 		fmt.Fprintf(os.Stderr, "pylon: the name must be kebab-case (lowercase letters, digits, dashes)\n")
 		return 2
 	}
-	prefix := loadConfigOrWarn(kbRoot).DecisionPrefixOrDefault()
 	if numbered {
 		if spec.typ != "decision" {
 			fmt.Fprintf(os.Stderr, "pylon: --number applies to decisions only\n")
+			return 2
+		}
+		prefix := loadConfigOrWarn(kbRoot).DecisionPrefixOrDefault()
+		if !newPrefixRe.MatchString(prefix) {
+			fmt.Fprintf(os.Stderr, "pylon: decision_prefix must be one to four uppercase letters, got %q\n", prefix)
 			return 2
 		}
 		next, err := nextDecisionNumber(kbRoot, prefix)
@@ -90,10 +116,20 @@ func cmdNew(kbRoot, docType, name, title string, numbered bool) int {
 		}
 		name = fmt.Sprintf("%s%04d-%s", prefix, next, name)
 	}
+	if spec.typ == "plan" {
+		prefixed := false
+		for _, p := range newPlanPrefixes {
+			prefixed = prefixed || strings.HasPrefix(name, p)
+		}
+		if !prefixed {
+			fmt.Fprintf(os.Stderr, "pylon: the plan name must start with feature-, refactor-, chore-, docs-, or perf- (PYLON038)\n")
+			return 2
+		}
+	}
 	data, err := readAnnotationInput(filepath.Join(kbRoot, "templates", spec.template+".md"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "pylon: the %s template is unreadable: %v\n", spec.typ, err)
-		return 2
+		fmt.Fprintf(os.Stderr, "pylon: the %s template is unreadable (templates/ ships with the product layer): %v\n", spec.typ, err)
+		return 1
 	}
 	base := name
 	if spec.dated {
@@ -104,7 +140,15 @@ func cmdNew(kbRoot, docType, name, title string, numbered bool) int {
 	if title == "" {
 		title = strings.ToUpper(name[:1]) + strings.ReplaceAll(name[1:], "-", " ")
 	}
-	out := fillNewFrontMatter(string(data), spec, title)
+	if !isPlainTitle(title) {
+		fmt.Fprintf(os.Stderr, "pylon: the title must be printable text without control characters\n")
+		return 2
+	}
+	out, err := fillNewFrontMatter(string(data), spec, title)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pylon: the %s template is malformed: %v\n", spec.typ, err)
+		return 2
+	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "pylon: cannot create %s: %v\n", filepath.Dir(rel), err)
 		return 1
@@ -136,37 +180,69 @@ func cmdNew(kbRoot, docType, name, title string, numbered bool) int {
 // template copy: title, type, status, created, and updated. Everything
 // else, body included, stays verbatim so the template's required
 // headings and closed-key discipline arrive intact.
-func fillNewFrontMatter(template string, spec *newDocType, title string) string {
+// newMissingKeyError marks a template whose frontmatter lacks one of
+// the five mechanical keys; new fails closed rather than writing a
+// document that cannot pass its own lint.
+var newMissingKeyError = errors.New("template frontmatter is missing a mechanical key")
+
+func fillNewFrontMatter(template string, spec *newDocType, title string) (string, error) {
 	today := time.Now().Format("2006-01-02")
 	if !strings.HasPrefix(template, "---\n") {
-		return template
+		return "", newMissingKeyError
 	}
 	rest := template[4:]
 	end := strings.Index(rest, "\n---")
 	if end < 0 {
-		return template
+		return "", newMissingKeyError
 	}
 	fm := rest[:end]
 	body := rest[end+1:]
+	seen := map[string]bool{"title": false, "type": false, "status": false, "created": false, "updated": false}
 	var b strings.Builder
-	for _, line := range strings.Split(fm, "\n") {
-		switch {
-		case strings.HasPrefix(line, "title:"):
+	for line := range strings.SplitSeq(fm, "\n") {
+		key := ""
+		if i := strings.IndexByte(line, ':'); i > 0 {
+			key = strings.TrimSpace(line[:i])
+		}
+		dup := seen[key]
+		switch key {
+		case "title":
+			if dup {
+				return "", newMissingKeyError
+			}
 			line = "title: \"" + strings.NewReplacer("\\", "\\\\", "\"", "\\\"").Replace(title) + "\""
-		case strings.HasPrefix(line, "type:"):
+		case "type":
 			line = "type: " + spec.typ
-		case strings.HasPrefix(line, "status:"):
+		case "status":
 			line = "status: " + spec.status
-		case strings.HasPrefix(line, "created:"):
+		case "created":
 			line = "created: " + today
-		case strings.HasPrefix(line, "updated:"):
+		case "updated":
 			line = "updated: " + today
+		}
+		if _, known := seen[key]; known {
+			if dup {
+				return "", newMissingKeyError
+			}
+			seen[key] = true
 		}
 		b.WriteString(line)
 		b.WriteString("\n")
 	}
-	return "---\n" + b.String() + body
+	for key, ok := range seen {
+		if !ok {
+			return "", fmt.Errorf("%w: %s", newMissingKeyError, key)
+		}
+	}
+	// The template body's placeholder heading carries the title, so the
+	// created document reads finished rather than half-stamped.
+	body = newPlaceholderRe.ReplaceAllString(body, title)
+	return "---\n" + b.String() + body, nil
 }
+
+// newPlaceholderRe matches a template body placeholder such as
+// {{Quirk title}}; created documents substitute the real title.
+var newPlaceholderRe = regexp.MustCompile(`\{\{[^}]*\}\}`)
 
 // nextDecisionNumber scans decisions/ recursively for the configured
 // prefix's four-digit numbers and returns the next free one, so a
@@ -174,7 +250,11 @@ func fillNewFrontMatter(template string, spec *newDocType, title string) string 
 // and moved under decisions/.
 func nextDecisionNumber(kbRoot, prefix string) (int, error) {
 	next := 1
-	root := filepath.Join(kbRoot, "decisions")
+	root := evalRoot(filepath.Join(kbRoot, "decisions"))
+	// The name must be exactly the PYLON010 shape <prefix><NNNN>- so a
+	// six-digit file (D12345678.md) or a sign-bearing name never
+	// inflates the numbering.
+	numbered := regexp.MustCompile(`^` + regexp.QuoteMeta(prefix) + `[0-9]{4}-`)
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) && path == root {
@@ -186,10 +266,7 @@ func nextDecisionNumber(kbRoot, prefix string) (int, error) {
 			return nil
 		}
 		base := d.Name()
-		if !strings.HasPrefix(base, prefix) || len(base) <= len(prefix)+4 {
-			return nil
-		}
-		if n, err := strconv.Atoi(base[len(prefix) : len(prefix)+4]); err == nil && n >= next {
+		if n, err := strconv.Atoi(base[len(prefix) : len(prefix)+4]); numbered.MatchString(base) && err == nil && n+1 > next {
 			next = n + 1
 		}
 		return nil
@@ -198,4 +275,14 @@ func nextDecisionNumber(kbRoot, prefix string) (int, error) {
 		return 0, err
 	}
 	return next, nil
+}
+
+// evalRoot follows a symlinked scan root; filepath.WalkDir does not
+// follow a root symlink, so the numbering scan would read an absent
+// tree while the write follows the link.
+func evalRoot(root string) string {
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		return resolved
+	}
+	return root
 }

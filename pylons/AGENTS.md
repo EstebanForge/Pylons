@@ -4,4 +4,4 @@ Documentation about Pylons itself: feature guides, manifesto, roadmap, and relea
 
 ## Rules
 
-- Keep meta docs aligned with `../README.md`, `../AGENTS.md`, and `../cli/`.
+- Keep these docs aligned with `../README.md`, `../AGENTS.md`, and `../cli/`.

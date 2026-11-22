@@ -62,7 +62,6 @@ Usage:
   pylon install         [--pylons <path>]
   pylon init [dir]       [--pylons <path>]
   pylon new <type> <name> [--title <t>] [--number] [--pylons <path>]
-  pylon init [dir]
 
 Exit codes:
   0 Clean or advisory-only
@@ -685,8 +684,8 @@ func run(args []string) int {
 		return cmdHarvest(kbRoot, harvestDiffPath, harvestMetaPath, harvestRecordPath)
 
 	case "new":
-		if len(rest) < 2 {
-			fmt.Fprintln(os.Stderr, "pylon: new requires a document type and a name")
+		if len(rest) < 2 || len(rest) > 2 {
+			fmt.Fprintln(os.Stderr, "pylon: new requires exactly a document type and a name")
 			return 2
 		}
 		return cmdNew(kbRoot, rest[0], rest[1], newTitle, newNumbered)

@@ -464,14 +464,21 @@ func resolveSchema(projectRoot, ref string, kind Kind, id string) Verdict {
 // contracts honor repo:// base refs instead of silently reading the worktree.
 // grepTargetRegex is grepTarget with a regex and a filename-extension
 // allowlist on the worktree path; the ref path runs git grep -E with
-// the POSIX form of the same pattern, scoped to the same file set the
-// walk would read. re and posix must match identically: the ref path
-// never sees the Go-only syntax.
-func grepTargetRegex(root, ref string, exts map[string]bool, re *regexp.Regexp, posix string) string {
+// the same pattern, scoped to the same file set the walk reads. The
+// pattern must be engine-neutral (POSIX ERE that RE2 also accepts) and
+// the walk matches it line by line, so both engines judge the same
+// lines; the git-glob excludes mirror the walk's skip list at every
+// depth.
+func grepTargetRegex(root, ref string, exts map[string]bool, pattern string) string {
+	lineRe := regexp.MustCompile(pattern)
 	root = evalRoot(root)
 	if ref != "" && hasGitRepo(root) {
-		out, err := GitRun(root, nil, "grep", "-I", "-m", "1", "-E", "-e", posix, ref,
-			"--", "*.php", ":(exclude)vendor", ":(exclude)node_modules", ":(exclude)target", ":(exclude)_*")
+		out, err := GitRun(root, nil, "grep", "-I", "-m", "1", "-E", "-e", pattern, ref,
+			"--", "*.php",
+			":(glob,exclude)**/vendor/**",
+			":(glob,exclude)**/node_modules/**",
+			":(glob,exclude)**/target/**",
+			":(glob,exclude)**/_*/**")
 		if err != nil {
 			return ""
 		}
@@ -515,7 +522,14 @@ func grepTargetRegex(root, ref string, exts map[string]bool, re *regexp.Regexp, 
 		if err != nil || closeErr != nil {
 			return nil
 		}
-		if re.Match(data) {
+		matched := false
+		for _, line := range strings.Split(string(data), "\n") {
+			if lineRe.MatchString(line) {
+				matched = true
+				break
+			}
+		}
+		if matched {
 			rel, relErr := filepath.Rel(root, p)
 			if relErr != nil {
 				found = p
