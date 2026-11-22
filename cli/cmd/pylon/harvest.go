@@ -4,17 +4,21 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/estebanforge/pylons/cli/internal/rules"
 )
 
 // cmdHarvest renders the pr-harvest candidate artifact to stdout. The
 // engine never writes to main: a CI workflow captures this output as
-// the reviewable patch and a maintainer applies it by hand.
-func cmdHarvest(kbRoot, diffPath, metaPath string) int {
+// the reviewable patch and a maintainer applies it by hand. With
+// --record, each Footgun marker is also appended to a JSONL findings
+// file that `review retro` consumes.
+func cmdHarvest(kbRoot, diffPath, metaPath, recordPath string) int {
 	if diffPath == "" {
 		fmt.Fprintln(os.Stderr, "pylon: harvest pr requires --diff <file|->")
 		return 2
@@ -37,8 +41,36 @@ func cmdHarvest(kbRoot, diffPath, metaPath string) int {
 		fmt.Fprintf(os.Stderr, "pylon: harvest: %v\n", err)
 		return 2
 	}
+	if recordPath != "" && len(rep.Quirks) > 0 {
+		if err := appendRetroRecords(recordPath, rep.Quirks); err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: harvest: %v\n", err)
+			return 2
+		}
+	}
 	fmt.Print(renderHarvest(rep))
 	return 0
+}
+
+// appendRetroRecords appends one JSONL finding per Footgun marker so a
+// recurring marker crosses the retro threshold over later merges.
+func appendRetroRecords(path string, quirks []rules.QuirkCandidate) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	today := time.Now().Format("2006-01-02")
+	for _, q := range quirks {
+		rec := rules.RetroRecord{Date: today, Lens: "review", Text: q.Text, Source: q.Source}
+		line, err := json.Marshal(rec)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(f, "%s\n", line); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func renderHarvest(rep rules.HarvestReport) string {

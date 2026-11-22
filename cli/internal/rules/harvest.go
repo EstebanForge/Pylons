@@ -39,6 +39,7 @@ type UnattributedSymbol struct {
 type QuirkCandidate struct {
 	Slug   string
 	Title  string
+	Text   string // the full Footgun marker text
 	Body   string
 	Source string // e.g. "commit fix: replay storm"
 }
@@ -315,6 +316,7 @@ func harvestFootguns(pm *prMetadata) []QuirkCandidate {
 		q := QuirkCandidate{
 			Slug:   slug,
 			Title:  "Footgun: " + strings.Join(words, " "),
+			Text:   mk.text,
 			Source: mk.source,
 		}
 		q.Body = strings.Join([]string{

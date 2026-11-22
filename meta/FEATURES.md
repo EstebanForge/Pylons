@@ -387,6 +387,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `review rework [--window] [--package]` | Counts `fix:` and `refactor:` commits touching paths a `feat:` commit changed, per registered project. Report-only. | Retro and planning | Never (skips unreadable projects) |
 | `review annotations --from <file|->` | Converts lint findings (SARIF or JSON) into GitHub Check annotations plus a summary comment body; blocking errors only, capped at 50 with the total kept, hostile text sanitized. | CI PR feedback (the workflow posts; the engine emits) | Never; unparsable input exits 2 |
 | `harvest pr --diff <patch|-> [--metadata <json>]` | Turn a merged PR diff into a candidate patch: exported-symbol `exposes:` proposals anchored to the claiming package doc, scaffolded quirk post-mortems for `Footgun:` markers in commit or review bodies, warnings for unattributed and vendored paths. | Capture at merge time | Report-only; never exits on findings |
+| `review retro --findings <file|->` | Count review-finding signatures inside a window and open exactly one promotion candidate per repeated signature: a convention stub in `conventions/proposals/`, a `wrong_if` falsifier entry for the named contract, or a lint-rule proposal. | Closing the loop on repeated review comments | Report-only; malformed records fail closed |
 | `review-brief <plan>` | Assembles a self-contained review packet for fresh-context reviewers. | Peer review | Plan errors |
 | `review-brief --validate <file>` | Stage-1 validation: verifies review completeness and empty evaluations. | Review submission | Incomplete reviews |
 | `review-brief --validate-resolutions <f>` | Stage-2 validation: verifies every finding was resolved before merge. | Pre-merge verification | Unresolved findings |
@@ -424,7 +425,9 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--validate-resolutions <f>` | Validates that all findings in a review packet are resolved. | `review-brief` |
 | `--base <ref>` | Base git ref for diff comparisons. | `review-brief`, `review merge-danger`, `review gate-surface`, `review release-surface`, `harvest pr` |
 | `--diff <patch|->` | Harvest input: the PR diff, or `-` for stdin. | Diff paths resolve against the caller directory, then the ledger root. |
+| `--findings <file|->` | Review-retro input: the JSONL findings file, or `-` for stdin. | Malformed records fail closed |
 | `--metadata <json>` | PR metadata for harvest: commits and review bodies scanned for `Footgun:` markers. | Malformed JSON fails closed |
+| `--record <file>` | Harvest appends each `Footgun:` marker as a JSONL finding for `review retro`. | Append-only file |
 | `--force` | Overwrites a conflicting `core.hooksPath` and drifted hook files. | `install`, `self-update` |
 | `--type <types>` | Filters documents by comma-separated type list. | `map` |
 | `--tag <tags>` | Filters documents by comma-separated tag list. | `map` |
@@ -440,6 +443,8 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--min <float>` | Results must be more similar than this. Search defaults 0.71, recommend 0.65. | `aroma` |
 | `--min-support <n>` | Fewest methods behind a recommendation. 2 by default; 1 reproduces the paper's behavior. | `aroma` |
 | `--min-query-size <n>` | Drops queries with fewer features. Default 0. | `aroma` |
+| `--shape <s>` | Force a promotion shape: `convention`, `falsifier`, or `lint-rule`. | Unanimous record shape wins otherwise |
+| `--min <n>` | Repeat threshold for review retro (default 2); the aroma `--min <float>` is a separate flag. | Lower values widen candidates |
 | `--include-tests` | Keeps `_test.go` files in the corpus. | `aroma` |
 | `--lang <id>` | Picks the language front end for stdin snippets. Only `go` ships today. | `aroma` |
 | `--graph <package>` | Names the package the dependency view starts from. | `context --graph` |

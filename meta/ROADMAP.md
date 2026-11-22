@@ -21,16 +21,6 @@ All features, rules, and commands in Pylons and the `pylon` CLI must be 100% det
 - **Consumer**: Filter input for `pylon context` ranking and periodic hygiene reviews.
 - **Objective**: Keep context lean and high-signal. Weed out obsolete quirks and elevate proven operational patterns to formal engineering standards.
 
-### review-retro
-- **Command**: `pylon review retro [--window <period>]`
-- **Deterministic Mechanism**: Extend the PR harvest (`pr-harvest`). Normalize every human review finding to a signature: lens id, rule or contract id, path pattern. Count signature repeats across merged PRs and returned `review-brief` validations within the window. A signature seen twice or more opens exactly one promotion candidate as a reviewable patch.
-- **Promotion Paths (closed set)**:
-  - `wrong_if` falsifier entry on the touched plan contract, enforced by `check`.
-  - New `pylon` lint rule proposal against the rule catalog.
-  - Convention doc stub in `conventions/proposals/`.
-- **Consumer**: A maintainer accepts the candidate by commit. The loop ends in executable enforcement or accepted prose, never in a repeated comment. No auto-commit: candidate patch only, per the Explicitly Not Adopted list.
-- **Objective**: Never write the same comment twice. A recurring review finding becomes a check, a falsifier, or a convention. Extends the `knowledge-utility` pattern-promotion idea: input here is review findings, not document citations.
-
 ## Explicitly Not Adopted
 
 - **Hosted context runtime.** The agent harness owns sessions. No external portal dependency.

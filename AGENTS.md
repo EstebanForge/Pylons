@@ -42,7 +42,8 @@ Pylons documents reference files with URI schemes, never machine paths.
 - `pylon review release-surface --pinned-releases <dir> [--base <ref>]`
 - `pylon review gate-surface [--base <ref>]`
 - `pylon review annotations --from <file|-> [--path-prefix <p>]`
-- `pylon harvest pr --diff <patch|-> [--metadata <json>]`
+- `pylon harvest pr --diff <patch|-> [--metadata <json>] [--record <file>]`
+- `pylon review retro --findings <file|-> [--window <period>] [--min <n>] [--shape <s>]`
 - `pylon sync [--detached]`
 - `pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>]`
 - `pylon protocol [list|<name>] [--template <path>]`
