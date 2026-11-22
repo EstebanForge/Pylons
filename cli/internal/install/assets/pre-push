@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Pylons pre-push gate: manifest freshness, full-corpus lint, and quirk source
-# validation must pass before leaving the machine.
-# Enable with: pylon install (or git config core.hooksPath .githooks)
+# Pylons pre-push gate shim: all gate logic lives in the compiled
+# engine (pylon gate pre-push). Enable with: pylon install
+# (or git config core.hooksPath .githooks). Opt out: PYLON_HOOKS_OPTIONAL=1
 
 set -euo pipefail
 
@@ -20,32 +20,8 @@ if ! BIN="$(find_bin)"; then
         echo "pylon: PYLON_HOOKS_OPTIONAL=1; skipping pre-push gate" >&2
         exit 0
     fi
-    echo "pylon: no pylon binary found; the push gate cannot run (build: cd cli && go build -o ../bin/pylon ./cmd/pylon; opt out: PYLON_HOOKS_OPTIONAL=1)" >&2
+    echo "pylon: no pylon binary found (build: cd cli && go build -o ../bin/pylon ./cmd/pylon; opt out: PYLON_HOOKS_OPTIONAL=1)" >&2
     exit 1
 fi
 
-FAIL=0
-"$BIN" manifest rules --check >/dev/null || FAIL=1
-"$BIN" manifest packages --check >/dev/null || FAIL=1
-if [[ "$FAIL" -ne 0 ]]; then
-    echo "pylon: manifests stale with frontmatter; run: bin/pylon manifest rules && bin/pylon manifest packages" >&2
-    exit 1
-fi
-
-set +e
-"$BIN" lint --format human
-code=$?
-set -e
-if [[ "$code" -ne 0 ]]; then
-	if [[ "$code" -eq 3 ]]; then
-		echo "pylon: no manifests/pylons.yaml; the KB is broken; fix before pushing" >&2
-	else
-		echo "pylon: corpus lint findings; fix before pushing" >&2
-	fi
-	exit 1
-fi
-
-if ! "$BIN" review postmortem --check-sources --format human; then
-    echo "pylon: quirk source validation failed; declared code paths missing" >&2
-    exit 1
-fi
+exec "$BIN" gate pre-push

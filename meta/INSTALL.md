@@ -27,7 +27,8 @@ Variants:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | bash -s -- my-kb          # custom directory
-curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | PYLONS_VERSION=v0.1.0 bash  # pinned version
+curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | PYLONS_VERSION=0.2.0 bash  # pinned version
+curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | bash -s -- --bin-only .    # binary only, into an existing directory
 ```
 
 The installer needs `bash`, `curl` or `wget`, and a sha256 tool. Minimal containers without `bash` cannot run it; download the release tarballs manually there.
@@ -92,6 +93,15 @@ The repo ships gate hooks in `.githooks/`. Enable them once per clone:
 ```
 
 The command is idempotent: it writes only missing hook scripts and reports what it kept. `pylon init` wires the same hooks automatically when it runs inside a git repository.
+
+The shipped hooks are thin shims: all gate logic lives in the compiled engine, so the shim files rarely change and `self-update` never needs to touch them.
+
+If another tool owns your hooks, `pylon install` refuses instead of silently leaving you ungated. Two ways out:
+
+1. Chain the engine from your own hook template. Add one line to it: `bin/pylon gate pre-commit || exit 1` (and `bin/pylon gate pre-push || exit 1` for push). The engine entry is stable across releases.
+2. Take over with `pylon install --force`. Your previous hook files are kept beside the new ones as `.bak` copies.
+
+In either case, add `pylon lint --ci` and `pylon review gate-surface` to CI as the backstop.
 
 `pre-commit` regenerates the manifests and auto-stages drift, lints changed docs, and reviews staged proposals and quirks. `pre-push` blocks on stale manifests, full-corpus lint findings, and quirk source validation.
 

@@ -25,16 +25,23 @@ var schemeNameRe = regexp.MustCompile(`^[a-z][a-z0-9+.\-]*$`)
 
 var reservedSchemes = []string{"repo", "pylon", "http", "https", "mailto", "file"}
 
+// decisionPrefixRe is the accepted-decision filename prefix grammar:
+// one to four uppercase letters.
+var decisionPrefixRe = regexp.MustCompile(`^[A-Z]{1,4}$`)
+
 // Config holds the parsed pylons.yaml registry.
 type Config struct {
-	Version    int                      `yaml:"version"`
-	Extensions []string                 `yaml:"extensions"`
-	Protocols  map[string]string        `yaml:"protocols"`
-	Parity     *ParityConfig            `yaml:"parity"`
-	Generate   *[]string                `yaml:"generate"`
-	Schemes    []string                 `yaml:"schemes"`
-	Exclude    []string                 `yaml:"exclude"`
-	Projects   map[string]ProjectConfig `yaml:"projects"`
+	Version    int               `yaml:"version"`
+	Extensions []string          `yaml:"extensions"`
+	Protocols  map[string]string `yaml:"protocols"`
+	Parity     *ParityConfig     `yaml:"parity"`
+	Generate   *[]string         `yaml:"generate"`
+	Schemes    []string          `yaml:"schemes"`
+	Exclude    []string          `yaml:"exclude"`
+	// DecisionPrefix names accepted-decision files: <prefix>NNNN-slug.md.
+	// Absent means D.
+	DecisionPrefix string                   `yaml:"decision_prefix"`
+	Projects       map[string]ProjectConfig `yaml:"projects"`
 }
 
 // GeneratedManifests is the closed set of manifests the gate hooks
@@ -54,6 +61,15 @@ func (c Config) GeneratesManifest(name string) bool {
 		}
 	}
 	return false
+}
+
+// DecisionPrefixOrDefault is the accepted-decision filename prefix:
+// the configured value, else D.
+func (c Config) DecisionPrefixOrDefault() string {
+	if c.DecisionPrefix == "" {
+		return "D"
+	}
+	return c.DecisionPrefix
 }
 
 // ProjectConfig describes one tracked repository or project.
@@ -146,6 +162,9 @@ func Load(root string) (Config, error) {
 		if slices.Contains(reservedSchemes, sc) {
 			return cfg, errors.New("schemes: " + sc + " is built in and cannot be redeclared")
 		}
+	}
+	if cfg.DecisionPrefix != "" && !decisionPrefixRe.MatchString(cfg.DecisionPrefix) {
+		return cfg, errors.New("decision_prefix: must be one to four uppercase letters, got " + cfg.DecisionPrefix)
 	}
 	if cfg.Generate != nil {
 		for _, g := range *cfg.Generate {

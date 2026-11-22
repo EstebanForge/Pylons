@@ -629,6 +629,13 @@ func run(args []string) int {
 	case "self-update":
 		return cmdSelfUpdate(kbRoot, annFrom, forceHooks, dryRunUpdate)
 
+	case "gate":
+		if len(rest) == 0 {
+			fmt.Fprintln(os.Stderr, "pylon: gate requires 'pre-commit' or 'pre-push'")
+			return 2
+		}
+		return runGate(kbRoot, rest[0])
+
 	case "manifest":
 		if len(rest) == 0 {
 			fmt.Fprintln(os.Stderr, "pylon: manifest requires 'rules' or 'packages'")
@@ -859,7 +866,8 @@ func cmdInstall(kbRoot string, force bool) int {
 	// when they are not; refuse and point at the takeover flag.
 	if len(res.DriftedHooks) > 0 && len(res.SkippedHooks) == 0 && len(res.WroteHooks) == 0 {
 		fmt.Fprintf(os.Stderr, "pylon install: every gate hook is foreign; the pylon gates will not run\n")
-		fmt.Fprintf(os.Stderr, "pylon install: %s in .githooks differ from the shipped gates; inspect them, or take over with pylon install --force\n", strings.Join(res.DriftedHooks, ", "))
+		fmt.Fprintf(os.Stderr, "pylon install: chain the engine into your own hook template with: bin/pylon gate pre-commit || exit 1 (and bin/pylon gate pre-push || exit 1)\n")
+		fmt.Fprintf(os.Stderr, "pylon install: %s in .githooks differ from the shipped gates; inspect them, or take over with pylon install --force (foreign copies land as .bak)\n", strings.Join(res.DriftedHooks, ", "))
 		return 1
 	}
 	if res.HooksPathSet {

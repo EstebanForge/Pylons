@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/estebanforge/pylons/cli/internal/resolve"
 )
@@ -81,6 +82,14 @@ func EnsureHooks(kbRoot string, force bool) (Result, error) {
 			// Keep a locally modified hook, but flag the drift.
 			res.DriftedHooks = append(res.DriftedHooks, name)
 		default:
+			// A forced overwrite of an existing hook keeps the old copy
+			// beside it, so a takeover is reversible.
+			if statErr == nil {
+				bak := dst + ".bak." + time.Now().Format("20060102-150405")
+				if err := os.WriteFile(bak, existing, 0o755); err != nil {
+					return res, err
+				}
+			}
 			if err := os.WriteFile(dst, body, 0o755); err != nil {
 				return res, err
 			}

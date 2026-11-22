@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Pylons pre-commit gate: regenerate manifests, lint changed docs, review staged
-# proposals and quirks. Enable with: pylon install (or git config core.hooksPath .githooks)
-# Known limits: manifest auto-stage uses the real index (git commit --only uses
-# a temp index, so the staged manifests stay outside that commit), and
-# lint --changed reads working-tree content of staged paths.
+# Pylons pre-commit gate shim: all gate logic lives in the compiled
+# engine (pylon gate pre-commit). Enable with: pylon install
+# (or git config core.hooksPath .githooks). Opt out: PYLON_HOOKS_OPTIONAL=1
 
 set -euo pipefail
 
@@ -26,43 +24,4 @@ if ! BIN="$(find_bin)"; then
     exit 1
 fi
 
-# Commit-time convenience: auto-stage manifest drift. Push time blocks instead.
-"$BIN" manifest rules >/dev/null
-"$BIN" manifest packages >/dev/null
-if ! git -C "$DIR" diff --exit-code manifests/rules.json manifests/packages.json >/dev/null 2>&1; then
-    git -C "$DIR" add manifests/rules.json manifests/packages.json
-    echo "pylon: auto-staged regenerated manifests"
-fi
-
-set +e
-"$BIN" lint --changed --format human
-code=$?
-set -e
-if [[ "$code" -eq 3 ]]; then
-    echo "pylon: no manifests/pylons.yaml; skipping lint gate" >&2
-elif [[ "$code" -ne 0 ]]; then
-    echo "pylon: lint findings on changed docs; fix before committing" >&2
-    exit 1
-fi
-
-while IFS= read -r f; do
-    [[ -z "$f" ]] && continue
-    [[ "$f" == "proposals/README.md" || "$f" == "proposals/AGENTS.md" ]] && continue
-    if [[ "$f" =~ ^proposals/.*\.md$ && -f "$DIR/$f" ]]; then
-        if ! "$BIN" review plan "$f" --format human; then
-            echo "pylon: plan review findings in $f; fix structure before committing" >&2
-            exit 1
-        fi
-    fi
-done < <(git -C "$DIR" diff --cached --name-only --diff-filter=ACMR)
-
-while IFS= read -r f; do
-    [[ -z "$f" ]] && continue
-    [[ "$f" == "quirks/README.md" || "$f" == "quirks/AGENTS.md" ]] && continue
-    if [[ "$f" =~ ^quirks/.*\.md$ && -f "$DIR/$f" ]]; then
-        if ! "$BIN" review postmortem "$f" --check-sources --format human; then
-            echo "pylon: postmortem review findings in $f; verify source paths before committing" >&2
-            exit 1
-        fi
-    fi
-done < <(git -C "$DIR" diff --cached --name-only --diff-filter=ACMR)
+exec "$BIN" gate pre-commit

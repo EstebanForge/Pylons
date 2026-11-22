@@ -35,7 +35,6 @@ var (
 	mdLinkRe      = regexp.MustCompile(`\[[^\]]+\]\(([^)#\s]+)(?:#[^)]*)?\)`)
 	inlineCodeRe  = regexp.MustCompile("`[^`]+`")
 	machinePathRe = regexp.MustCompile(`(?:^|[\s(])(/(?:Users|home|var|etc|opt|tmp)/[^\s)]+|~/[^\s)]+|[A-Za-z]:\\[^\s)]+)`)
-	decisionNumRe = regexp.MustCompile(`^D\d{4}-.+\.md$`)
 )
 
 // isRootSkippedDir skips non-KB top-level directories without skipping nested folders of the same name.
@@ -267,8 +266,12 @@ func lintDoc(kbRoot, rel, content string, cfg config.Config, opts LintOptions) [
 		out = append(out, errFinding("PYLON009", rel, 1, "shipped plan must declare artifact:"))
 	}
 
-	if rootZone == "decisions" && meta.Status == "accepted" && !decisionNumRe.MatchString(filepath.Base(rel)) {
-		out = append(out, errFinding("PYLON010", rel, 1, "accepted decision must be named DNNNN-slug.md"))
+	if rootZone == "decisions" && meta.Status == "accepted" {
+		prefix := cfg.DecisionPrefixOrDefault()
+		nameRe := regexp.MustCompile(`^` + prefix + `\d{4}-.+\.md$`)
+		if !nameRe.MatchString(filepath.Base(rel)) {
+			out = append(out, errFinding("PYLON010", rel, 1, "accepted decision must be named "+prefix+"NNNN-slug.md"))
+		}
 	}
 
 	body := resolve.WithoutFrontMatter(content)
@@ -440,7 +443,11 @@ func checkSTE100(rel, body string) []report.Finding {
 		for _, sentence := range strings.Split(cleaned, ". ") {
 			words := strings.Fields(sentence)
 			if len(words) > limit {
-				out = append(out, errFinding("PYLON006", rel, idx+1, "sentence exceeds "+strconv.Itoa(limit)+" words under ASD-STE100"))
+				head := words
+				if len(head) > 8 {
+					head = head[:8]
+				}
+				out = append(out, errFinding("PYLON006", rel, idx+1, "sentence exceeds "+strconv.Itoa(limit)+" words under ASD-STE100: "+strings.Join(head, " ")))
 				break
 			}
 		}

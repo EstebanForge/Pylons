@@ -62,6 +62,7 @@ projects:
 | `exclude` | no | KB-relative globs never linted and never indexed. |
 | `projects.<alias>.ref` | no | Git ref the checker reads when resolving the project's code. Unset means the working tree. |
 | `projects.<alias>.tier` | no | Free-form tier hint, for example `core`, `app`, or `service`. |
+| `decision_prefix` | no | One to four uppercase letters naming accepted-decision files `<prefix>NNNN-slug.md`. Absent means `D`. |
 | `projects.<alias>.extensions` | no | Extension ids enabled for this project only. |
 
 ## Key constraints

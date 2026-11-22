@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/estebanforge/pylons/cli/internal/report"
 )
@@ -25,10 +26,27 @@ import (
 // message (a sentence now at 26 words) keeps the same fingerprint.
 var volatileNumRe = regexp.MustCompile(`[0-9]+`)
 
-// Baseline is the on-disk accepted-debt ledger.
+// Baseline is the on-disk accepted-debt ledger. Entries carry the
+// finding itself, not a hash, so reviewers can read what debt the
+// ledger accepted; Count carries multiplicity because fingerprints
+// deliberately collapse repeated messages in one file.
 type Baseline struct {
-	Version      int      `json:"version"`
-	Fingerprints []string `json:"fingerprints"`
+	Version  int             `json:"version"`
+	Accepted []BaselineEntry `json:"accepted"`
+}
+
+// BaselineEntry is one accepted finding kind.
+type BaselineEntry struct {
+	Rule    string `json:"rule"`
+	File    string `json:"file"`
+	Message string `json:"message"`
+	Count   int    `json:"count"`
+}
+
+// baselineKey groups findings the way the baseline judges them: the
+// message with volatile digits stripped, no line number.
+func baselineKey(f report.Finding) string {
+	return f.RuleID + "\x00" + f.File + "\x00" + volatileNumRe.ReplaceAllString(f.Message, "#")
 }
 
 func baselinePath(kbRoot string) string {
@@ -56,16 +74,31 @@ var baselineExemptRules = map[string]bool{
 // set. A config-error finding is never recorded: a broken
 // manifests/pylons.yaml must always block.
 func UpdateBaseline(kbRoot string, findings []report.Finding) error {
-	var fps []string
+	counts := map[string]*BaselineEntry{}
 	for _, f := range findings {
 		if f.Grade != report.GradeForced || f.File == "manifests/pylons.yaml" || baselineExemptRules[f.RuleID] {
 			continue
 		}
-		fps = append(fps, Fingerprint(f))
+		if e, ok := counts[baselineKey(f)]; ok {
+			e.Count++
+			continue
+		}
+		counts[baselineKey(f)] = &BaselineEntry{Rule: f.RuleID, File: f.File, Message: f.Message, Count: 1}
 	}
-	slices.Sort(fps)
-	fps = slices.Compact(fps)
-	data, err := json.MarshalIndent(Baseline{Version: 1, Fingerprints: fps}, "", "  ")
+	accepted := make([]BaselineEntry, 0, len(counts))
+	for _, e := range counts {
+		accepted = append(accepted, *e)
+	}
+	slices.SortFunc(accepted, func(a, b BaselineEntry) int {
+		if c := strings.Compare(a.File, b.File); c != 0 {
+			return c
+		}
+		if c := strings.Compare(a.Rule, b.Rule); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Message, b.Message)
+	})
+	data, err := json.MarshalIndent(Baseline{Version: 2, Accepted: accepted}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -82,26 +115,36 @@ func ApplyBaseline(kbRoot string, findings []report.Finding) (kept []report.Find
 		return findings, 0, 0
 	}
 	var b Baseline
-	if json.Unmarshal(data, &b) != nil {
-		return findings, 0, 0
+	if json.Unmarshal(data, &b) != nil || b.Version != 2 {
+		// A v1 file predates counts and would suppress by hash alone;
+		// it must be regenerated, loudly.
+		reject := errFinding("PYLON001", "manifests/baseline.json", 1,
+			"baseline format is not version 2; regenerate with pylon lint --update-baseline")
+		out := findings[:0:0]
+		out = append(out, findings...)
+		out = append(out, reject)
+		return out, 0, 0
 	}
-	entries := map[string]bool{}
-	for _, fp := range b.Fingerprints {
-		entries[fp] = true
+	budget := map[string]int{}
+	entryExists := map[string]bool{}
+	for _, e := range b.Accepted {
+		key := e.Rule + "\x00" + e.File + "\x00" + volatileNumRe.ReplaceAllString(e.Message, "#")
+		budget[key] = e.Count
+		entryExists[key] = true
 	}
-	matched := map[string]bool{}
+	matched := map[string]int{}
 	kept = findings[:0:0]
 	for _, f := range findings {
-		fp := Fingerprint(f)
-		if f.Grade == report.GradeForced && f.File != "manifests/pylons.yaml" && !baselineExemptRules[f.RuleID] && entries[fp] {
+		key := baselineKey(f)
+		if f.Grade == report.GradeForced && f.File != "manifests/pylons.yaml" && !baselineExemptRules[f.RuleID] && matched[key] < budget[key] {
+			matched[key]++
 			accepted++
-			matched[fp] = true
 			continue
 		}
 		kept = append(kept, f)
 	}
-	for fp := range entries {
-		if !matched[fp] {
+	for key, count := range budget {
+		if matched[key] < count || !entryExists[key] {
 			stale++
 		}
 	}

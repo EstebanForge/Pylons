@@ -116,3 +116,31 @@ func TestExcludeValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestDecisionPrefixValidation(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]bool{
+		"version: 1\n":                         true, // absent means D
+		"version: 1\ndecision_prefix: A\n":     true,
+		"version: 1\ndecision_prefix: OK\n":    true,
+		"version: 1\ndecision_prefix: \"\"\n":  true,
+		"version: 1\ndecision_prefix: abc\n":   false, // lowercase
+		"version: 1\ndecision_prefix: ABCDE\n": false,
+		"version: 1\ndecision_prefix: A1\n":    false,
+	}
+	for manifest, want := range cases {
+		if err := os.WriteFile(filepath.Join(dir, "manifests", "pylons.yaml"), []byte(manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := Load(dir)
+		if want && err != nil {
+			t.Errorf("%q: unexpected error %v", manifest, err)
+		}
+		if !want && err == nil {
+			t.Errorf("%q: expected a validation error", manifest)
+		}
+	}
+}

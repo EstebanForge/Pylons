@@ -6,6 +6,11 @@
 #   curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | bash
 #   curl -fsSL ... | bash -s -- my-kb                  # custom directory
 #   curl -fsSL ... | PYLONS_VERSION=0.2.0 bash        # pinned version
+#   curl -fsSL ... | bash -s -- --bin-only .          # binary only, into an existing directory
+#
+# --bin-only places bin/pylon (with its license files) into an
+# existing directory and nothing else: no scaffolding, no git, no
+# hooks. For ledgers that predate Pylons.
 #
 # Requires bash, curl or wget, and a sha256 tool. The installer never
 # touches anything outside the target directory.
@@ -14,6 +19,11 @@ main() {
 
 	REPO="EstebanForge/Pylons"
 	VERSION="${PYLONS_VERSION:-latest}"
+	BIN_ONLY=0
+	if [ "${1:-}" = "--bin-only" ]; then
+		BIN_ONLY=1
+		shift
+	fi
 	DEST="${1:-pylons}"
 
 	log() { printf 'pylons-install: %s\n' "$*"; }
@@ -79,16 +89,37 @@ main() {
 
 	log "downloading $VERSION for $os/$arch"
 	fetch "$base/$bin_asset" "$work/$bin_asset"
-	fetch "$base/$kb_asset" "$work/$kb_asset"
 	fetch "$base/checksums.txt" "$work/checksums.txt"
+	if [ "$BIN_ONLY" != 1 ]; then
+		fetch "$base/$kb_asset" "$work/$kb_asset"
+	fi
 
-	for f in "$bin_asset" "$kb_asset"; do
+	for f in "$bin_asset" $([ "$BIN_ONLY" != 1 ] && printf '%s' "$kb_asset"); do
 		want="$(awk -v f="$f" '{ sub(/.*\//, "", $2); if ($2 == f) print $1 }' "$work/checksums.txt")"
 		got="$(sum "$work/$f")"
 		[ -n "$want" ] || die "no checksum found for $f"
 		[ "$want" = "$got" ] || die "checksum mismatch for $f (want $want, got $got)"
 	done
 	log "checksums verified"
+
+	if [ "$BIN_ONLY" = 1 ]; then
+		# Binary-only mode: an existing ledger gets the engine and its
+		# license files under bin/ and nothing else.
+		[ -d "$DEST" ] || die "--bin-only needs an existing directory; $DEST does not exist"
+		# The tarball carries a bin/ prefix; strip it so everything
+		# lands flat in the target's bin/.
+		mkdir -p "$DEST/bin"
+		tar -xzf "$work/$bin_asset" -C "$DEST/bin" --strip-components=1
+		chmod +x "$DEST/bin/pylon"
+		printf -v q '%q' "$DEST"
+		log "binary installed at $DEST/bin/pylon"
+		log "next steps:"
+		log "  1. write manifests/pylons.yaml in $q (see the README)"
+		log "  2. $DEST/bin/pylon install --pylons $DEST"
+		log "  3. consider adding bin/ to .gitignore"
+		log "done"
+		return 0
+	fi
 
 	mkdir -p "$work/stage"
 	tar -xzf "$work/$bin_asset" -C "$work/stage"
