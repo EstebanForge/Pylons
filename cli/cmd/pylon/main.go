@@ -627,8 +627,16 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, "pylon: search requires <query>")
 			return 2
 		}
-		docs := filterDocs(scanDocs(kbRoot, mapAll), "", "", "", "", "", strings.Join(rest, " "), limit, queryProjectAliases(kbRoot))
-		return renderDocs(docs, format)
+		query := strings.Join(rest, " ")
+		cfg := loadConfigOrWarn(kbRoot)
+		docs := scanDocs(kbRoot, mapAll)
+		expanded := expandQueryTerms(kbRoot, cfg, docs, docTokens(query))
+		full := query
+		if len(expanded) > 0 {
+			full = query + " " + strings.Join(expanded, " ")
+		}
+		ranked := filterDocs(docs, "", "", "", "", "", full, limit, queryProjectAliases(kbRoot))
+		return renderSearch(ranked, expanded, format)
 
 	case "self-update":
 		return cmdSelfUpdate(kbRoot, annFrom, forceHooks, dryRunUpdate)
@@ -1107,6 +1115,8 @@ type docEntry struct {
 	Machines   int      `json:"-"`
 	Owners     []string `json:"-"`
 	Updated    string   `json:"-"`
+	Links      []string `json:"-"`
+	IndexTerms []string `json:"-"`
 	Body       string   `json:"-"`
 }
 
@@ -1156,10 +1166,12 @@ func scanDocs(kbRoot string, includeArchive bool) []docEntry {
 			Machines:   len(meta.Machines),
 			Owners:     meta.Owners,
 			Updated:    meta.Updated,
+			Links:      meta.Links,
 			Body:       string(raw),
 		})
 		return nil
 	})
+	expandIndexTerms(docs)
 	slices.SortFunc(docs, func(a, b docEntry) int { return strings.Compare(a.Path, b.Path) })
 	return docs
 }
@@ -1215,7 +1227,37 @@ func indexText(d docEntry) string {
 		[]string{d.Title, d.Type, d.Status, d.Package},
 		d.Tags, d.Components, d.Owners,
 	), " ")
+	if len(d.IndexTerms) > 0 {
+		header = strings.Join(slices.Concat([]string{header}, d.IndexTerms), " ")
+	}
 	return header + " " + resolve.WithoutFrontMatter(d.Body)
+}
+
+// renderSearch labels query expansion in human output and carries it as
+// an explicit field in JSON.
+func renderSearch(docs []docEntry, expanded []string, format report.Format) int {
+	if docs == nil {
+		docs = []docEntry{}
+	}
+	if expanded == nil {
+		expanded = []string{}
+	}
+	if format == report.FormatJSON {
+		if err := json.NewEncoder(os.Stdout).Encode(struct {
+			Expanded []string   `json:"expanded"`
+			Docs     []docEntry `json:"docs"`
+		}{expanded, docs}); err != nil {
+			return 2
+		}
+		return 0
+	}
+	if len(expanded) > 0 {
+		fmt.Printf("expanded: %s\n", strings.Join(expanded, " "))
+	}
+	for _, d := range docs {
+		fmt.Printf("%s\t[%s/%s]\t%s\n", d.Path, d.Type, d.Status, d.Title)
+	}
+	return 0
 }
 
 func renderDocs(docs []docEntry, format report.Format) int {

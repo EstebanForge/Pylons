@@ -49,7 +49,7 @@ Roadmap build-out. Every lint finding now carries a remediation line sourced fro
 - Secret scanning recognizes PGP private-key blocks and the JSON, ENV-suffixed, dash-key, and bearer assignment shapes; install records a replaced core.hooksPath and names the chain line when a foreign hook shares the gate.
 - The lint usage line documents --update-baseline.
 - Documentation pass: the feature guide carries the proof machinery (secret shapes, gate guard, strict frontmatter, readable baseline) and true command and flag dictionaries; the roadmap gains five deterministic retrieval items with a recall gate.
-- Search ranks on situated documents: a deterministic header carries structured frontmatter fields into the index while YAML keys never score, and a fusion pass promotes live status, recent updates, exact rule ids, and the queried project over equally-scoring stale records.
+- Search ranks on situated documents: a deterministic header carries structured frontmatter fields into the index while YAML keys never score, and a fusion pass promotes live status, recent updates, exact rule ids, and the queried project over equally-scoring stale records. Query expansion resolves source-file and package tokens to their owning package and dependency-graph neighbors, surfaced in human output and as an explicit JSON field; the search index gains one-hop domain vocabulary from linked entities.
 
 ## 2026-01-26: Origin
 

@@ -231,3 +231,11 @@ func globMatchesTarget(pattern string, nt normalizedTarget, components []string)
 	}
 	return resolve.MatchGlob(pattern, nt.path)
 }
+
+// ResolveCheckTarget exposes check-target path resolution for query
+// expansion: a raw path maps to its owning project alias. Plain
+// relative paths carry no attribution, mirroring normalizeCheckTarget.
+func ResolveCheckTarget(kbRoot, raw string, cfg config.Config) (alias, rel string, ok bool) {
+	t := normalizeCheckTarget(kbRoot, raw, cfg)
+	return t.alias, t.path, t.alias != ""
+}
