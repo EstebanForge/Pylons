@@ -275,3 +275,40 @@ func TestRustEnumBlockBeforeMatchDoesNotEndTheScan(t *testing.T) {
 		t.Fatalf("got %d triples, want 2 (the enum block must not end the scan)", len(trs))
 	}
 }
+
+func TestRustMultilineAdjacencyArmExtracts(t *testing.T) {
+	// rustfmt wraps long successor lists across lines; the canonical
+	// form must read them or every formatted adopter breaks.
+	src := "// pylon:machine sync\nmatch self {\n    SyncState::Idle => &[\n        SyncState::Pulling,\n        SyncState::PushVerify,\n    ],\n    SyncState::Pulling => &[SyncState::Idle],\n}\n"
+	trs, err := extractRustTransitions(src, "sync")
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if len(trs) != 3 {
+		t.Fatalf("got %d triples, want 3: %+v", len(trs), trs)
+	}
+	if trs[0].from != "Idle" || trs[1].to != "PushVerify" || trs[2].from != "Pulling" {
+		t.Fatalf("triples wrong: %+v", trs)
+	}
+}
+
+func TestRustTrailingCommentOnArmExtracts(t *testing.T) {
+	src := "// pylon:machine sync\nmatch self {\n    SyncState::Idle => &[SyncState::Pulling], // start of the loop\n}\n"
+	trs, err := extractRustTransitions(src, "sync")
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if len(trs) != 1 || trs[0].from != "Idle" || trs[0].to != "Pulling" {
+		t.Fatalf("triples = %+v, want Idle -> Pulling", trs)
+	}
+}
+
+func TestRustGuardedArmFailsClosed(t *testing.T) {
+	// A guard is a conditional transition: reading it as an
+	// unconditional triple would lie about the machine.
+	src := "// pylon:machine sync\nmatch self {\n    SyncState::Idle if SyncState::Pushing.is_ready() => &[SyncState::Pulling],\n}\n"
+	_, err := extractRustTransitions(src, "sync")
+	if err == nil || !strings.Contains(err.Error(), "guard") {
+		t.Fatalf("err = %v, want a guard-outside-canonical-form error", err)
+	}
+}

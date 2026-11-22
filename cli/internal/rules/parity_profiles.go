@@ -154,6 +154,8 @@ func extractRustTransitions(source, machineID string) ([]parityTransition, error
 	found, sawID := false, ""
 	var out []parityTransition
 	inBody := false
+	var arm strings.Builder
+	armLines := 0
 	for _, line := range lines {
 		if id, ok := markerLineID(line); ok {
 			if found && inBody {
@@ -182,17 +184,45 @@ func extractRustTransitions(source, machineID string) ([]parityTransition, error
 		if trimmed == "}" {
 			break
 		}
-		trimmed = strings.TrimSuffix(trimmed, ",")
-		if trimmed == "" || strings.HasPrefix(trimmed, "//") || !strings.Contains(trimmed, "=>") {
+		if comment := strings.Index(trimmed, "//"); comment >= 0 {
+			trimmed = strings.TrimSpace(trimmed[:comment])
+			if trimmed == "" {
+				continue
+			}
+		}
+		if !strings.Contains(trimmed, "=>") && arm.Len() == 0 {
 			// Structural lines (the fn signature, the match header)
 			// carry no triples.
 			continue
 		}
-		trs, err := parseRustArm(trimmed)
+		if arm.Len() > 0 {
+			// Continuation lines keep their commas: they separate the
+			// successor list items.
+			arm.WriteString(" ")
+			arm.WriteString(trimmed)
+		} else {
+			arm.WriteString(strings.TrimSuffix(trimmed, ","))
+		}
+		armLines++
+		if depth := strings.Count(arm.String(), "[") - strings.Count(arm.String(), "]"); depth > 0 {
+			if armLines > 50 {
+				return nil, fmt.Errorf("machine %s: adjacency arm never closes", machineID)
+			}
+			// rustfmt wraps long successor lists; keep reading lines
+			// until the bracket closes.
+			continue
+		}
+		text := strings.TrimSuffix(arm.String(), ",")
+		arm.Reset()
+		armLines = 0
+		trs, err := parseRustArm(text)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, trs...)
+	}
+	if arm.Len() > 0 {
+		return nil, fmt.Errorf("machine %s: adjacency arm never closes", machineID)
 	}
 	if !found {
 		if sawID != "" {
@@ -219,6 +249,9 @@ func parseRustArm(arm string) ([]parityTransition, error) {
 	before, after, ok := strings.Cut(arm, "=>")
 	if !ok {
 		return nil, nil
+	}
+	if guardRe.MatchString(before) {
+		return nil, fmt.Errorf("rust arm %q: guarded arms are outside the canonical form; declare the guard as its own from-state", arm)
 	}
 	value := strings.TrimSpace(after)
 	if strings.HasSuffix(strings.TrimSpace(before), "{") || strings.HasPrefix(value, "{") {
@@ -330,3 +363,7 @@ var rustWrapperTokens = map[string]bool{
 	"Ok": true, "Some": true, "Err": true, "None": true,
 	"ok": true, "some": true, "err": true, "none": true, "vec": true, "Vec": true,
 }
+
+// guardRe matches a Rust match-arm guard: `State if cond =>`, a
+// conditional transition the canonical flat form cannot represent.
+var guardRe = regexp.MustCompile(`(^|[^A-Za-z0-9_])if([^A-Za-z0-9_]|$)`)
