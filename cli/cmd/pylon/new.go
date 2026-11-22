@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -52,7 +53,7 @@ func isSlugName(name string) bool {
 	return true
 }
 
-func cmdNew(kbRoot, docType, name, title string) int {
+func cmdNew(kbRoot, docType, name, title string, numbered bool) int {
 	var spec *newDocType
 	for i := range newDocTypes {
 		if newDocTypes[i].typ == docType {
@@ -71,6 +72,23 @@ func cmdNew(kbRoot, docType, name, title string) int {
 	if !isSlugName(name) {
 		fmt.Fprintf(os.Stderr, "pylon: the name must be kebab-case (lowercase letters, digits, dashes)\n")
 		return 2
+	}
+	prefix := loadConfigOrWarn(kbRoot).DecisionPrefixOrDefault()
+	if numbered {
+		if spec.typ != "decision" {
+			fmt.Fprintf(os.Stderr, "pylon: --number applies to decisions only\n")
+			return 2
+		}
+		next, err := nextDecisionNumber(kbRoot, prefix)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: cannot scan decisions: %v\n", err)
+			return 1
+		}
+		if next > 9999 {
+			fmt.Fprintf(os.Stderr, "pylon: the %s numbering is exhausted at 9999\n", prefix)
+			return 2
+		}
+		name = fmt.Sprintf("%s%04d-%s", prefix, next, name)
 	}
 	data, err := readAnnotationInput(filepath.Join(kbRoot, "templates", spec.template+".md"))
 	if err != nil {
@@ -148,4 +166,36 @@ func fillNewFrontMatter(template string, spec *newDocType, title string) string 
 		b.WriteString("\n")
 	}
 	return "---\n" + b.String() + body
+}
+
+// nextDecisionNumber scans decisions/ recursively for the configured
+// prefix's four-digit numbers and returns the next free one, so a
+// numbered proposal keeps a valid PYLON010 name when it is accepted
+// and moved under decisions/.
+func nextDecisionNumber(kbRoot, prefix string) (int, error) {
+	next := 1
+	root := filepath.Join(kbRoot, "decisions")
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) && path == root {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		base := d.Name()
+		if !strings.HasPrefix(base, prefix) || len(base) <= len(prefix)+4 {
+			return nil
+		}
+		if n, err := strconv.Atoi(base[len(prefix) : len(prefix)+4]); err == nil && n >= next {
+			next = n + 1
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return next, nil
 }

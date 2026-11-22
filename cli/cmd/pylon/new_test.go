@@ -171,6 +171,67 @@ func TestNewTitleFlag(t *testing.T) {
 	}
 }
 
+func TestNewDecisionNumberAssignsNext(t *testing.T) {
+	kb := newSandboxKB(t)
+	dec := filepath.Join(kb, "decisions")
+	if err := os.MkdirAll(filepath.Join(dec, "archive"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"D0001-first.md", "D0003-third.md", filepath.Join("archive", "D0002-old.md")} {
+		if err := os.WriteFile(filepath.Join(dec, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, ec := runNew(t, kb, "decision", "use-ledger-sync", "--number")
+	if ec != 0 {
+		t.Fatalf("exit %d: %s", ec, out)
+	}
+	if _, err := os.Stat(filepath.Join(kb, "decisions", "proposals", "D0004-use-ledger-sync.md")); err != nil {
+		t.Fatalf("the next free number must be assigned: %v\n%s", err, out)
+	}
+}
+
+func TestNewDecisionNumberHonorsPrefix(t *testing.T) {
+	kb := newSandboxKB(t)
+	if err := os.WriteFile(filepath.Join(kb, "manifests", "pylons.yaml"), []byte("version: 1\ndecision_prefix: A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dec := filepath.Join(kb, "decisions")
+	if err := os.MkdirAll(dec, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dec, "A0007-prior.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ec := runNew(t, kb, "decision", "event-sourcing", "--number"); ec != 0 {
+		t.Fatal("numbered creation failed")
+	}
+	if _, err := os.Stat(filepath.Join(kb, "decisions", "proposals", "A0008-event-sourcing.md")); err != nil {
+		t.Fatal("the configured prefix must drive the numbering")
+	}
+}
+
+func TestNewDecisionNumberOnlyForDecisions(t *testing.T) {
+	kb := newSandboxKB(t)
+	if _, ec := runNew(t, kb, "quirk", "numbered", "--number"); ec != 2 {
+		t.Fatalf("--number outside decision must be a usage error, got exit %d", ec)
+	}
+}
+
+func TestNewDecisionNumberRefusesExhausted(t *testing.T) {
+	kb := newSandboxKB(t)
+	dec := filepath.Join(kb, "decisions")
+	if err := os.MkdirAll(dec, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dec, "D9999-last.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ec := runNew(t, kb, "decision", "one-more", "--number"); ec != 2 {
+		t.Fatalf("exhausted numbers must be a usage error, got exit %d", ec)
+	}
+}
+
 // The type table must cover every shipped template, so a new template
 // can never ship without pylon new knowing it.
 func TestNewCoversEveryTemplate(t *testing.T) {

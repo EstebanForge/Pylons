@@ -58,7 +58,7 @@ Pylons documents reference files with URI schemes, never machine paths.
 - `pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]`
 - `pylon install`
 - `pylon init [dir]`
-- `pylon new <type> <name> [--title <t>]`
+- `pylon new <type> <name> [--title <t>] [--number]`
 
 # Project AGENTS extension
 Read the contents of @AGENTS.project.md

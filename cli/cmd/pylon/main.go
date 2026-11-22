@@ -60,6 +60,8 @@ Usage:
   pylon explain <rule_id>
   pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]
   pylon install         [--pylons <path>]
+  pylon init [dir]       [--pylons <path>]
+  pylon new <type> <name> [--title <t>] [--number] [--pylons <path>]
   pylon init [dir]
 
 Exit codes:
@@ -141,6 +143,7 @@ func run(args []string) int {
 	graphPkg, annFrom, annPrefix := "", "", ""
 	harvestDiffPath, harvestMetaPath, harvestRecordPath := "", "", ""
 	newTitle := ""
+	newNumbered := false
 	retroFindingsPath, retroShape := "", ""
 	retroMin := 0
 	graphDepth := 0
@@ -184,6 +187,8 @@ func run(args []string) int {
 			preamble = true
 		case arg == "--check-sources":
 			checkSources = true
+		case arg == "--number":
+			newNumbered = true
 		case arg == "--stdout":
 			rbStdout = true
 		case arg == "--all":
@@ -684,7 +689,7 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, "pylon: new requires a document type and a name")
 			return 2
 		}
-		return cmdNew(kbRoot, rest[0], rest[1], newTitle)
+		return cmdNew(kbRoot, rest[0], rest[1], newTitle, newNumbered)
 
 	case "gate":
 		if len(rest) == 0 {
