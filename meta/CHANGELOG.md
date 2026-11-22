@@ -48,6 +48,7 @@ Roadmap build-out. Every lint finding now carries a remediation line sourced fro
 - Unknown doc types fall back to the union of known frontmatter keys, so a custom type no longer mass-fires unknown-key advisories on title or type.
 - Secret scanning recognizes PGP private-key blocks and the JSON, ENV-suffixed, dash-key, and bearer assignment shapes; install records a replaced core.hooksPath and names the chain line when a foreign hook shares the gate.
 - The lint usage line documents --update-baseline.
+- Documentation pass: the feature guide carries the proof machinery (secret shapes, gate guard, strict frontmatter, readable baseline) and true command and flag dictionaries; the roadmap gains five deterministic retrieval items with a recall gate.
 
 ## 2026-01-26: Origin
 
