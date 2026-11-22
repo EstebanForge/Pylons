@@ -615,7 +615,11 @@ func run(args []string) int {
 		return 0
 
 	case "map":
-		docs := filterDocs(scanDocs(kbRoot, mapAll), mapType, pkgArg, mapTag, mapStatus, mapFolder, mapQuery, limit, queryProjectAliases(kbRoot))
+		var projs []string
+		if mapQuery != "" {
+			projs = queryProjectAliases(kbRoot)
+		}
+		docs := filterDocs(scanDocs(kbRoot, mapAll), mapType, pkgArg, mapTag, mapStatus, mapFolder, mapQuery, limit, projs)
 		return renderDocs(docs, format)
 
 	case "search":
@@ -1190,17 +1194,7 @@ func filterDocs(docs []docEntry, typ, pkg, tag, status, folder, query string, li
 		}
 		idx := resolve.NewBM25Index(bmDocs)
 		hits := idx.Search(query, 0)
-		ids := make([]string, 0, len(hits))
-		scores := make(map[string]float64, len(hits))
-		for _, h := range hits {
-			ids = append(ids, h.ID)
-			scores[h.ID] = h.Score
-		}
-		docs := make([]docEntry, 0, len(hits))
-		for _, id := range ids {
-			docs = append(docs, byPath[id])
-		}
-		ranked := rerank(ids, scores, docs, projs, docTokens(query))
+		ranked := rerank(hits, byPath, projs, docTokens(query))
 		if limit > 0 && len(ranked) > limit {
 			ranked = ranked[:limit]
 		}

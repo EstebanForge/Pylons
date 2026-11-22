@@ -12,11 +12,15 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/estebanforge/pylons/cli/internal/resolve"
 )
 
 // Fusion weights are fixed in code on purpose: ranking must stay
 // deterministic across machines and CI runs, and the retrieval recall
-// suite gates every change to this table.
+// suite gates every change to this table. Recency buckets compare
+// against the wall clock, so ordering is a pure function of corpus and
+// date: bucket boundaries move at UTC midnight, never mid-run.
 const (
 	fusionStatusBoost   = 0.15
 	fusionRecencyBoost  = 0.10
@@ -70,11 +74,13 @@ func fusionBoost(d docEntry, queryTokens []string, projs []string) float64 {
 		}
 	}
 
-	bodyTokens := docTokens(d.Body)
-	for _, q := range queryTokens {
-		if isRuleIdToken(q) && slices.Contains(bodyTokens, q) {
-			boost += fusionIdentifierHit
-			break
+	if slices.ContainsFunc(queryTokens, isRuleIdToken) {
+		bodyTokens := docTokens(d.Body)
+		for _, q := range queryTokens {
+			if isRuleIdToken(q) && slices.Contains(bodyTokens, q) {
+				boost += fusionIdentifierHit
+				break
+			}
 		}
 	}
 
@@ -91,24 +97,20 @@ func fusionBoost(d docEntry, queryTokens []string, projs []string) float64 {
 	return boost
 }
 
-// rerank applies fusionBoost to BM25 scores and returns the documents in
+// rerank applies fusionBoost to BM25 hits and returns the documents in
 // fused order, strongest first, ties broken by path for determinism.
-func rerank(ids []string, scores map[string]float64, docs []docEntry, projs []string, queryTokens []string) []docEntry {
-	byPath := make(map[string]docEntry, len(docs))
-	for _, d := range docs {
-		byPath[d.Path] = d
-	}
+func rerank(hits []resolve.BM25Result, byPath map[string]docEntry, projs []string, queryTokens []string) []docEntry {
 	type fused struct {
 		doc   docEntry
 		score float64
 	}
-	out := make([]fused, 0, len(ids))
-	for _, id := range ids {
-		d, ok := byPath[id]
+	out := make([]fused, 0, len(hits))
+	for _, h := range hits {
+		d, ok := byPath[h.ID]
 		if !ok {
 			continue
 		}
-		out = append(out, fused{doc: d, score: scores[id] * fusionBoost(d, queryTokens, projs)})
+		out = append(out, fused{doc: d, score: h.Score * fusionBoost(d, queryTokens, projs)})
 	}
 	slices.SortFunc(out, func(a, b fused) int {
 		if c := cmp.Compare(b.score, a.score); c != 0 {
@@ -125,18 +127,28 @@ func rerank(ids []string, scores map[string]float64, docs []docEntry, projs []st
 
 // queryProjectAliases returns the registered project aliases whose roots
 // contain the working directory, so proximity ranking reflects where the
-// query runs from.
+// query runs from. Both sides resolve through Abs and EvalSymlinks so a
+// relative --pylons root or a symlinked checkout still matches.
 func queryProjectAliases(kbRoot string) []string {
 	cfg := loadConfigOrWarn(kbRoot)
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil
 	}
+	if resolved, err := filepath.EvalSymlinks(cwd); err == nil {
+		cwd = resolved
+	}
 	out := make([]string, 0, len(cfg.Projects))
 	for _, alias := range slices.Sorted(maps.Keys(cfg.Projects)) {
 		root := cfg.ProjectPath(kbRoot, alias)
 		if root == "" {
 			continue
+		}
+		if abs, err := filepath.Abs(root); err == nil {
+			root = abs
+		}
+		if resolved, err := filepath.EvalSymlinks(root); err == nil {
+			root = resolved
 		}
 		if cwd == root || strings.HasPrefix(cwd, root+string(filepath.Separator)) {
 			out = append(out, alias)

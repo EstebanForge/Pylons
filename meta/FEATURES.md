@@ -160,7 +160,7 @@ An agent with the wrong context ships the wrong thing fast. These features feed 
 
 #### Discovery (`pylon map`, `pylon search`)
 
-- **What**: One line per document in the ledger, filterable by type, package, tag, folder, status, and query, ranked by BM25 relevance. Full-text search across the corpus beside it.
+- **What**: One line per document in the ledger, filterable by type, package, tag, folder, status, and query, ranked by BM25 relevance fused with deterministic signals (status, recency, rule ids, queried project). Full-text search across the corpus beside it.
 - **The pain**: A ledger of hundreds of documents is useless without discovery. People re-ask answered questions and re-write conventions that already exist.
 - **How it works**: `map` walks document front matter at runtime and caps human output at a token budget with a footer that says how much it hid. `--json` is never truncated. `--all` includes the archive subtrees.
 - **For agents**: A whole-corpus overview in one cheap read, so agents retrieve existing solutions instead of scanning file trees or guessing.
@@ -363,8 +363,8 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `context <paths...>` | Emits token-efficient architectural context: contracts, collisions, quirk guardrails, conventions. | Before file edits | Clean output |
 | `context --slice <plan>` | Prints only one plan's contracts with resolution state, linked quirks, and linked domain terms. | Starting a slice task | Missing plan exits 2 |
 | `context --preamble` | Emits `context` plus the cache-friendly architecture preamble. | Agent prompt boot | Clean output |
-| `map` | Projects corpus front matter as filterable one-line discovery records ranked by BM25. | Discovering docs before reading them | Usage errors exit 2 |
-| `search <query>` | Full-text BM25 search across non-archived documents. | Finding docs by content | Usage errors exit 2 |
+| `map` | Projects corpus front matter as filterable one-line discovery records ranked by BM25 plus deterministic fusion signals. | Discovering docs before reading them | Usage errors exit 2 |
+| `search <query>` | Full-text BM25 search across non-archived documents, reranked by status, recency, rule ids, and project proximity. | Finding docs by content | Usage errors exit 2 |
 | `aroma search\|recommend` | Structural code similarity over featurized parse trees: methods resembling the query, then the code its results share. Query from `--lines path:a-b`, `--snippet <file|->`, or `--diff <file|->` (one query per method the lines touch); corpus is registered projects by default, else `--corpus`. Zero model calls. | Exploring unfamiliar code, orienting on a diff | Never; usage, unreadable corpus, or an empty corpus exit 2 |
 | `review release-surface` | Pinned-release diff: block when a pinned deployment consumes a symbol, route, or cli surface removed or changed against its pinned tag; lockfiles under `--pinned-releases <dir>`, `--base <ref>` overrides pinning. | Release review, version-bump CI | Removed or changed consumed surfaces, unknown pin aliases, missing tags |
 | `review gate-surface` | Guard the guard: block when a diff touches suppression or closed-set manifests, the shipped hooks, the declared-schema templates, or a widened gate knob in `pylons.yaml`. | PR review, CI | Any changed gate surface; under `--ci` an unreadable base fails the run |
