@@ -29,6 +29,10 @@ var gateSurfaces = []string{
 
 const gateHooksPrefix = ".githooks/"
 
+// templates/ is the declared frontmatter schema (TemplateKeys derives
+// from it), so a diff touching it changes what the checker accepts.
+const gateTemplatesPrefix = "templates/"
+
 // gateKnobRe matches added lines that widen a gate-weakening knob in
 // manifests/pylons.yaml: exclude skips linting, generate disables
 // gate-maintained manifests, schemes relaxes link checks.
@@ -42,7 +46,10 @@ func GateSurface(kbRoot, base string) []report.Finding {
 	if strings.TrimSpace(base) == "" {
 		base = "origin/main"
 	}
-	out, err := resolve.GitRun(kbRoot, nil, "diff", "--name-only", base+"...HEAD")
+	// Per-commit union, not a tree diff: a file added and then moved
+	// away within the range nets out of base...HEAD and would evade a
+	// net-only check.
+	out, err := resolve.GitRun(kbRoot, nil, "log", "--name-only", "--no-renames", "--format=", base+"..HEAD")
 	if err != nil {
 		return []report.Finding{advisoryFinding("PYLON063", "manifests/pylons.yaml", 1,
 			"the gate surface check could not run: base "+base+" is unreadable; pin --base to a reachable ref")}
@@ -50,11 +57,12 @@ func GateSurface(kbRoot, base string) []report.Finding {
 	changed := changedPaths(string(out))
 	var touched []string
 	for _, p := range changed {
-		if slices.Contains(gateSurfaces, p) || strings.HasPrefix(p, gateHooksPrefix) {
+		if slices.Contains(gateSurfaces, p) || strings.HasPrefix(p, gateHooksPrefix) || strings.HasPrefix(p, gateTemplatesPrefix) {
 			touched = append(touched, p)
 		}
 	}
 	slices.Sort(touched)
+	touched = slices.Compact(touched)
 	var findings []report.Finding
 	for _, p := range touched {
 		findings = append(findings, errFinding("PYLON062", p, 1,
@@ -67,26 +75,64 @@ func GateSurface(kbRoot, base string) []report.Finding {
 }
 
 // gateKnobFindings reads the pylons.yaml patch and reports each added
-// gate-weakening knob line with its real line number.
+// gate-weakening knob line with its real line number. The patch is the
+// net range diff on purpose: a knob that is added and removed again
+// within the range leaves no widening behind.
 func gateKnobFindings(kbRoot, base string) []report.Finding {
-	patch, err := resolve.GitRun(kbRoot, nil, "diff", "-U0", base+"...HEAD", "--", "manifests/pylons.yaml")
+	patch, err := resolve.GitRun(kbRoot, nil, "diff", "-U3", "--no-ext-diff", "--no-color", base+"...HEAD", "--", "manifests/pylons.yaml")
 	if err != nil {
 		return nil
 	}
 	var findings []report.Finding
+	for _, h := range parseKnobPatch(string(patch)) {
+		findings = append(findings, errFinding("PYLON062", "manifests/pylons.yaml", h.line,
+			"this diff widens a gate knob ("+h.knob+"); walk the change through the ledger owners"))
+	}
+	return findings
+}
+
+type knobHit struct {
+	line int
+	knob string
+}
+
+// parseKnobPatch flags every ADDED line inside an exclude/generate/
+// schemes block: the key line itself and any deeper-indented line
+// under it. Context lines carry the knob state across, so items added
+// under an existing key fire too. A column-0 key ends the block; a
+// blank line keeps it. Lines starting with a backslash ("\\ No
+// newline at end of file") never advance the line.
+func parseKnobPatch(patch string) []knobHit {
+	var findings []knobHit
 	line := 0
-	for _, l := range strings.Split(string(patch), "\n") {
+	knob := ""
+	for _, l := range strings.Split(patch, "\n") {
 		switch {
 		case strings.HasPrefix(l, "@@"):
 			line = hunkNewStart(l)
-		case strings.HasPrefix(l, "+"):
+			knob = ""
+		case strings.HasPrefix(l, "\\"):
+		case strings.HasPrefix(l, "-"):
+		case strings.HasPrefix(l, "+"), strings.HasPrefix(l, " "):
+			added := strings.HasPrefix(l, "+")
 			body := l[1:]
-			if m := gateKnobRe.FindStringSubmatch(body); m != nil {
-				findings = append(findings, errFinding("PYLON062", "manifests/pylons.yaml", line,
-					"this diff widens a gate knob ("+m[1]+"); walk the change through the ledger owners"))
+			switch {
+			case body == "":
+				line++
+				continue
+			case gateKnobRe.MatchString(body):
+				knob = gateKnobRe.FindStringSubmatch(body)[1]
+				if added {
+					findings = append(findings, knobHit{line, knob})
+				}
+			case knob != "" && (strings.HasPrefix(body, " ") || strings.HasPrefix(body, "\t")):
+				if added {
+					findings = append(findings, knobHit{line, knob})
+				}
+			default:
+				knob = ""
 			}
 			line++
-		case strings.HasPrefix(l, "-"):
 		default:
 			line++
 		}

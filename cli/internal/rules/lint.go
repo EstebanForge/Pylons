@@ -76,6 +76,7 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 
 	var findings []report.Finding
 	var docs []corpusDoc
+	var rawDocs []corpusDoc
 	var junk []string
 	_ = filepath.WalkDir(kbRoot, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -133,6 +134,9 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 			}
 		}
 		findings = append(findings, lintDoc(kbRoot, rel, content, cfg, opts)...)
+		// Raw content rides along even when frontmatter fails strict
+		// parsing: the secret scan reads bodies, not metadata.
+		rawDocs = append(rawDocs, corpusDoc{rel: rel, content: content})
 		var meta resolve.DocMeta
 		if resolve.ParseDocMeta(content, &meta) {
 			docs = append(docs, corpusDoc{rel: rel, content: content, meta: meta})
@@ -155,7 +159,7 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 	findings = append(findings, scanPlanAndQuirkRules(kbRoot, docs, cfg, opts)...)
 	findings = append(findings, scanLifecycleRules(kbRoot, docs, cfg, opts.HasCode)...)
 	findings = append(findings, scanMachineDeclarations(docs)...)
-	findings = append(findings, scanSecrets(docs)...)
+	findings = append(findings, scanSecrets(rawDocs)...)
 	if opts.HasCode {
 		findings = append(findings, lintImportBoundaries(kbRoot, cfg, changedSet)...)
 	}

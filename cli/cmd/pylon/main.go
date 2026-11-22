@@ -524,13 +524,7 @@ func run(args []string) int {
 		case "gate-surface":
 			findings := rules.GateSurface(kbRoot, diffBase)
 			rules.Remediate(findings)
-			if err := report.Render(os.Stdout, format, findings); err != nil {
-				return 2
-			}
-			if report.HasBlocking(findings) {
-				return 1
-			}
-			return 0
+			return renderFindings(findings, format, ci)
 		default:
 			fmt.Fprintf(os.Stderr, "pylon: unknown review subcommand %s\n", rest[0])
 			return 2

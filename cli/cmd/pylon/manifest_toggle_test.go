@@ -235,4 +235,7 @@ func TestGateSurfaceFlagPath(t *testing.T) {
 	if code := run([]string{"review", "gate-surface", "--base", "no-such-ref", "--pylons", dir}); code != 0 {
 		t.Fatalf("an unreadable base must stay advisory at exit 0, got %d", code)
 	}
+	if code := run([]string{"review", "gate-surface", "--base", "no-such-ref", "--ci", "--pylons", dir}); code != 1 {
+		t.Fatalf("under --ci an unreadable base must fail the run, got %d", code)
+	}
 }

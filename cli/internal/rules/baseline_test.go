@@ -133,3 +133,19 @@ func readBaseline(t *testing.T, kb string) Baseline {
 	}
 	return b
 }
+
+func TestApplyBaselineNeverSuppressesExemptRules(t *testing.T) {
+	kb := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kb, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	secret := report.Finding{RuleID: "PYLON060", Severity: report.SeverityError, Grade: report.GradeForced, File: "references/aws.md", Message: "possible AWS access key id"}
+	writeBaselineFile(t, kb, []string{Fingerprint(secret)})
+	kept, accepted, stale := ApplyBaseline(kb, []report.Finding{secret})
+	if accepted != 0 || len(kept) != 1 {
+		t.Fatalf("an exempt rule must never be suppressed: accepted=%d kept=%d", accepted, len(kept))
+	}
+	if stale != 1 {
+		t.Fatalf("an exempt-rule entry must report stale so it gets cleaned up: stale=%d", stale)
+	}
+}

@@ -4,6 +4,7 @@
 package rules
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -47,8 +48,8 @@ func TestSecretAssignmentAdvisory(t *testing.T) {
 	src := "---\ntitle: cfg\ntype: investigation\nstatus: resolved\n---\n\npassword: hunter2hunter2\ntoken=abcdef0123456789\napi_key: your-api-key-here\nshort: abc\nHOST=localhost\n"
 	fs := scanSecrets(secretDoc(src))
 	ids := secretIDs(fs)
-	if len(ids["PYLON061"]) != 3 {
-		t.Fatalf("expected 3 PYLON061 findings, got %v", ids)
+	if len(ids["PYLON061"]) != 2 {
+		t.Fatalf("digit-bearing assignments fire, word-only values stay prose: %v", ids)
 	}
 	for _, f := range fs {
 		if f.Severity != report.SeverityAdvisory || f.Grade != report.GradeAdvisory {
@@ -77,5 +78,43 @@ func TestSecretFindingsCapped(t *testing.T) {
 	fs := scanSecrets(secretDoc(src))
 	if len(fs) > 8 {
 		t.Fatalf("findings must cap at 8 per file, got %d", len(fs))
+	}
+}
+
+func TestSecretScanRunsOnUnparsableDocs(t *testing.T) {
+	kb := t.TempDir()
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), "version: 1\n")
+	mustWrite(t, filepath.Join(kb, "references/creds.md"), "---\ntitle: creds\n&bad anchors: yes\ntype: reference\n---\n\nAKIAIOSFODNN7EXAMPLE\n")
+	fs := Lint(kb, LintOptions{})
+	ids := findingRules(fs)
+	joined := strings.Join(ids, "\n")
+	if !strings.Contains(joined, "PYLON001") {
+		t.Fatalf("the broken frontmatter must still fail, got %v", ids)
+	}
+	if !strings.Contains(joined, "PYLON060") {
+		t.Fatalf("a doc that fails strict parsing must still be scanned for secrets, got %v", ids)
+	}
+}
+
+func TestSecretAssignmentRequiresDigit(t *testing.T) {
+	fs := scanSecrets(secretDoc("password = correct-horse-battery-staple\npassword = correct-horse-12345\n"))
+	ids := secretIDs(fs)
+	if len(ids["PYLON061"]) != 1 {
+		t.Fatalf("a word-only assignment is prose, a digit-bearing one is a finding: %v", ids)
+	}
+}
+
+func TestSecretPrefixInsideWordStaysQuiet(t *testing.T) {
+	fs := scanSecrets(secretDoc("the task-ant-api-key-registry-service-handling layer tokens\n"))
+	if ids := secretIDs(fs); len(ids["PYLON060"]) != 0 {
+		t.Fatalf("sk-ant- inside a word must not fire: %v", ids)
+	}
+}
+
+func TestSecretAllowMarkerSkipsLine(t *testing.T) {
+	fs := scanSecrets(secretDoc("AKIAIOSFODNN7EXAMPLE pylons-allow-secret\nAKIAIOSFODNN7EXAMPLE\n"))
+	ids := secretIDs(fs)
+	if len(ids["PYLON060"]) != 1 || ids["PYLON060"][0] != 2 {
+		t.Fatalf("the allow marker must exempt only its own line: %v", ids)
 	}
 }

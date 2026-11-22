@@ -4,8 +4,12 @@
 package resolve
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func strictParse(t *testing.T, front string) (DocMeta, bool) {
@@ -140,4 +144,90 @@ func containsAll(haystack []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestContractEntryExternalKeyIsKnown(t *testing.T) {
+	m, ok := strictParse(t, "title: p\ntype: plan\nstatus: accepted\nticket: [T-1]\ncreated: 2026-11-01\nupdated: 2026-11-01\ntags: [x]\ncontract:\n  stable:\n    - kind: go-symbol\n      id: repo://app/svc.go::Run\n      external: true")
+	if !ok {
+		t.Fatalf("external is read by the checks and must be a known contract key: %v", m.ParseErrors)
+	}
+}
+
+func TestAliasReferencingKeyAnchorRejected(t *testing.T) {
+	m, ok := strictParse(t, "&k title: q\ntype: quirk\nb: *k\nstatus: active\ncreated: 2026-11-01\nupdated: 2026-11-01\ntags: [x]")
+	if ok {
+		t.Fatalf("an alias resolving a key anchor must fail closed, got %+v", m)
+	}
+	if !containsAll(m.ParseErrors, "anchor") {
+		t.Fatalf("expected an anchor rejection, got %v", m.ParseErrors)
+	}
+}
+
+func TestEngineReadKeysKnownOnEveryType(t *testing.T) {
+	// links and supersedes are read on every doc by the graph rules,
+	// so no type may flag them unknown (the fix hint would trip
+	// PYLON004).
+	for typ := range TemplateKeys {
+		set := knownKeySet(typ)
+		for _, want := range engineReadKeys {
+			if !set[want] {
+				t.Errorf("%s: known keys lack engine-read key %s", typ, want)
+			}
+		}
+	}
+}
+
+func TestTemplateKeysCoverTheirTemplates(t *testing.T) {
+	entries, err := os.ReadDir("../../../templates")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || e.Name() == "AGENTS.md" || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join("../../../templates", e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		front := ExtractFrontMatter(string(raw))
+		if front == "" {
+			continue
+		}
+		var node yaml.Node
+		if err := yaml.Unmarshal([]byte(front), &node); err != nil {
+			t.Fatalf("%s: %v", e.Name(), err)
+		}
+		if len(node.Content) == 0 {
+			continue
+		}
+		doc := node.Content[0]
+		typ := ""
+		for i := 0; i+1 < len(doc.Content); i += 2 {
+			if doc.Content[i].Value == "type" {
+				typ = doc.Content[i+1].Value
+			}
+		}
+		if typ == "" {
+			continue
+		}
+		known := knownKeySet(typ)
+		for _, k := range mappingKeys(doc) {
+			if !known[k] {
+				t.Errorf("%s (type %s): template declares key %q that TemplateKeys lacks", e.Name(), typ, k)
+			}
+		}
+	}
+}
+
+func TestStructuralLineNumbersAreFileRelative(t *testing.T) {
+	// The frontmatter body starts at file line 2, so an anchor on the
+	// first frontmatter line must be reported at file line 2.
+	m, ok := strictParse(t, "title: q\nstatus: active\ncreated: 2026-11-01\nupdated: 2026-11-01\ntags: [x]\nowners: &shared [a]")
+	if ok {
+		t.Fatal("anchor must fail closed")
+	}
+	if !containsAll(m.ParseErrors, "line 7") {
+		t.Fatalf("line numbers must be file-relative, got %v", m.ParseErrors)
+	}
 }

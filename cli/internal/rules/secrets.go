@@ -17,12 +17,18 @@ var secretProviderRes = []*regexp.Regexp{
 	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
 	regexp.MustCompile(`gh[pousr]_[A-Za-z0-9]{36,}`),
 	regexp.MustCompile(`github_pat_[A-Za-z0-9_]{22,}`),
-	regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]{20,}`),
+	regexp.MustCompile(`(^|[^A-Za-z0-9])sk-ant-[A-Za-z0-9_-]{20,}`),
 	regexp.MustCompile(`xox[abprs]-[A-Za-z0-9-]{10,}`),
 	regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`),
 }
 
 var secretAssignmentRe = regexp.MustCompile(`(?i)(password|passwd|secret|token|api_?key)[[:space:]]*[=:][[:space:]]*["']?[A-Za-z0-9/+_.-]{12,}`)
+
+// secretAllowMarker exempts exactly the line it sits on. Reference
+// docs quote real provider example keys (the AWS docs key is a known
+// one), and a FORCED rule the baseline cannot suppress needs its own
+// escape hatch.
+const secretAllowMarker = "pylons-allow-secret"
 
 const secretFindingsPerFile = 8
 
@@ -32,6 +38,9 @@ func scanSecrets(docs []corpusDoc) []report.Finding {
 		provider := 0
 		assignment := 0
 		for i, line := range strings.Split(d.content, "\n") {
+			if strings.Contains(line, secretAllowMarker) {
+				continue
+			}
 			if provider >= secretFindingsPerFile && assignment >= secretFindingsPerFile {
 				break
 			}
@@ -44,9 +53,11 @@ func scanSecrets(docs []corpusDoc) []report.Finding {
 					}
 				}
 			}
-			if assignment < secretFindingsPerFile && secretAssignmentRe.MatchString(line) {
-				findings = append(findings, advisoryFinding("PYLON061", d.rel, i+1, "possible secret assignment: rotate it if real, or reword the example"))
-				assignment++
+			if assignment < secretFindingsPerFile {
+				if m := secretAssignmentRe.FindString(line); m != "" && strings.ContainsAny(m, "0123456789") {
+					findings = append(findings, advisoryFinding("PYLON061", d.rel, i+1, "possible secret assignment: rotate it if real, or reword the example"))
+					assignment++
+				}
 			}
 		}
 	}

@@ -93,7 +93,7 @@ func ApplyBaseline(kbRoot string, findings []report.Finding) (kept []report.Find
 	kept = findings[:0:0]
 	for _, f := range findings {
 		fp := Fingerprint(f)
-		if f.Grade == report.GradeForced && f.File != "manifests/pylons.yaml" && entries[fp] {
+		if f.Grade == report.GradeForced && f.File != "manifests/pylons.yaml" && !baselineExemptRules[f.RuleID] && entries[fp] {
 			accepted++
 			matched[fp] = true
 			continue

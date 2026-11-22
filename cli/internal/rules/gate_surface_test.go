@@ -85,12 +85,75 @@ func TestGateSurfaceFlagsHooksAndKnobs(t *testing.T) {
 	}
 	fs := GateSurface(kb, base)
 	found := findingRules(fs)
-	if len(found) != 2 {
-		t.Fatalf("expected hook and knob findings, got %v", found)
+	if len(found) != 3 {
+		t.Fatalf("expected hook, knob key, and added list item findings, got %v", found)
 	}
-	joined := found[0] + "\n" + found[1]
-	if !strings.Contains(joined, "PYLON062 .githooks/pre-commit") || !strings.Contains(joined, "PYLON062 manifests/pylons.yaml") {
-		t.Fatalf("missing hook or knob finding: %v", found)
+	joined := strings.Join(found, "\n")
+	for _, want := range []string{"PYLON062 .githooks/pre-commit", "PYLON062 manifests/pylons.yaml"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %s: %v", want, found)
+		}
+	}
+	items := 0
+	for _, f := range fs {
+		if f.RuleID == "PYLON062" && f.File == "manifests/pylons.yaml" {
+			items++
+			if f.Line <= 0 {
+				t.Fatalf("knob finding must carry a real line number, got %+v", f)
+			}
+		}
+	}
+	if items != 2 {
+		t.Fatalf("expected both the knob key and its added list item to fire, got %d knob findings: %v", items, found)
+	}
+}
+
+func TestGateSurfaceFlagsRenamedSurface(t *testing.T) {
+	kb, base := gateKB(t)
+	mustWrite(t, filepath.Join(kb, "manifests/ratchet.json"), "{}\n")
+	run := exec.Command("git", "-C", kb, "add", "-Af", ".")
+	if out, err := run.CombinedOutput(); err != nil {
+		t.Fatalf("add: %v: %s", err, out)
+	}
+	run2 := exec.Command("git", "-C", kb, "commit", "-qm", "add ratchet")
+	if out, err := run2.CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v: %s", err, out)
+	}
+	if err := os.MkdirAll(filepath.Join(kb, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(kb, "manifests/ratchet.json"), filepath.Join(kb, "docs/moved.json")); err != nil {
+		t.Fatal(err)
+	}
+	run3 := exec.Command("git", "-C", kb, "add", "-Af", ".")
+	if out, err := run3.CombinedOutput(); err != nil {
+		t.Fatalf("add: %v: %s", err, out)
+	}
+	run4 := exec.Command("git", "-C", kb, "commit", "-qm", "move it")
+	if out, err := run4.CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v: %s", err, out)
+	}
+	fs := GateSurface(kb, base)
+	found := findingRules(fs)
+	if len(found) != 1 || !strings.Contains(found[0], "manifests/ratchet.json") {
+		t.Fatalf("a rename away from a gate surface must still flag the old path, got %v", found)
+	}
+}
+
+func TestKnobPatchParsing(t *testing.T) {
+	patch := "diff --git a/m b/m\n" +
+		"@@ -1,2 +1,4 @@\n" +
+		" exclude:\n" +
+		"+  - a/**\n" +
+		"+  - b/**\n" +
+		"\\ No newline at end of file\n" +
+		"+schemes: [x]\n"
+	hits := parseKnobPatch(patch)
+	if len(hits) != 3 {
+		t.Fatalf("expected 3 knob hits (two list items, one key), got %v", hits)
+	}
+	if hits[0].line != 2 || hits[1].line != 3 || hits[2].line != 4 {
+		t.Fatalf("line math wrong: %v", hits)
 	}
 }
 

@@ -396,7 +396,7 @@
     "name": "secret_shape",
     "severity": "error",
     "description": "A provider-shaped credential appears in a ledger document.",
-    "fix_hint": "Rotate the credential; deleting the line does not remove it from git history."
+    "fix_hint": "Rotate the credential; deleting the line does not remove it from git history. A quoted example key takes the pylons-allow-secret line marker."
   },
   {
     "id": "PYLON061",

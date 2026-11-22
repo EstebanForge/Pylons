@@ -30,7 +30,7 @@ var TemplateKeys = map[string][]string{
 // key inside one fails closed instead of silently dropping a check.
 var closedMachinesKeys = []string{"machine", "states", "initial", "terminal", "transitions", "states_symbol", "transitions_symbol", "on_unevaluated", "persisted_key", "verified_by"}
 var closedTransitionKeys = []string{"from", "event", "to"}
-var closedContractEntryKeys = []string{"kind", "id", "wrong_if", "verified_by", "falsified_by"}
+var closedContractEntryKeys = []string{"kind", "id", "wrong_if", "verified_by", "falsified_by", "external"}
 var closedScenarioKeys = []string{"given", "when", "expect", "covers"}
 
 // UnionKeys returns every known frontmatter key across all doc types.
@@ -46,13 +46,21 @@ func UnionKeys() map[string]bool {
 	return out
 }
 
+// engineReadKeys are read on every doc by the graph rules regardless
+// of type, so no type may report them unknown: the PYLON064 fix hint
+// would push authors into removing keys that cure PYLON004 orphans.
+var engineReadKeys = []string{"links", "supersedes"}
+
 func knownKeySet(docType string) map[string]bool {
 	keys, ok := TemplateKeys[docType]
 	if !ok {
-		return UnionKeys()
+		keys = nil
 	}
-	out := make(map[string]bool, len(keys))
+	out := make(map[string]bool, len(keys)+len(engineReadKeys))
 	for _, k := range keys {
+		out[k] = true
+	}
+	for _, k := range engineReadKeys {
 		out[k] = true
 	}
 	return out
@@ -79,7 +87,7 @@ func strictFrontMatter(content string, out *DocMeta) bool {
 	}
 	doc := root.Content[0]
 	if doc.Kind != yaml.MappingNode {
-		out.ParseErrors = append(out.ParseErrors, fmt.Sprintf("frontmatter must be a mapping (line %d)", doc.Line))
+		out.ParseErrors = append(out.ParseErrors, fmt.Sprintf("frontmatter must be a mapping (line %d)", fmLine(doc)))
 		return false
 	}
 	var structural []string
@@ -107,17 +115,22 @@ func strictFrontMatter(content string, out *DocMeta) bool {
 }
 
 // walkStructural rejects anchors, aliases, merge keys, and custom
-// tags anywhere in the frontmatter tree, each with its line.
+// tags anywhere in the frontmatter tree, each with its file line
+// (yaml node lines are frontmatter-relative; the fence sits at line 1).
 func walkStructural(n *yaml.Node, path string, errs *[]string) {
 	if n == nil {
 		return
 	}
 	if n.Tag != "" && strings.HasPrefix(n.Tag, "!") && !strings.HasPrefix(n.Tag, "!!") {
-		*errs = append(*errs, fmt.Sprintf("%s: custom tag %s at line %d", path, n.Tag, n.Line))
+		*errs = append(*errs, fmt.Sprintf("%s: custom tag %s at line %d", path, n.Tag, fmLine(n)))
+		return
+	}
+	if n.Kind == yaml.AliasNode {
+		*errs = append(*errs, fmt.Sprintf("%s: alias at line %d", path, fmLine(n)))
 		return
 	}
 	if n.Anchor != "" {
-		*errs = append(*errs, fmt.Sprintf("%s: anchor at line %d", path, n.Line))
+		*errs = append(*errs, fmt.Sprintf("%s: anchor at line %d", path, fmLine(n)))
 		return
 	}
 	switch n.Kind {
@@ -129,9 +142,10 @@ func walkStructural(n *yaml.Node, path string, errs *[]string) {
 		for i := 0; i+1 < len(n.Content); i += 2 {
 			key, val := n.Content[i], n.Content[i+1]
 			if key.Tag == "!!merge" {
-				*errs = append(*errs, fmt.Sprintf("%s: merge key at line %d", path, key.Line))
+				*errs = append(*errs, fmt.Sprintf("%s: merge key at line %d", path, fmLine(key)))
 				continue
 			}
+			walkStructural(key, path, errs)
 			walkStructural(val, path+"."+key.Value, errs)
 		}
 	case yaml.SequenceNode:
@@ -139,6 +153,15 @@ func walkStructural(n *yaml.Node, path string, errs *[]string) {
 			walkStructural(item, fmt.Sprintf("%s[%d]", path, i), errs)
 		}
 	}
+}
+
+// fmLine converts a frontmatter-relative yaml node line to a
+// file-relative line: the opening fence occupies file line 1.
+func fmLine(n *yaml.Node) int {
+	if n == nil {
+		return 0
+	}
+	return n.Line + 1
 }
 
 // closedPayloadErrors walks the payloads the checks join on and
@@ -173,7 +196,7 @@ func closedPayloadErrors(doc *yaml.Node, docType string) []string {
 // further descent; a non-mapping item is reported.
 func mappingEntry(item *yaml.Node, closed []string, path string, errs *[]string) *yaml.Node {
 	if item == nil || item.Kind != yaml.MappingNode {
-		*errs = append(*errs, fmt.Sprintf("%s: must be a mapping (line %d)", path, nodeLine(item)))
+		*errs = append(*errs, fmt.Sprintf("%s: must be a mapping (line %d)", path, fmLine(item)))
 		return nil
 	}
 	known := map[string]bool{}
@@ -182,7 +205,7 @@ func mappingEntry(item *yaml.Node, closed []string, path string, errs *[]string)
 	}
 	for _, k := range mappingKeys(item) {
 		if !known[k] {
-			*errs = append(*errs, fmt.Sprintf("%s: unknown key %s (line %d)", path, k, nodeLine(item)))
+			*errs = append(*errs, fmt.Sprintf("%s: unknown key %s (line %d)", path, k, fmLine(item)))
 		}
 	}
 	return item
@@ -233,11 +256,4 @@ func mappingAt(doc *yaml.Node, key string) *yaml.Node {
 		}
 	}
 	return nil
-}
-
-func nodeLine(n *yaml.Node) int {
-	if n == nil {
-		return 0
-	}
-	return n.Line
 }
