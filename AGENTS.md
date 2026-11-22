@@ -49,7 +49,8 @@ Pylons documents reference files with URI schemes, never machine paths.
 - `pylon extensions [list|schema] [--format=human|json]`
 - `pylon map [--type <t>] [--package <p>] [--tag <t>] [--status <s>] [--folder <dir>] [--query <q>] [--limit <n>] [--all]`
 - `pylon search <query> [--limit <n>] [--all]`
-- `pylon manifest [rules|packages] [--check]`
+- `pylon manifest [rules|packages|product] [--check]`
+- `pylon self-update --from <dir> [--dry-run] [--force]`
 - `pylon explain <rule_id>`
 - `pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]`
 - `pylon install`

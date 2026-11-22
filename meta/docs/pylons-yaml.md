@@ -61,12 +61,12 @@ projects:
 | `schemes` | no | Extra URI schemes the ledger recognizes; declared-scheme links are checked for well-formedness. |
 | `exclude` | no | KB-relative globs never linted and never indexed. |
 | `projects.<alias>.ref` | no | Git ref the checker reads when resolving the project's code. Unset means the working tree. |
-| `projects.<alias>.tier` | no | Package tier hint: `development` or `production`. |
+| `projects.<alias>.tier` | no | Free-form tier hint, for example `core`, `app`, or `service`. |
 | `projects.<alias>.extensions` | no | Extension ids enabled for this project only. |
 
 ## Key constraints
 
-- A missing file is not an error: an empty ledger still runs, with zero projects.
+- The engine locates the ledger by this file: a missing one makes every command exit 3. An existing file with zero projects is the empty ledger, and it runs.
 - An unparsable file produces a fail-closed finding. Commands that only inform print a warning and continue.
 - One alias can register one project; alias names are stable identifiers, so renaming one breaks every `repo://` URI that names it.
 - The extension system is configured here too. See [EXTENSIONS.md](../EXTENSIONS.md) for the language list and plugin installation.

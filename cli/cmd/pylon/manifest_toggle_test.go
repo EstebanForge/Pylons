@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -237,5 +238,60 @@ func TestGateSurfaceFlagPath(t *testing.T) {
 	}
 	if code := run([]string{"review", "gate-surface", "--base", "no-such-ref", "--ci", "--pylons", dir}); code != 1 {
 		t.Fatalf("under --ci an unreadable base must fail the run, got %d", code)
+	}
+}
+
+func TestLintBaselineBannerNeverPollutesJSON(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifests", "pylons.yaml"), []byte("version: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "quirks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bad := "---\ntitle: q\ntype: quirk\nstatus: active\n---\n\npassword: hunter2hunter2\n"
+	if err := os.WriteFile(filepath.Join(dir, "quirks", "q.md"), []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun := func(args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+		return string(out)
+	}
+	gitRun("init", "-q", "-b", "main")
+	gitRun("config", "user.email", "t@example.com")
+	gitRun("config", "user.name", "t")
+	gitRun("add", "-Af", ".")
+	gitRun("commit", "-qm", "kb")
+	// Absorb the advisory so the baseline actually suppresses something.
+	cmd := exec.Command("../../../bin/pylon", "lint", "--update-baseline", "--pylons", dir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("update-baseline: %v\n%s", err, out)
+	}
+	out, err := exec.Command("../../../bin/pylon", "lint", "--format=json", "--pylons", dir).Output()
+	if err != nil {
+		t.Fatalf("lint with a suppressing baseline must exit 0: %v\n%s", err, out)
+	}
+	line := strings.TrimSpace(string(out))
+	if !json.Valid([]byte(line)) {
+		t.Fatalf("stdout must be valid JSON, got %q", line)
+	}
+}
+
+func TestLintRejectsStrayPositionals(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifests", "pylons.yaml"), []byte("version: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code := run([]string{"lint", "extra", "--pylons", dir}); code != 2 {
+		t.Fatalf("a stray positional must be a usage error, got %d", code)
 	}
 }

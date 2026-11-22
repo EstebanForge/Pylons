@@ -341,6 +341,10 @@ func run(args []string) int {
 
 	switch cmd {
 	case "lint":
+		if len(rest) > 0 {
+			fmt.Fprintf(os.Stderr, "pylon: lint takes no positional arguments (got %v)\n", rest)
+			return 2
+		}
 		if lintParity && docOnly {
 			fmt.Fprintln(os.Stderr, "warning: --parity is ignored with --doc-only; parity checks need the project source")
 		}
@@ -361,7 +365,7 @@ func run(args []string) int {
 		}
 		findings, accepted, stale := rules.ApplyBaseline(kbRoot, findings)
 		if accepted > 0 {
-			fmt.Printf("lint: %d finding(s) accepted by manifests/baseline.json\n", accepted)
+			fmt.Fprintf(os.Stderr, "lint: %d finding(s) accepted by manifests/baseline.json\n", accepted)
 		}
 		if stale > 0 {
 			fmt.Fprintf(os.Stderr, "pylon: %d baseline entr(ies) no longer match; shrink with pylon lint --update-baseline\n", stale)
