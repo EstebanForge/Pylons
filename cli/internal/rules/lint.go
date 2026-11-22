@@ -118,8 +118,8 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 		if changedSet != nil && !changedSet[rel] {
 			return nil
 		}
-		// Root docs and meta/prompts/skills skip strict frontmatter/STE scans.
-		if !strings.Contains(rel, "/") || strings.HasPrefix(rel, "meta/") || strings.HasPrefix(rel, "prompts/") || strings.HasPrefix(rel, "skills/") {
+		// Root docs and pylons/prompts/skills skip strict frontmatter/STE scans.
+		if !strings.Contains(rel, "/") || strings.HasPrefix(rel, "pylons/") || strings.HasPrefix(rel, "prompts/") || strings.HasPrefix(rel, "skills/") {
 			return nil
 		}
 

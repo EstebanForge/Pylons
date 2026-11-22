@@ -305,7 +305,7 @@ The cards above cover the systems with commands and grades. The rest of the ledg
 | `references/` | Third-party API docs and external hooks the platform relies on. | Developers and agents extending integrations |
 | `prompts/` | Shared raw agent prompts, reusable across the platform. | Agents and their operators |
 | `skills/` | Reusable team skills for agent environments. | Agents |
-| `meta/` | Documentation about Pylons itself: manifesto, feature guide, roadmap, changelog, CLI manual. Start at [`meta/INDEX.md`](meta/INDEX.md). | Everyone |
+| `pylons/` | Documentation about Pylons itself: manifesto, feature guide, roadmap, changelog, CLI manual. Start at [`pylons/INDEX.md`](pylons/INDEX.md). | Everyone |
 | `manifests/` | Compiled JSON artifacts the CLI emits and CI checks. | Tooling |
 
 ### 3.6 Structural code search

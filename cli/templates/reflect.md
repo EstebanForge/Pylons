@@ -36,7 +36,7 @@ Run this protocol periodically (weekly or monthly) to keep Pylons (`{{.Root}}`) 
 | `references/` | Phase 3 | Code, hooks, 3rd-party docs | `superseded` / `retired` move to `references/archive/` |
 | `quirks/`, `domain/` | Phase 4 | Code, tests, `review postmortem` | Retired / superseded docs move to `<zone>/archive/` |
 | `skills/`, `prompts/`, `templates/` | Phase 4 | Frontmatter, paths, `manifests/vocabulary.json` | Promote mature prompts to `skills/` |
-| `meta/`, `manifests/` | Phase 5 | `manifest rules`, `manifest packages` | Refresh indexes and record pass in `meta/` |
+| `pylons/`, `manifests/` | Phase 5 | `manifest rules`, `manifest packages` | Refresh indexes and record pass in `pylons/` |
 
 ## Working Ledger
 

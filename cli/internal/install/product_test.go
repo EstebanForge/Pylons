@@ -52,7 +52,7 @@ func writeProductTree(t *testing.T, root string) {
 	write(t, filepath.Join(root, "manifests", "pylons.example.yaml"), "version: 1\n")
 	write(t, filepath.Join(root, "protocols", "agent.md"), "agent\n")
 	write(t, filepath.Join(root, "protocols", "reflect.md"), "reflect\n")
-	write(t, filepath.Join(root, "meta", "MANIFESTO.md"), "manifesto\n")
+	write(t, filepath.Join(root, "pylons", "MANIFESTO.md"), "manifesto\n")
 	write(t, filepath.Join(root, "templates", "plan.md"), "plan template\n")
 	write(t, filepath.Join(root, "extensions", "_examples", "pylon-ext-js"), "plugin\n")
 	write(t, filepath.Join(root, "_examples", "ledger", "README.md"), "example ledger\n")
@@ -90,7 +90,7 @@ func TestProductManifestIsTheAllowlist(t *testing.T) {
 	}
 	for _, want := range []string{
 		"AGENTS.md", "LICENSE", "NOTICE",
-		"meta/MANIFESTO.md", "templates/plan.md",
+		"pylons/MANIFESTO.md", "templates/plan.md",
 		"protocols/agent.md", "protocols/reflect.md",
 		"manifests/vocabulary.json", "manifests/parity.json",
 		"manifests/rules.json", "manifests/pylons.example.yaml",

@@ -66,7 +66,7 @@ func TestSelfUpdateReplacesUnmodifiedAndKeepsUserData(t *testing.T) {
 	write(t, filepath.Join(kb, "plans", "mine.md"), "# my plan\n")
 	write(t, filepath.Join(kb, "manifests", "pylons.yaml"), "version: 1\n")
 	buildStaged(t, staged, "1.1.0", func(dir string) {
-		write(t, filepath.Join(dir, "meta", "MANIFESTO.md"), "manifesto v2\n")
+		write(t, filepath.Join(dir, "pylons", "MANIFESTO.md"), "manifesto v2\n")
 	})
 
 	res, err := SelfUpdate(kb, staged, false, false)
@@ -76,7 +76,7 @@ func TestSelfUpdateReplacesUnmodifiedAndKeepsUserData(t *testing.T) {
 	if res.Version != "1.1.0" {
 		t.Fatalf("Version = %q", res.Version)
 	}
-	if readInstalled(t, kb, "meta/MANIFESTO.md") != "manifesto v2\n" {
+	if readInstalled(t, kb, "pylons/MANIFESTO.md") != "manifesto v2\n" {
 		t.Error("unmodified product file must be replaced")
 	}
 	if readInstalled(t, kb, "plans/mine.md") != "# my plan\n" {
@@ -135,12 +135,12 @@ func TestSelfUpdateDriftWritesNewBesideAndForceOverwrites(t *testing.T) {
 func TestSelfUpdateRemovesDroppedFilesSafely(t *testing.T) {
 	kb, staged := t.TempDir(), t.TempDir()
 	buildInstalled(t, kb, "1.0.0")
-	// A product file the new release drops: meta/OLD.md is on disk
+	// A product file the new release drops: pylons/OLD.md is on disk
 	// and in the old manifest only if the old build carried it.
-	write(t, filepath.Join(kb, "meta", "OLD.md"), "old doc\n")
+	write(t, filepath.Join(kb, "pylons", "OLD.md"), "old doc\n")
 	// Rebuild the old manifest to include it by staging it first.
 	buildStaged(t, staged, "1.0.0", func(dir string) {
-		write(t, filepath.Join(dir, "meta", "OLD.md"), "old doc\n")
+		write(t, filepath.Join(dir, "pylons", "OLD.md"), "old doc\n")
 	})
 	// Overwrite the installed manifest with one that knows OLD.md.
 	m, err := BuildProductManifest(staged, "1.0.0")
@@ -155,7 +155,7 @@ func TestSelfUpdateRemovesDroppedFilesSafely(t *testing.T) {
 
 	// New release without OLD.md.
 	buildStaged(t, staged, "1.1.0", func(dir string) {
-		if err := os.Remove(filepath.Join(dir, "meta", "OLD.md")); err != nil {
+		if err := os.Remove(filepath.Join(dir, "pylons", "OLD.md")); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -163,22 +163,22 @@ func TestSelfUpdateRemovesDroppedFilesSafely(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SelfUpdate: %v", err)
 	}
-	if len(res.Removed) != 1 || res.Removed[0] != "meta/OLD.md" {
-		t.Fatalf("Removed = %v, want meta/OLD.md", res.Removed)
+	if len(res.Removed) != 1 || res.Removed[0] != "pylons/OLD.md" {
+		t.Fatalf("Removed = %v, want pylons/OLD.md", res.Removed)
 	}
-	requireNoFile(t, kb, "meta/OLD.md")
+	requireNoFile(t, kb, "pylons/OLD.md")
 
 	// A user-modified dropped file is kept.
-	write(t, filepath.Join(kb, "meta", "OLD.md"), "user edited old doc\n")
+	write(t, filepath.Join(kb, "pylons", "OLD.md"), "user edited old doc\n")
 	write(t, filepath.Join(kb, "manifests", "product.json"), string(installedBytes))
 	res2, err := SelfUpdate(kb, staged, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res2.KeptDirty) != 1 || res2.KeptDirty[0] != "meta/OLD.md" {
+	if len(res2.KeptDirty) != 1 || res2.KeptDirty[0] != "pylons/OLD.md" {
 		t.Fatalf("KeptDirty = %v", res2.KeptDirty)
 	}
-	if readInstalled(t, kb, "meta/OLD.md") != "user edited old doc\n" {
+	if readInstalled(t, kb, "pylons/OLD.md") != "user edited old doc\n" {
 		t.Error("a user-modified dropped file must be kept")
 	}
 }
@@ -188,13 +188,13 @@ func TestSelfUpdateFailsClosedOnStagedMismatch(t *testing.T) {
 	buildInstalled(t, kb, "1.0.0")
 	buildStaged(t, staged, "1.1.0", nil)
 	// Corrupt one staged file after its manifest was built.
-	write(t, filepath.Join(staged, "meta", "MANIFESTO.md"), "tampered\n")
+	write(t, filepath.Join(staged, "pylons", "MANIFESTO.md"), "tampered\n")
 
 	if _, err := SelfUpdate(kb, staged, false, false); err == nil {
 		t.Fatal("a staged file that contradicts the manifest must fail the update")
 	}
 	// Nothing was touched.
-	if readInstalled(t, kb, "meta/MANIFESTO.md") != "manifesto\n" {
+	if readInstalled(t, kb, "pylons/MANIFESTO.md") != "manifesto\n" {
 		t.Error("the installed tree must be untouched after a failed verification")
 	}
 }
@@ -223,7 +223,7 @@ func TestSelfUpdateDryRunTouchesNothing(t *testing.T) {
 	kb, staged := t.TempDir(), t.TempDir()
 	buildInstalled(t, kb, "1.0.0")
 	buildStaged(t, staged, "1.1.0", func(dir string) {
-		write(t, filepath.Join(dir, "meta", "MANIFESTO.md"), "manifesto v2\n")
+		write(t, filepath.Join(dir, "pylons", "MANIFESTO.md"), "manifesto v2\n")
 	})
 	res, err := SelfUpdate(kb, staged, false, true)
 	if err != nil {
@@ -232,7 +232,7 @@ func TestSelfUpdateDryRunTouchesNothing(t *testing.T) {
 	if !res.DryRun || len(res.Replaced) == 0 {
 		t.Fatalf("dry-run plan = %+v", res)
 	}
-	if readInstalled(t, kb, "meta/MANIFESTO.md") != "manifesto\n" {
+	if readInstalled(t, kb, "pylons/MANIFESTO.md") != "manifesto\n" {
 		t.Error("a dry run must not write")
 	}
 	requireNoFile(t, kb, "_pylons-backup")
@@ -242,7 +242,7 @@ func TestSelfUpdateWritesNewProductManifest(t *testing.T) {
 	kb, staged := t.TempDir(), t.TempDir()
 	buildInstalled(t, kb, "1.0.0")
 	buildStaged(t, staged, "1.1.0", func(dir string) {
-		write(t, filepath.Join(dir, "meta", "MANIFESTO.md"), "manifesto v2\n")
+		write(t, filepath.Join(dir, "pylons", "MANIFESTO.md"), "manifesto v2\n")
 	})
 
 	if _, err := SelfUpdate(kb, staged, false, false); err != nil {
@@ -257,14 +257,14 @@ func TestSelfUpdateSecondHopHasNoFalseDrift(t *testing.T) {
 	kb, staged := t.TempDir(), t.TempDir()
 	buildInstalled(t, kb, "1.0.0")
 	buildStaged(t, staged, "1.1.0", func(dir string) {
-		write(t, filepath.Join(dir, "meta", "MANIFESTO.md"), "manifesto v2\n")
+		write(t, filepath.Join(dir, "pylons", "MANIFESTO.md"), "manifesto v2\n")
 	})
 	if _, err := SelfUpdate(kb, staged, false, false); err != nil {
 		t.Fatalf("first hop: %v", err)
 	}
 
 	buildStaged(t, staged, "1.2.0", func(dir string) {
-		write(t, filepath.Join(dir, "meta", "MANIFESTO.md"), "manifesto v3\n")
+		write(t, filepath.Join(dir, "pylons", "MANIFESTO.md"), "manifesto v3\n")
 	})
 	res, err := SelfUpdate(kb, staged, false, false)
 	if err != nil {
@@ -273,7 +273,7 @@ func TestSelfUpdateSecondHopHasNoFalseDrift(t *testing.T) {
 	if len(res.Drifted) != 0 {
 		t.Fatalf("second hop Drifted = %v; files the first hop replaced must not report drift", res.Drifted)
 	}
-	if readInstalled(t, kb, "meta/MANIFESTO.md") != "manifesto v3\n" {
+	if readInstalled(t, kb, "pylons/MANIFESTO.md") != "manifesto v3\n" {
 		t.Error("the second hop must apply its staged content")
 	}
 }

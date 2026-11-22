@@ -838,7 +838,7 @@ func cmdInit(dir string) int {
 		return 1
 	}
 	seedFiles := map[string]string{
-		"AGENTS.md": "# Guidelines\n\nA pylon: the plain-text map of this platform. See `manifests/vocabulary.json` and `meta/docs/`.\n",
+		"AGENTS.md": "# Guidelines\n\nA pylon: the plain-text map of this platform. See `manifests/vocabulary.json` and `pylons/docs/`.\n",
 	}
 	for _, dir := range scaffoldDirs {
 		zone, _, _ := strings.Cut(dir, "/")

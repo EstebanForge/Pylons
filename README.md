@@ -43,7 +43,7 @@ A pylon is organized by rate of change. Slow-moving knowledge sits apart from fa
 | Protocols | `protocols/` | CLI-consumed protocol templates (`pylon protocol`, `pylon reflect`). |
 | Extensions | `extensions/` | Drop-in `pylon-ext-<name>` plugins for language or domain contract checks. |
 | Manifests | `manifests/` | Machine-generated indexes (`rules.json`, `packages.json`). |
-| Meta | `meta/` | Documentation about Pylons itself. |
+| Pylons | `pylons/` | Documentation about Pylons itself. |
 
 ## Contracts, the core unit
 
@@ -86,9 +86,9 @@ curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/in
 2. Register tracked repositories and extensions in `pylons/manifests/pylons.yaml`.
 3. Run `pylons/bin/pylon brief` at session start, `pylons/bin/pylon check <paths...>` before edits, and `pylons/bin/pylon lint` before commits.
 
-Prefer to build from source, or want the pylon to live inside this repository instead of a fresh install? See [meta/INSTALL.md](meta/INSTALL.md).
+Prefer to build from source, or want the pylon to live inside this repository instead of a fresh install? See [pylons/INSTALL.md](pylons/INSTALL.md).
 
-See [meta/INDEX.md](meta/INDEX.md) for installation, usage, drop-in extensions, and design philosophy. Planned work lives in the [roadmap](meta/ROADMAP.md); shipped work lands in the [changelog](meta/CHANGELOG.md).
+See [pylons/INDEX.md](pylons/INDEX.md) for installation, usage, drop-in extensions, and design philosophy. Planned work lives in the [roadmap](pylons/ROADMAP.md); shipped work lands in the [changelog](pylons/CHANGELOG.md).
 
 ## License
 

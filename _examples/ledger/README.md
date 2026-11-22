@@ -18,4 +18,4 @@ The ledger lints with zero findings. Change a triple in `svc/shipments.go` witho
 
 Contracts resolve against the working tree because the example sets no `ref:`. Set `ref:` on a project in `manifests/pylons.yaml` to read a committed tree instead.
 
-To drive the machine through an external plugin instead of the built-in Go profile, copy `_examples/pylon-ext-parity` into this ledger's own `extensions/` directory, bind `use: external:parity` for a `.demo` profile as `meta/docs/parity-spec.md` describes, and point `transitions_symbol` at a marked `.demo` file.
+To drive the machine through an external plugin instead of the built-in Go profile, copy `_examples/pylon-ext-parity` into this ledger's own `extensions/` directory, bind `use: external:parity` for a `.demo` profile as `pylons/docs/parity-spec.md` describes, and point `transitions_symbol` at a marked `.demo` file.
