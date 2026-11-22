@@ -165,6 +165,7 @@
       "tier",
       "rollout",
       "depends_on",
+      "components",
       "exposes",
       "protected",
       "description",

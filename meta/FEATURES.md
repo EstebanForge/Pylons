@@ -386,6 +386,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `review ratchet [--update]` | Counts advisories per package and zone against the committed `manifests/ratchet.json` baseline. Rising counts block. | CI or pre-push | Advisory count above baseline |
 | `review rework [--window] [--package]` | Counts `fix:` and `refactor:` commits touching paths a `feat:` commit changed, per registered project. Report-only. | Retro and planning | Never (skips unreadable projects) |
 | `review annotations --from <file|->` | Converts lint findings (SARIF or JSON) into GitHub Check annotations plus a summary comment body; blocking errors only, capped at 50 with the total kept, hostile text sanitized. | CI PR feedback (the workflow posts; the engine emits) | Never; unparsable input exits 2 |
+| `harvest pr --diff <patch|-> [--metadata <json>]` | Turn a merged PR diff into a candidate patch: exported-symbol `exposes:` proposals anchored to the claiming package doc, scaffolded quirk post-mortems for `Footgun:` markers in commit or review bodies, warnings for unattributed and vendored paths. | Capture at merge time | Report-only; never exits on findings |
 | `review-brief <plan>` | Assembles a self-contained review packet for fresh-context reviewers. | Peer review | Plan errors |
 | `review-brief --validate <file>` | Stage-1 validation: verifies review completeness and empty evaluations. | Review submission | Incomplete reviews |
 | `review-brief --validate-resolutions <f>` | Stage-2 validation: verifies every finding was resolved before merge. | Pre-merge verification | Unresolved findings |
@@ -421,7 +422,9 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--stdout` | Prints the generated review brief to stdout instead of writing a file. | `review-brief` |
 | `--validate <file>` | Validates that a returned review packet contains required evaluations. | `review-brief` |
 | `--validate-resolutions <f>` | Validates that all findings in a review packet are resolved. | `review-brief` |
-| `--base <ref>` | Base git ref for diff comparisons. | `review-brief`, `review merge-danger`, `review gate-surface`, `review release-surface` |
+| `--base <ref>` | Base git ref for diff comparisons. | `review-brief`, `review merge-danger`, `review gate-surface`, `review release-surface`, `harvest pr` |
+| `--diff <patch|->` | Harvest input: the PR diff, or `-` for stdin. | Diff paths resolve against the caller directory, then the ledger root. |
+| `--metadata <json>` | PR metadata for harvest: commits and review bodies scanned for `Footgun:` markers. | Malformed JSON fails closed |
 | `--force` | Overwrites a conflicting `core.hooksPath` and drifted hook files. | `install`, `self-update` |
 | `--type <types>` | Filters documents by comma-separated type list. | `map` |
 | `--tag <tags>` | Filters documents by comma-separated tag list. | `map` |

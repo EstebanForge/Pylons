@@ -139,6 +139,7 @@ func run(args []string) int {
 	pinnedReleases, sessionSince := "", ""
 	sessionManifest, diffSinceSet := false, false
 	graphPkg, annFrom, annPrefix := "", "", ""
+	harvestDiffPath, harvestMetaPath := "", ""
 	graphDepth := 0
 	graphSet, depthSet := false, false
 	mapType, mapTag, mapStatus, mapFolder, mapQuery := "", "", "", "", ""
@@ -202,7 +203,7 @@ func run(args []string) int {
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
-		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version":
+		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version" || arg == "--diff" || arg == "--metadata":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "pylon: flag %s requires a value\n", arg)
 				return 2
@@ -244,6 +245,10 @@ func run(args []string) int {
 				annFrom = val
 			case "--path-prefix":
 				annPrefix = val
+			case "--diff":
+				harvestDiffPath = val
+			case "--metadata":
+				harvestMetaPath = val
 			case "--release-version":
 				releaseVersion = val
 			case "--depth":
@@ -640,6 +645,13 @@ func run(args []string) int {
 
 	case "self-update":
 		return cmdSelfUpdate(kbRoot, annFrom, forceHooks, dryRunUpdate)
+
+	case "harvest":
+		if len(rest) == 0 || rest[0] != "pr" {
+			fmt.Fprintln(os.Stderr, "pylon: harvest requires 'pr'")
+			return 2
+		}
+		return cmdHarvest(kbRoot, harvestDiffPath, harvestMetaPath)
 
 	case "gate":
 		if len(rest) == 0 {

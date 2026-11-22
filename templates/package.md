@@ -13,6 +13,7 @@ ref: main
 tier: ""
 rollout: development
 depends_on: []
+components: []
 exposes: []
 protected: []
 description: ""
