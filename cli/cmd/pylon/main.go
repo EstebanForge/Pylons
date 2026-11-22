@@ -140,6 +140,7 @@ func run(args []string) int {
 	sessionManifest, diffSinceSet := false, false
 	graphPkg, annFrom, annPrefix := "", "", ""
 	harvestDiffPath, harvestMetaPath, harvestRecordPath := "", "", ""
+	newTitle := ""
 	retroFindingsPath, retroShape := "", ""
 	retroMin := 0
 	graphDepth := 0
@@ -205,7 +206,7 @@ func run(args []string) int {
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
-		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version" || arg == "--diff" || arg == "--metadata" || arg == "--record" || arg == "--findings" || arg == "--min" || arg == "--shape":
+		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version" || arg == "--diff" || arg == "--metadata" || arg == "--record" || arg == "--findings" || arg == "--min" || arg == "--shape" || arg == "--title":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "pylon: flag %s requires a value\n", arg)
 				return 2
@@ -262,6 +263,8 @@ func run(args []string) int {
 					return 2
 				}
 				retroMin = n
+			case "--title":
+				newTitle = val
 			case "--shape":
 				retroShape = val
 			case "--release-version":
@@ -675,6 +678,13 @@ func run(args []string) int {
 			return 2
 		}
 		return cmdHarvest(kbRoot, harvestDiffPath, harvestMetaPath, harvestRecordPath)
+
+	case "new":
+		if len(rest) < 2 {
+			fmt.Fprintln(os.Stderr, "pylon: new requires a document type and a name")
+			return 2
+		}
+		return cmdNew(kbRoot, rest[0], rest[1], newTitle)
 
 	case "gate":
 		if len(rest) == 0 {

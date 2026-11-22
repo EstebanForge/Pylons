@@ -396,6 +396,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `self-update --from <dir>` | Applies a staged release: verifies staged hashes fail-closed, three-ways product files (drift returns `.pylons-new` copies), writes the new product manifest, and swaps the binary last. | Upgrading an installed pylon | Drifted product files, no `--from` |
 | `manifest --check` | Verifies the committed manifests match the compiled catalogs without writing. | CI verification | Catalog drift |
 | `protocol [list\|<name>]` | Lists or renders shipped CLI protocols (`pylon reflect`, `pylon protocol agent`). | Session rituals | Unknown protocol |
+| `new <type> <name>` | Creates a typed document from the ledger's own template with zone placement, default status, and today's dates filled. | Authoring | Unknown type, dirty name, existing file |
 | `extensions [list\|schema]` | Lists built-in language extensions and the custom-extension schema. | Enabling code extraction | Unknown extension |
 | `explain <rule_id>` | Prints rule name, severity, auto-fixability, description, and fix hint. | Fixing lint failures | Unknown rule ID |
 | `install [--pylons <path>] [--force]` | Writes `.githooks/`, enables `core.hooksPath`, repairs mode bits. Idempotent. | One-time ledger wiring | Nested pylon, hook conflict, missing binary |
