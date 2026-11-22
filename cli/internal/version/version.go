@@ -6,4 +6,4 @@ package version
 
 // Version is the release version; scripts/release.sh refuses to
 // publish a tag that does not match it.
-const Version = "0.3.0"
+const Version = "0.4.0"
