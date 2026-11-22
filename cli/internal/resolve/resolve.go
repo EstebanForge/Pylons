@@ -462,6 +462,68 @@ func resolveSchema(projectRoot, ref string, kind Kind, id string) Verdict {
 
 // grepTarget searches the configured ref via git grep so route/cli/event/schema
 // contracts honor repo:// base refs instead of silently reading the worktree.
+// grepTargetRegex is grepTarget with a regex and a filename-extension
+// allowlist on the worktree path; the ref path runs git grep -E.
+func grepTargetRegex(root, ref string, exts map[string]bool, re *regexp.Regexp) string {
+	if ref != "" && hasGitRepo(root) {
+		out, err := GitRun(root, nil, "grep", "-I", "-m", "1", "-E", "-e", re.String(), ref)
+		if err != nil {
+			return ""
+		}
+		line := strings.TrimSpace(string(out))
+		if idx := strings.Index(line, ref+":"); idx >= 0 {
+			rest := line[idx+len(ref)+1:]
+			if end := strings.IndexByte(rest, ':'); end > 0 {
+				return rest[:end]
+			}
+		}
+		return ""
+	}
+	var found string
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			base := d.Name()
+			if base == ".git" || base == "node_modules" || base == "target" || base == "vendor" || strings.HasPrefix(base, "_") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		if exts != nil && !exts[strings.ToLower(filepath.Ext(p))] {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil || info.Size() > maxGrepFileBytes {
+			return nil
+		}
+		f, err := os.Open(p)
+		if err != nil {
+			return nil
+		}
+		data, err := io.ReadAll(io.LimitReader(f, maxGrepFileBytes+1))
+		closeErr := f.Close()
+		if err != nil || closeErr != nil {
+			return nil
+		}
+		if re.Match(data) {
+			rel, relErr := filepath.Rel(root, p)
+			if relErr != nil {
+				found = p
+			} else {
+				found = filepath.ToSlash(rel)
+			}
+			return fs.SkipAll
+		}
+		return nil
+	})
+	return found
+}
+
 func grepTarget(root, ref, needle string) string {
 	if ref != "" && hasGitRepo(root) {
 		out, err := GitRun(root, nil, "grep", "-I", "--fixed-strings", "-m", "1", "-e", needle, ref)

@@ -21,6 +21,17 @@ type URI struct {
 
 // ParseURI parses repo://<alias>[@<branch>]/<path> and pylon://<path>,
 // rejecting empty paths, double slashes, and .. traversal segments.
+// stripSymbolFragment removes a trailing ::-anchored symbol fragment
+// before path validation. Fragments name code symbols (PHP namespaces
+// carry backslashes), so only the file path itself is path-checked; an
+// empty fragment leaves the string untouched.
+func stripSymbolFragment(path string) string {
+	if i := strings.Index(path, "::"); i > 0 && i < len(path)-1 {
+		return path[:i]
+	}
+	return path
+}
+
 func ParseURI(raw string) (URI, bool) {
 	switch {
 	case strings.HasPrefix(raw, "repo://"):
@@ -30,7 +41,7 @@ func ParseURI(raw string) (URI, bool) {
 			return URI{}, false
 		}
 		head := rest[:slash]
-		path := rest[slash+1:]
+		path := stripSymbolFragment(rest[slash+1:])
 		if !isSafeRelPath(path) {
 			return URI{}, false
 		}
@@ -40,7 +51,7 @@ func ParseURI(raw string) (URI, bool) {
 		}
 		return URI{Scheme: "repo", Alias: alias, Branch: branch, Path: path}, true
 	case strings.HasPrefix(raw, "pylon://"):
-		path := strings.TrimPrefix(raw, "pylon://")
+		path := stripSymbolFragment(strings.TrimPrefix(raw, "pylon://"))
 		if !isSafeRelPath(path) {
 			return URI{}, false
 		}

@@ -93,7 +93,23 @@ var builtinExtensions = map[string]map[Kind]Resolver{
 	},
 	"php": {
 		"php-symbol": resolvePHPSymbol,
+		"wp-hook":    resolveWPHook,
 	},
+}
+
+// resolveWPHook resolves a hook-name contract: the id is the hook tag,
+// and the hook exists when a bounded project PHP file registers, fires,
+// removes, or queries the tag through the standard hook functions.
+func resolveWPHook(projectRoot, ref string, kind Kind, id string) Verdict {
+	tag := strings.TrimSpace(id)
+	if tag == "" || strings.ContainsAny(tag, "\"'\\") || strings.HasPrefix(tag, "-") {
+		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "expected the hook tag as the id"}
+	}
+	re := regexp.MustCompile(`\b(?:add_action|add_filter|do_action|apply_filters|remove_action|remove_filter|has_action|has_filter|doing_action|doing_filter|did_action|did_filter)\s*\(\s*['"]` + regexp.QuoteMeta(tag) + `['"]`)
+	if match := grepTargetRegex(projectRoot, ref, map[string]bool{".php": true}, re); match != "" {
+		return Verdict{Kind: kind, ID: id, Resolved: true, Detail: match}
+	}
+	return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "hook " + tag + " never registered, fired, or queried"}
 }
 
 func resolveGoSymbol(projectRoot, ref string, kind Kind, id string) Verdict {
@@ -141,8 +157,22 @@ func resolvePHPSymbol(projectRoot, ref string, kind Kind, id string) Verdict {
 		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "file not found"}
 	}
 	if classPart, method, hasClass := strings.Cut(sym, "::"); hasClass && classPart != "" && method != "" {
-		classRe := regexp.MustCompile(`(?m)\b(?:class|interface|trait|enum)\s+` + regexp.QuoteMeta(classPart) + `\b`)
+		classPart = strings.Trim(classPart, "\\")
 		methodRe := regexp.MustCompile(`(?m)\b(?:function|const)\s+` + regexp.QuoteMeta(method) + `\b`)
+		// A namespaced id (Vendor\Class) cannot appear in the class
+		// declaration: the file declares the namespace on its own line
+		// and the class bare. Compare the namespace against the
+		// declaration and the short name against the class keyword.
+		if i := strings.LastIndexByte(classPart, '\\'); i > 0 {
+			ns, short := classPart[:i], classPart[i+1:]
+			nsRe := regexp.MustCompile(`(?m)^\s*namespace\s+` + regexp.QuoteMeta(ns) + `\s*;`)
+			classRe := regexp.MustCompile(`(?m)\b(?:class|interface|trait|enum)\s+` + regexp.QuoteMeta(short) + `\b`)
+			if nsRe.Match(data) && classRe.Match(data) && methodRe.Match(data) {
+				return Verdict{Kind: kind, ID: id, Resolved: true, Detail: rel}
+			}
+			return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "class or method not found"}
+		}
+		classRe := regexp.MustCompile(`(?m)\b(?:class|interface|trait|enum)\s+` + regexp.QuoteMeta(classPart) + `\b`)
 		if classRe.Match(data) && methodRe.Match(data) {
 			return Verdict{Kind: kind, ID: id, Resolved: true, Detail: rel}
 		}

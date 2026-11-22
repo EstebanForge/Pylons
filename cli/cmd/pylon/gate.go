@@ -128,7 +128,7 @@ func gatePrePush(kbRoot string) int {
 }
 
 func lintGate(kbRoot string, changedOnly bool) int {
-	findings := rules.Lint(kbRoot, rules.LintOptions{HasCode: true, ChangedOnly: changedOnly})
+	findings, _, _ := lintCorpus(kbRoot, rules.LintOptions{HasCode: true, ChangedOnly: changedOnly})
 	rules.Remediate(findings)
 	if err := report.Render(os.Stdout, report.FormatHuman, findings); err != nil {
 		return 1
@@ -144,6 +144,16 @@ func lintGate(kbRoot string, changedOnly bool) int {
 		}
 	}
 	return 0
+}
+
+// lintCorpus is the one lint entry every gate consumer shares: it runs
+// the corpus lint and applies the accepted-debt baseline, so gates and
+// the lint command suppress exactly the same findings. Keep lint entry
+// points on this helper; a second unbaselined path resurrects accepted
+// debt as blocking.
+func lintCorpus(kbRoot string, opts rules.LintOptions) ([]report.Finding, int, int) {
+	findings := rules.Lint(kbRoot, opts)
+	return rules.ApplyBaseline(kbRoot, findings)
 }
 
 func stagedFiles(kbRoot string) []string {

@@ -110,3 +110,36 @@ func TestExternalExtensionRequiresNamespace(t *testing.T) {
 		t.Fatal("kind without a dash must not resolve")
 	}
 }
+
+// wp-hook ships natively under the php language extension: the id is
+// the hook tag, resolved when a bounded project PHP file registers,
+// fires, removes, or queries the tag through the standard hook
+// functions. Without the php extension the kind does not exist.
+func TestWPHookNativeThroughPhpExtension(t *testing.T) {
+	proj := t.TempDir()
+	os.MkdirAll(filepath.Join(proj, "src"), 0o755)
+	src := "<?php\nadd_action('acme/module/ready', 'boot');\ndo_action( \"acme/other\" );\n"
+	if err := os.WriteFile(filepath.Join(proj, "src", "boot.php"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "notes.txt"), []byte("add_action('acme/in-txt')\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry([]string{"php"}, "")
+	if v := reg.Resolve(proj, Kind("wp-hook"), "acme/module/ready"); !v.Resolved {
+		t.Fatalf("registered hook must resolve: %s", v.Detail)
+	}
+	if v := reg.Resolve(proj, Kind("wp-hook"), "acme/other"); !v.Resolved {
+		t.Fatalf("double-quoted spaced hook must resolve: %s", v.Detail)
+	}
+	if v := reg.Resolve(proj, Kind("wp-hook"), "acme/never-wired"); v.Resolved {
+		t.Fatal("unregistered hook must not resolve")
+	}
+	if v := reg.Resolve(proj, Kind("wp-hook"), "acme/in-txt"); v.Resolved {
+		t.Fatal("a non-PHP file must never satisfy a wp-hook contract")
+	}
+	plain := NewRegistry([]string{}, "")
+	if v := plain.Resolve(proj, Kind("wp-hook"), "acme/module/ready"); v.Resolved {
+		t.Fatal("wp-hook must not exist without the php extension")
+	}
+}

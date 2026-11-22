@@ -454,10 +454,17 @@ func publicContractSurfaces(kbRoot string) map[string]map[string]string {
 			if !ok || u.Scheme != "repo" || u.Path == "" {
 				continue
 			}
+			// ParseURI strips the ::fragment from Path, but the
+			// fragment is the surface consumers reference, so the
+			// surface key carries the raw pointer's fragment.
+			surface := u.Path
+			if _, frag, hasFrag := strings.Cut(idStr, "::"); hasFrag && frag != "" {
+				surface = u.Path + "::" + frag
+			}
 			if out[u.Alias] == nil {
 				out[u.Alias] = map[string]string{}
 			}
-			out[u.Alias][u.Path] = kind
+			out[u.Alias][surface] = kind
 		}
 		return nil
 	})

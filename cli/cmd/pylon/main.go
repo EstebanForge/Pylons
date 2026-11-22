@@ -368,14 +368,14 @@ func run(args []string) int {
 		if lintParity && docOnly {
 			fmt.Fprintln(os.Stderr, "warning: --parity is ignored with --doc-only; parity checks need the project source")
 		}
-		findings := rules.Lint(kbRoot, rules.LintOptions{
-			HasCode:       !docOnly,
-			Fix:           fix,
-			ChangedOnly:   changed,
-			AllowExternal: allowExternal,
-			Parity:        lintParity,
-		})
 		if updateBaseline {
+			findings := rules.Lint(kbRoot, rules.LintOptions{
+				HasCode:       !docOnly,
+				Fix:           fix,
+				ChangedOnly:   changed,
+				AllowExternal: allowExternal,
+				Parity:        lintParity,
+			})
 			if err := rules.UpdateBaseline(kbRoot, findings); err != nil {
 				fmt.Fprintf(os.Stderr, "pylon: write baseline: %v\n", err)
 				return 1
@@ -383,7 +383,13 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, "pylon: wrote manifests/baseline.json from the current FORCED findings")
 			return 0
 		}
-		findings, accepted, stale := rules.ApplyBaseline(kbRoot, findings)
+		findings, accepted, stale := lintCorpus(kbRoot, rules.LintOptions{
+			HasCode:       !docOnly,
+			Fix:           fix,
+			ChangedOnly:   changed,
+			AllowExternal: allowExternal,
+			Parity:        lintParity,
+		})
 		if accepted > 0 {
 			fmt.Fprintf(os.Stderr, "lint: %d finding(s) accepted by manifests/baseline.json\n", accepted)
 		}

@@ -118,10 +118,9 @@ func resolveEnumCases(kbRoot string, cfg config.Config, symbol string, allowExte
 		return nil, fmt.Errorf("project %q is not registered", u.Alias)
 	}
 	filePart := uriSurfacePath(u.Path)
-	enumName := ""
-	if i := strings.Index(u.Path, "::"); i >= 0 {
-		enumName = u.Path[i+2:]
-	}
+	// ParseURI strips the ::fragment from Path, so the enum name comes
+	// from the raw pointer.
+	_, enumName, _ := strings.Cut(symbol, "::")
 	target, safe := resolve.SafeJoin(root, filePart)
 	if !safe {
 		return nil, fmt.Errorf("states_symbol path %q is unsafe", filePart)
