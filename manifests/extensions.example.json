@@ -43,7 +43,7 @@
       "schema_version": 1,
       "kind": "rust-symbol",
       "id": "src/lib.rs::unlock_vault",
-      "root": "/path/to/ledger/crates/ledger-core"
+      "root": "/path/to/project/crates/project-core"
     },
     "response": {
       "resolved": true,
