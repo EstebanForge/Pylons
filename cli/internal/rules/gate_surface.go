@@ -49,7 +49,9 @@ func GateSurface(kbRoot, base string) []report.Finding {
 	// Per-commit union, not a tree diff: a file added and then moved
 	// away within the range nets out of base...HEAD and would evade a
 	// net-only check.
-	out, err := resolve.GitRun(kbRoot, nil, "log", "--name-only", "--no-renames", "--format=", base+"..HEAD")
+	// --relative prints paths KB-relative even when the ledger is a
+	// subdirectory of its repository, so the surface list still matches.
+	out, err := resolve.GitRun(kbRoot, nil, "log", "--name-only", "--no-renames", "--relative", "--format=", base+"..HEAD")
 	if err != nil {
 		return []report.Finding{advisoryFinding("PYLON063", "manifests/pylons.yaml", 1,
 			"the gate surface check could not run: base "+base+" is unreadable; pin --base to a reachable ref")}

@@ -100,24 +100,34 @@ func ReleaseSurface(kbRoot string, opts ReleaseSurfaceOptions) ([]report.Finding
 					fmt.Sprintf("project %q's repository is unreadable; its pinned surfaces are unjudged", alias)))
 				continue
 			}
-			for _, surface := range slices.Sorted(maps.Keys(files)) {
-				file := files[surface]
+			for _, file := range slices.Sorted(maps.Keys(files)) {
 				atBase, baseOK := blobAt(projPath, base, file)
 				if !baseOK {
 					continue
 				}
 				evaluated = true
-				atHead, headOK := blobAt(projPath, "HEAD", file)
-				if !headOK {
+				// One verdict per file; any consumed surface in the
+				// file counts, so the verdict never depends on map
+				// iteration order.
+				consumed := ""
+				for _, surface := range files[file] {
 					if index.consumes(surfaceName(surface, surKind(surfaces, alias, surface))) {
-						findings = append(findings, releaseFinding(pin, surface, "RELEASE_SURFACE_REMOVED",
-							fmt.Sprintf("pinned deployment consumes %s, which exists at %s but is gone at HEAD", surface, base)))
+						consumed = surface
+						break
 					}
+				}
+				if consumed == "" {
 					continue
 				}
-				if atBase != atHead && index.consumes(surfaceName(surface, surKind(surfaces, alias, surface))) {
-					findings = append(findings, releaseFinding(pin, surface, "RELEASE_SURFACE_CHANGED",
-						fmt.Sprintf("pinned deployment consumes %s, whose content differs between %s and HEAD", surface, base)))
+				atHead, headOK := blobAt(projPath, "HEAD", file)
+				if !headOK {
+					findings = append(findings, releaseFinding(pin, consumed, "RELEASE_SURFACE_REMOVED",
+						fmt.Sprintf("pinned deployment consumes %s, which exists at %s but is gone at HEAD", consumed, base)))
+					continue
+				}
+				if atBase != atHead {
+					findings = append(findings, releaseFinding(pin, consumed, "RELEASE_SURFACE_CHANGED",
+						fmt.Sprintf("pinned deployment consumes %s, whose content differs between %s and HEAD", consumed, base)))
 				}
 			}
 		}
@@ -137,19 +147,18 @@ func surKind(surfaces map[string]map[string]string, alias, surface string) strin
 	return byAlias[surface]
 }
 
-// surfaceFiles reduces the alias's surfaces to one entry per file: two
-// symbols in one file drift together and must not double-report.
-func surfaceFiles(byAlias map[string]string) map[string]string {
-	files := map[string]string{}
-	for surface := range byAlias {
-		files[uriSurfacePath(surface)] = surface
+// surfaceFiles groups the alias's surfaces by file: two symbols in
+// one file drift together, so the verdict is per file, and
+// consumption counts when the deployment uses any symbol in it. The
+// slices are sorted, so the first surface is a stable representative
+// for the finding text.
+func surfaceFiles(byAlias map[string]string) map[string][]string {
+	files := map[string][]string{}
+	for _, surface := range slices.Sorted(maps.Keys(byAlias)) {
+		file := uriSurfacePath(surface)
+		files[file] = append(files[file], surface)
 	}
-	// Keep one representative surface per file for the finding text.
-	out := map[string]string{}
-	for file, surface := range files {
-		out[surface] = file
-	}
-	return out
+	return files
 }
 
 func releaseFinding(pin pinRef, surface, code, message string) report.Finding {

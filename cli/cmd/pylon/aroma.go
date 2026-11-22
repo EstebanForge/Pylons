@@ -280,6 +280,12 @@ func parseLinesSpec(spec string) (string, []int, error) {
 		if err != nil {
 			return "", nil, fmt.Errorf("--lines end %q is not a number", bounds[1])
 		}
+		if start < 1 {
+			return "", nil, fmt.Errorf("--lines start %d is before the first line", start)
+		}
+		if start > end {
+			return "", nil, fmt.Errorf("--lines range %q ends before it starts", part)
+		}
 		if end-start > 100_000 {
 			return "", nil, fmt.Errorf("--lines range %q is larger than 100000 lines", part)
 		}
@@ -288,6 +294,30 @@ func parseLinesSpec(spec string) (string, []int, error) {
 		}
 	}
 	return path, lines, nil
+}
+
+// worstLine returns the highest line number in a range list, or 0.
+func worstLine(lines []int) int {
+	max := 0
+	for _, n := range lines {
+		if n > max {
+			max = n
+		}
+	}
+	return max
+}
+
+// countLines counts newline-terminated lines the way an editor numbers
+// them: a trailing newline does not start a new line.
+func countLines(source string) int {
+	if source == "" {
+		return 0
+	}
+	n := strings.Count(source, "\n")
+	if !strings.HasSuffix(source, "\n") {
+		n++
+	}
+	return n
 }
 
 // skipDirs keeps walk out of dependency and VCS trees.
@@ -493,6 +523,11 @@ func (options runOptions) queries(index *aroma.Index, stdin io.Reader, roots []c
 			source, indexed, err := readCorpusFile(path, roots)
 			if err != nil {
 				return nil, err
+			}
+			// A range past the end of the file is a bad spec, not an
+			// empty result.
+			if max := worstLine(options.lines[path]); max > 0 && max > countLines(source) {
+				return nil, fmt.Errorf("--lines %s: line %d is past the end of the file (%d lines)", path, max, countLines(source))
 			}
 			file := aroma.SourceFile{Path: indexed, Source: source}
 			queries = append(queries, aroma.QueriesFromLines(index, file, options.lines[path])...)

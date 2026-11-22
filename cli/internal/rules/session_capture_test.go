@@ -210,3 +210,30 @@ func TestCaptureRejectsEmptyRef(t *testing.T) {
 		t.Fatal("an empty ref must be a usage error")
 	}
 }
+
+func TestCaptureIgnoresScratchDirsAndRetiredPackages(t *testing.T) {
+	fx := newCaptureFixture(t)
+	// A scratch copy of the plan must never declare surfaces.
+	if err := os.MkdirAll(filepath.Join(fx.kb, "plans", "_scratch"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(fx.kb, "plans", "_scratch", "ghost.md"), "---\ntitle: ghost\ntype: plan\nstatus: accepted\ncomponents: [app]\nticket: [T-2]\ncontract:\n  stable:\n    - kind: route\n      id: repo://app/src/routes.go\n---\n\n# Ghost\n")
+	// A retired package must not index its exposes either.
+	mustWrite(t, filepath.Join(fx.kb, "packages", "old.md"), "---\ntitle: \"Old\"\ntype: package\nstatus: retired\ntier: core\nexposes:\n  - kind: symbol\n    id: repo://app/src/gone.go::Gone\n---\n\n# Old\n")
+	fx.touchCode(t)
+	cap, err := SessionCapture(fx.kb, "HEAD~1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range cap.Surfaces {
+		if s.Doc == "plans/_scratch/ghost.md" {
+			t.Fatalf("a scratch doc must never declare surfaces: %+v", cap.Surfaces)
+		}
+		if s.Doc == "packages/old.md" {
+			t.Fatalf("a retired package must not index surfaces: %+v", cap.Surfaces)
+		}
+	}
+	if len(cap.Surfaces) == 0 {
+		t.Fatalf("the live package and plan must still declare surfaces: %+v", cap.Surfaces)
+	}
+}

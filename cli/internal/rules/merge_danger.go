@@ -115,8 +115,37 @@ func validateOneWayConsistency(kbRoot string, opts MergeDangerOptions, door, bla
 	if dataMigrationRe.MatchString(body) {
 		return nil
 	}
-	marker, err := diffHasReleaseMarker(kbRoot, opts.Base)
-	if err != nil || marker {
+	cfg, err := config.Load(kbRoot)
+	if err != nil {
+		return []report.Finding{notEvaluated(opts.Body)}
+	}
+	surfaces := schemaContractSurfaces(kbRoot)
+	if len(surfaces) == 0 {
+		// Nothing declared is at risk, so the one-way claim has no
+		// code side to check.
+		return nil
+	}
+	marker, evaluated := false, false
+	for _, alias := range slices.Sorted(maps.Keys(surfaces)) {
+		projPath := cfg.ProjectPath(kbRoot, alias)
+		if projPath == "" {
+			continue
+		}
+		found, err := projectHasReleaseMarker(projPath, opts.Base)
+		if err != nil {
+			continue
+		}
+		evaluated = true
+		if found {
+			marker = true
+			break
+		}
+	}
+	if !evaluated {
+		// An unreadable base must never read as a verified claim.
+		return []report.Finding{notEvaluated(opts.Body)}
+	}
+	if marker {
 		return nil
 	}
 	return []report.Finding{{
@@ -246,13 +275,15 @@ var majorRe = regexp.MustCompile(`#major\b`)
 // quoted mention in the body proves nothing.
 var dataMigrationRe = regexp.MustCompile(`(?m)^Data migration:\s*\S`)
 
-// diffHasReleaseMarker reports whether the commits in the diff carry a
-// release marker: a breaking type subject or a #major token.
-func diffHasReleaseMarker(kbRoot, base string) (bool, error) {
+// projectHasReleaseMarker reports whether the commits in the code
+// project's diff carry a release marker: a breaking type subject or a
+// #major token. The proof reads the project's own repository; a
+// ledger outside the code never speaks for its commits.
+func projectHasReleaseMarker(projectPath, base string) (bool, error) {
 	if base == "" {
 		base = "origin/main"
 	}
-	out, err := resolve.GitRun(kbRoot, nil, "log", "--pretty=format:%s", base+"..HEAD")
+	out, err := resolve.GitRun(projectPath, nil, "log", "--pretty=format:%s", base+"..HEAD")
 	if err != nil {
 		return false, err
 	}

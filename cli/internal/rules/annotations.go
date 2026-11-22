@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -106,7 +107,10 @@ func Annotations(input []byte) (AnnotationReport, error) {
 			out.Truncated = true
 			continue
 		}
-		if f.File == "" {
+		// One rejected path drops the whole GitHub batch: an empty,
+		// absolute, or parent-relative path counts in the totals but
+		// never annotates.
+		if !annotationPathSafe(f.File) {
 			continue
 		}
 		msg := f.Message
@@ -187,6 +191,24 @@ func validateJSON(input []byte) error {
 
 // capRunes truncates to the cap with an ellipsis, by rune so multi-byte
 // text cannot land mid-sequence.
+// annotationPathSafe reports whether a finding path is usable as a
+// GitHub annotation path: non-empty, relative, and free of parent
+// hops.
+func annotationPathSafe(p string) bool {
+	if p == "" {
+		return false
+	}
+	if filepath.IsAbs(p) || strings.HasPrefix(p, "/") {
+		return false
+	}
+	for _, seg := range strings.Split(filepath.ToSlash(p), "/") {
+		if seg == ".." {
+			return false
+		}
+	}
+	return true
+}
+
 func capRunes(s string, cap int) string {
 	if len([]rune(s)) <= cap {
 		return s
@@ -226,11 +248,4 @@ func summaryLine(s string) string {
 	}
 	s = strings.ReplaceAll(s, "`", "'")
 	return strings.ReplaceAll(s, "@", "&#64;")
-}
-
-func firstLine(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i]
-	}
-	return s
 }

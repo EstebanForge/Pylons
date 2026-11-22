@@ -34,3 +34,39 @@ func TestNormalizeCheckTargetDeterministic(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeCheckTargetAbsoluteTargetWithRelativeRoot(t *testing.T) {
+	tmp := t.TempDir()
+	svc := filepath.Join(tmp, "svc")
+	if err := os.MkdirAll(svc, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{Projects: map[string]config.ProjectConfig{
+		"svc": {Path: "svc"},
+	}}
+	target := filepath.Join(svc, "shipments.go")
+	// A relative --pylons root must not blind the absolute match.
+	restore := chdirTmp(t, tmp)
+	defer restore()
+	for i := 0; i < 50; i++ {
+		if nt := normalizeCheckTarget(".", target, cfg); nt.alias != "svc" || nt.path != "shipments.go" {
+			t.Fatalf("run %d: absolute target with relative root: alias=%q path=%q", i, nt.alias, nt.path)
+		}
+	}
+}
+
+func chdirTmp(t *testing.T, dir string) func() {
+	t.Helper()
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	return func() {
+		if err := os.Chdir(old); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

@@ -13,7 +13,7 @@ extensions:
 
 # Extra URI schemes this ledger recognizes. Well-formed declared
 # links pass; malformed ones fail. Resolution semantics stay yours.
-# schemes: [legacy, atlas]
+# schemes: [legacy, intranet]
 
 # KB-relative globs removed from the engine entirely: never linted,
 # never graph docs.

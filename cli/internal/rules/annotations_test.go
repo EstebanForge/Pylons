@@ -133,14 +133,16 @@ func TestAnnotationsMissingLocationStaysOutOfAnnotations(t *testing.T) {
 }
 
 func TestAnnotationsStripsFileScheme(t *testing.T) {
+	// A file:// URI strips to an absolute path, which is exactly the
+	// unsafe class: it counts in the totals but never annotates.
 	sarif := `{"runs": [{"results": [{"ruleId": "PYLON001", "level": "error", "message": {"text": "m"},
 		"locations": [{"physicalLocation": {"artifactLocation": {"uri": "file:///srv/kb/packages/a.md"}, "region": {"startLine": 1}}}]}]}]}`
 	r, err := Annotations([]byte(sarif))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(r.Annotations[0].Path, "file://") {
-		t.Fatalf("the uri scheme must not reach the annotation path, got %q", r.Annotations[0].Path)
+	if r.Total != 1 || len(r.Annotations) != 0 {
+		t.Fatalf("an absolute stripped path must never annotate, got %+v", r)
 	}
 }
 
@@ -201,5 +203,28 @@ func TestAnnotationsSARIFCarriesFixHint(t *testing.T) {
 	}
 	if !strings.Contains(r.Annotations[0].Message, "Fix:") {
 		t.Fatalf("the SARIF path must carry the catalog fix hint like the JSON path, got %q", r.Annotations[0].Message)
+	}
+}
+
+func TestAnnotationsUnsafePathsNeverAnnotate(t *testing.T) {
+	// One rejected path drops the whole GitHub batch, so absolute and
+	// parent-relative paths count in totals but never annotate.
+	sarif := `{"runs": [{"results": [
+		{"ruleId": "PYLON001", "level": "error", "message": {"text": "parent"},
+		 "locations": [{"physicalLocation": {"artifactLocation": {"uri": "../../etc/passwd"}, "region": {"startLine": 1}}}]},
+		{"ruleId": "PYLON001", "level": "error", "message": {"text": "absolute"},
+		 "locations": [{"physicalLocation": {"artifactLocation": {"uri": "/abs/x.md"}, "region": {"startLine": 1}}}]},
+		{"ruleId": "PYLON001", "level": "error", "message": {"text": "clean"},
+		 "locations": [{"physicalLocation": {"artifactLocation": {"uri": "packages/a.md"}, "region": {"startLine": 2}}}]}
+	]}]}`
+	r, err := Annotations([]byte(sarif))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Total != 3 || len(r.Annotations) != 1 {
+		t.Fatalf("unsafe paths must count but never annotate, got %+v", r)
+	}
+	if r.Annotations[0].Path != "packages/a.md" {
+		t.Fatalf("only the clean path annotates, got %+v", r.Annotations[0])
 	}
 }

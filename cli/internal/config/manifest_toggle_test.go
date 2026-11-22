@@ -72,7 +72,7 @@ func TestSchemesValidation(t *testing.T) {
 		yaml    string
 		wantErr bool
 	}{
-		{"valid", "version: 1\nschemes: [legacy, atlas]\n", false},
+		{"valid", "version: 1\nschemes: [legacy, intranet]\n", false},
 		{"empty ok", "version: 1\nschemes: []\n", false},
 		{"reserved repo", "version: 1\nschemes: [repo]\n", true},
 		{"reserved pylon", "version: 1\nschemes: [pylon]\n", true},

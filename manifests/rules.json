@@ -305,7 +305,7 @@
     "name": "merge_danger",
     "severity": "error",
     "description": "The pull request body lacks a valid merge danger line, or the derived minimum door outranks the author door.",
-    "fix_hint": "Add 'Merge danger: \u003cone-way|two-way\u003e | blast radius: \u003cscope\u003e' to the body."
+    "fix_hint": "Keep exactly one 'Merge danger: \u003cone-way|two-way\u003e | blast radius: \u003cscope\u003e' line; a one-way door needs a release marker or a 'Data migration:' note."
   },
   {
     "id": "PYLON048",

@@ -151,6 +151,15 @@ func normalizeCheckTarget(kbRoot, raw string, cfg config.Config) normalizedTarge
 	if u, ok := resolve.ParseURI(raw); ok && u.Scheme == "repo" {
 		return normalizedTarget{alias: u.Alias, path: filepath.ToSlash(filepath.Clean(u.Path))}
 	}
+	// A relative KB root must still match absolute targets: make the
+	// root absolute before comparing paths. Plain relative targets
+	// stay ledger-relative by design; only repo:// and absolute
+	// targets carry project attribution.
+	if !filepath.IsAbs(kbRoot) {
+		if abs, err := filepath.Abs(kbRoot); err == nil {
+			kbRoot = abs
+		}
+	}
 	if filepath.IsAbs(raw) {
 		absTarget := filepath.Clean(raw)
 		type match struct {

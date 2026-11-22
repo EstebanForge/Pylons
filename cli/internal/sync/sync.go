@@ -74,6 +74,12 @@ func Run(kbRoot string) (Result, error) {
 	var res Result
 	st, hasState := readState(gitDir)
 
+	// No remote means nothing to fetch; reporting a launched fetch
+	// would be a lie.
+	if out, err := resolve.GitRun(kbRoot, nil, "remote"); err == nil && strings.TrimSpace(string(out)) == "" {
+		return res, nil
+	}
+
 	// Launch phase: a missing or stale state starts one detached
 	// fetch and records the launch first, so a fast-failing child
 	// cannot be overwritten by the parent's write.

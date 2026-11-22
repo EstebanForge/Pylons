@@ -133,7 +133,17 @@ func captureSurfaces(kbRoot string) map[string][]captureSurface {
 	}
 	walk := func(dir string, fn func(content, doc string) error) {
 		_ = filepath.WalkDir(filepath.Join(kbRoot, dir), func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
+			if err != nil {
+				return nil
+			}
+			// Underscore directories are never live content.
+			if d.IsDir() {
+				if strings.HasPrefix(d.Name(), "_") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(path, ".md") {
 				return nil
 			}
 			name := d.Name()
@@ -154,6 +164,11 @@ func captureSurfaces(kbRoot string) map[string][]captureSurface {
 	walk("packages", func(content, doc string) error {
 		var pkg resolve.PackageFrontMatter
 		if !resolve.ParsePackageFrontMatter(content, &pkg) || pkg.Type != "package" {
+			return nil
+		}
+		// A retired or deprecated package's exposes no longer describe
+		// the live tree; ripple already filters them the same way.
+		if pkg.Status != "active" {
 			return nil
 		}
 		for _, entry := range pkg.Exposes {

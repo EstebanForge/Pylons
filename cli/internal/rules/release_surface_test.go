@@ -267,3 +267,27 @@ func TestReleaseSurfaceDashVersionFailsClosed(t *testing.T) {
 		t.Fatalf("a dash-leading version must fail closed without reaching git as an option, got %v", msgs)
 	}
 }
+
+func TestReleaseSurfaceTwoSymbolsOneFileDeterministic(t *testing.T) {
+	fx := newReleaseSurfaceFixture(t, "---\ntitle: \"API\"\ntype: plan\nstatus: accepted\ncomponents: [app]\nticket: [T-1]\ncontract:\n  stable:\n    - kind: symbol\n      id: repo://app/src/api.go::Alpha\n    - kind: symbol\n      id: repo://app/src/api.go::Beta\n---\n\n# API\n")
+	mustWrite(t, filepath.Join(fx.repo, "src/api.go"), "package src\n\nfunc Alpha(x int) int {\n\treturn x + 1\n}\n\nfunc Beta(x int) int {\n\treturn x + 2\n}\n")
+	shell("git", "-C", fx.repo, "add", "-f", "src")
+	shell("git", "-C", fx.repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "feat: api")
+	shell("git", "-C", fx.repo, "tag", "0.2.0")
+	fx.pin(t, "0.2.0", map[string]string{"consumer.go": "out := Alpha(input)\n"})
+	// Change the file at HEAD so the declared surfaces drift; only
+	// Alpha is consumed, but both live in the same file.
+	mustWrite(t, filepath.Join(fx.repo, "src/api.go"), "package src\n\nfunc Alpha(x int) int {\n\treturn x\n}\n\nfunc Beta(x int) int {\n\treturn x + 2\n}\n")
+	shell("git", "-C", fx.repo, "add", "-f", "src")
+	shell("git", "-C", fx.repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "refactor: change Alpha")
+	for i := 0; i < 10; i++ {
+		fs, err := ReleaseSurface(fx.kb, ReleaseSurfaceOptions{PinnedDir: fx.lockDir, Base: ""})
+		if err != nil {
+			t.Fatal(err)
+		}
+		msgs := findingsOf(fs, "PYLON048")
+		if len(msgs) != 1 || !strings.Contains(msgs[0], "RELEASE_SURFACE_CHANGED") {
+			t.Fatalf("run %d: a file whose consumed symbol changed must block deterministically, got %v", i, msgs)
+		}
+	}
+}

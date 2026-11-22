@@ -430,3 +430,19 @@ func TestCaptureFlagPath(t *testing.T) {
 	code := run([]string{"context", "--diff-since", "HEAD", "--manifest", "--pylons", dir})
 	_ = code
 }
+
+func TestLinesSpecReversedOrOutOfRangeIsUsage(t *testing.T) {
+	dir := sandbox(t)
+	chdir(t, dir)
+	code, _, stderr := runCmd(t, dir, "search", "--corpus", ".", "--lines", "a/a.go:9-1")
+	if code != 2 {
+		t.Fatalf("a reversed range is a usage error, exit = %d, stderr = %q", code, stderr)
+	}
+	code, _, stderr = runCmd(t, dir, "search", "--corpus", ".", "--lines", "a/a.go:9999-10001")
+	if code != 2 {
+		t.Fatalf("a range past the file end is a usage error, exit = %d, stderr = %q", code, stderr)
+	}
+	if !strings.Contains(stderr, "past the end") {
+		t.Fatalf("the out-of-range error must say so, stderr = %q", stderr)
+	}
+}

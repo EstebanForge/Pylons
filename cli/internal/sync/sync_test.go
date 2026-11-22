@@ -247,3 +247,17 @@ func TestRunCorruptStateIsSafe(t *testing.T) {
 		t.Fatal("the launch must record valid state")
 	}
 }
+
+func TestRunSkipsFetchWithoutRemote(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q", "-b", "main").CombinedOutput(); err != nil {
+		t.Fatalf("init: %v: %s", err, out)
+	}
+	res, err := Run(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FetchStarted {
+		t.Fatal("a repo with no remote must not report a fetch started")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -247,5 +248,127 @@ func TestMergeDangerNotEvaluatedWithoutGit(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected a not-evaluated advisory, got %v", fs)
+	}
+}
+
+func TestGateSurfaceFlagsSubdirectoryLedger(t *testing.T) {
+	// The ledger lives at mono/ledger inside a workspace repo; the
+	// guard must still see repo-root-relative gate-surface paths.
+	mono := t.TempDir()
+	kb := filepath.Join(mono, "ledger")
+	run := func(args ...string) string {
+		t.Helper()
+		out, err := exec.Command("git", append([]string{"-C", mono}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+		return string(out)
+	}
+	run("init", "-q", "-b", "main")
+	run("config", "user.email", "t@example.com")
+	run("config", "user.name", "t")
+	mustWrite(t, filepath.Join(mono, "README.md"), "# workspace\n")
+	run("add", "-Af", ".")
+	run("commit", "-qm", "base")
+	base := run("rev-parse", "HEAD")
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), "version: 1\nexclude:\n  - old/**\n")
+	mustWrite(t, filepath.Join(kb, "manifests/baseline.json"), "{}\n")
+	mustWrite(t, filepath.Join(kb, "manifests/rules.json"), "{}\n")
+	mustWrite(t, filepath.Join(kb, "domain/machine.md"), "# machine\n")
+	run("add", "-Af", ".")
+	run("commit", "-qm", "seed ledger")
+	fs := GateSurface(kb, base[:len(base)-1])
+	found := findingRules(fs)
+	// The seed touches three gate surfaces and widens exclude, which
+	// adds a knob finding beside the pylons.yaml surface finding.
+	if len(found) != 4 {
+		t.Fatalf("a subdirectory ledger must still flag its gate surfaces, got %v", found)
+	}
+	if !slices.Contains(found, "PYLON062 manifests/baseline.json") || !slices.Contains(found, "PYLON062 manifests/rules.json") {
+		t.Fatalf("the touched manifests must be flagged, got %v", found)
+	}
+	knob := false
+	for _, f := range fs {
+		if f.RuleID == "PYLON062" && strings.Contains(f.Message, "exclude") {
+			knob = true
+		}
+	}
+	if !knob {
+		t.Fatalf("the added exclude knob must be flagged, got %v", found)
+	}
+}
+
+func TestMergeDangerMarkerReadsTheCodeRepo(t *testing.T) {
+	// The ledger is not a git repo; the code repo is. The marker
+	// proof must read the code repo's history, so an unmarked diff
+	// fires UNPAIRED instead of passing silently.
+	repo := t.TempDir()
+	kb := t.TempDir()
+	shell("git", "-C", repo, "init", "-q", "-b", "main")
+	shell("git", "-C", repo, "config", "user.email", "t@example.com")
+	shell("git", "-C", repo, "config", "user.name", "t")
+	mustWrite(t, filepath.Join(repo, "schema.sql"), "CREATE TABLE ship;\n")
+	shell("git", "-C", repo, "add", "-f", ".")
+	shell("git", "-C", repo, "commit", "-qm", "feat: base")
+	shell("git", "-C", repo, "remote", "add", "origin", repo)
+	shell("git", "-C", repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+	shell("git", "-C", repo, "commit", "--allow-empty", "-qm", "refactor: unmarked change")
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), "version: 1\nextensions: [go]\nprojects:\n  svc:\n    path: "+repo+"\n")
+	mustWrite(t, filepath.Join(kb, "plans/feature-ship.md"), "---\ntitle: ship\ntype: plan\nstatus: accepted\ncreated: 2026-11-01\nupdated: 2026-11-01\nowners: [Pylons]\ncomponents: [svc]\nticket: [EX-1]\ncontract:\n  stable:\n    - kind: go-schema\n      id: repo://svc/schema.sql::tables\n---\n\n## Problem\n\nShip it.\n")
+	body := "---\ntitle: body\n---\n\nMerge danger: one-way | blast radius: docs\n"
+	mustWrite(t, filepath.Join(kb, "body.md"), body)
+	fs, err := MergeDanger(kb, MergeDangerOptions{Body: filepath.Join(kb, "body.md"), Base: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, f := range fs {
+		if strings.Contains(f.Message, "MERGE_DANGER_UNPAIRED") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("an unmarked code diff must fire UNPAIRED even when the ledger is not a repo, got %v", fs)
+	}
+	// A breaking subject in the code repo proves the one-way claim.
+	shell("git", "-C", repo, "commit", "--allow-empty", "-qm", "feat!: breaking change")
+	fs, err = MergeDanger(kb, MergeDangerOptions{Body: filepath.Join(kb, "body.md"), Base: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if strings.Contains(f.Message, "MERGE_DANGER_UNPAIRED") {
+			t.Fatalf("a code-repo release marker proves the one-way door, got %v", fs)
+		}
+	}
+}
+
+func TestMergeDangerUnreadableBaseNeverPassesSilently(t *testing.T) {
+	repo := t.TempDir()
+	kb := t.TempDir()
+	shell("git", "-C", repo, "init", "-q", "-b", "main")
+	shell("git", "-C", repo, "config", "user.email", "t@example.com")
+	shell("git", "-C", repo, "config", "user.name", "t")
+	mustWrite(t, filepath.Join(repo, "schema.sql"), "CREATE TABLE ship;\n")
+	shell("git", "-C", repo, "add", "-f", ".")
+	shell("git", "-C", repo, "commit", "-qm", "feat: base")
+	shell("git", "-C", repo, "remote", "add", "origin", repo)
+	shell("git", "-C", repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), "version: 1\nextensions: [go]\nprojects:\n  svc:\n    path: "+repo+"\n")
+	mustWrite(t, filepath.Join(kb, "plans/feature-ship.md"), "---\ntitle: ship\ntype: plan\nstatus: accepted\ncreated: 2026-11-01\nupdated: 2026-11-01\nowners: [Pylons]\ncomponents: [svc]\nticket: [EX-1]\ncontract:\n  stable:\n    - kind: go-schema\n      id: repo://svc/schema.sql::tables\n---\n\n## Problem\n\nShip it.\n")
+	body := "---\ntitle: body\n---\n\nMerge danger: one-way | blast radius: docs\n"
+	mustWrite(t, filepath.Join(kb, "body.md"), body)
+	fs, err := MergeDanger(kb, MergeDangerOptions{Body: filepath.Join(kb, "body.md"), Base: "nosuchref"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, f := range fs {
+		if strings.Contains(f.Message, "MERGE_DANGER_NOT_EVALUATED") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("an unreadable base must advise, never pass silently, got %v", fs)
 	}
 }
