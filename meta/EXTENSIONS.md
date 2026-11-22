@@ -67,7 +67,7 @@ If resolution fails due to a runtime error, return `{"resolved": false, "detail"
 
 ## Parity plugins
 
-Hook-name contracts ship natively: with the `php` extension enabled, the `wp-hook` kind resolves the id's hook tag against a project's PHP files through the standard hook functions, no plugin needed.
+Hook-name contracts ship natively: with the `php` extension enabled, the `wp-hook` kind resolves the id's hook tag against a project's PHP files through the standard hook functions, no plugin needed. The family covers registration, firing, removal, queries, the ref-array and deprecated variants, and the remove_all pair. Variable and concatenated tags are out of scope: a contract names a literal tag. Matching ignores comments, so a tag named only in prose counts as wired, and PHP case folding applies to hook names.
 
 The parity system uses the same `pylon-ext-<name>` plugins for two extra request types beyond contract resolution. With a `use: external:<name>` profile binding in the `parity:` section of `manifests/pylons.yaml`, pylon sends the plugin a request with `"op"` instead of `"id"`:
 

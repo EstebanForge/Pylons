@@ -97,16 +97,27 @@ var builtinExtensions = map[string]map[Kind]Resolver{
 	},
 }
 
+// wpHookFamily is every standard hook entry point: registration,
+// firing, removal, queries, the ref-array and deprecated variants, and
+// the remove_all pair. Variable and concatenated tags are out of scope
+// by design: a contract names a literal tag.
+var wpHookFamily = "add_action|add_filter|do_action|do_action_ref_array|do_action_deprecated|apply_filters|apply_filters_ref_array|apply_filters_deprecated|remove_action|remove_filter|remove_all_actions|remove_all_filters|has_action|has_filter|doing_action|doing_filter|did_action|did_filter"
+
 // resolveWPHook resolves a hook-name contract: the id is the hook tag,
 // and the hook exists when a bounded project PHP file registers, fires,
 // removes, or queries the tag through the standard hook functions.
+// goRe and posix are the same match in the two engines the check can
+// run under: Go RE2 for the worktree walk, POSIX ERE for git grep,
+// which rejects RE2-only syntax like (?: and \b.
 func resolveWPHook(projectRoot, ref string, kind Kind, id string) Verdict {
 	tag := strings.TrimSpace(id)
-	if tag == "" || strings.ContainsAny(tag, "\"'\\") || strings.HasPrefix(tag, "-") {
+	if tag == "" || strings.ContainsAny(tag, "\"'\\") {
 		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "expected the hook tag as the id"}
 	}
-	re := regexp.MustCompile(`\b(?:add_action|add_filter|do_action|apply_filters|remove_action|remove_filter|has_action|has_filter|doing_action|doing_filter|did_action|did_filter)\s*\(\s*['"]` + regexp.QuoteMeta(tag) + `['"]`)
-	if match := grepTargetRegex(projectRoot, ref, map[string]bool{".php": true}, re); match != "" {
+	quoted := regexp.QuoteMeta(tag)
+	goRe := regexp.MustCompile(`\b(` + wpHookFamily + `)\s*\(\s*['"]` + quoted + `['"]`)
+	posix := `(^|[^A-Za-z0-9_])(` + wpHookFamily + `)[[:space:]]*\([[:space:]]*['"]` + quoted + `['"]`
+	if match := grepTargetRegex(projectRoot, ref, map[string]bool{".php": true}, goRe, posix); match != "" {
 		return Verdict{Kind: kind, ID: id, Resolved: true, Detail: match}
 	}
 	return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "hook " + tag + " never registered, fired, or queried"}
@@ -165,8 +176,11 @@ func resolvePHPSymbol(projectRoot, ref string, kind Kind, id string) Verdict {
 		// declaration and the short name against the class keyword.
 		if i := strings.LastIndexByte(classPart, '\\'); i > 0 {
 			ns, short := classPart[:i], classPart[i+1:]
-			nsRe := regexp.MustCompile(`(?m)^\s*namespace\s+` + regexp.QuoteMeta(ns) + `\s*;`)
-			classRe := regexp.MustCompile(`(?m)\b(?:class|interface|trait|enum)\s+` + regexp.QuoteMeta(short) + `\b`)
+			// PHP folds case on namespaces, classes, and functions;
+			// the namespace may share the opening tag's line and the
+			// braced form is legal.
+			nsRe := regexp.MustCompile(`(?mi)^\s*(?:<\?php\s+)?namespace\s+` + regexp.QuoteMeta(ns) + `\s*[;{]`)
+			classRe := regexp.MustCompile(`(?mi)\b(?:class|interface|trait|enum)\s+` + regexp.QuoteMeta(short) + `\b`)
 			if nsRe.Match(data) && classRe.Match(data) && methodRe.Match(data) {
 				return Verdict{Kind: kind, ID: id, Resolved: true, Detail: rel}
 			}

@@ -463,10 +463,15 @@ func resolveSchema(projectRoot, ref string, kind Kind, id string) Verdict {
 // grepTarget searches the configured ref via git grep so route/cli/event/schema
 // contracts honor repo:// base refs instead of silently reading the worktree.
 // grepTargetRegex is grepTarget with a regex and a filename-extension
-// allowlist on the worktree path; the ref path runs git grep -E.
-func grepTargetRegex(root, ref string, exts map[string]bool, re *regexp.Regexp) string {
+// allowlist on the worktree path; the ref path runs git grep -E with
+// the POSIX form of the same pattern, scoped to the same file set the
+// walk would read. re and posix must match identically: the ref path
+// never sees the Go-only syntax.
+func grepTargetRegex(root, ref string, exts map[string]bool, re *regexp.Regexp, posix string) string {
+	root = evalRoot(root)
 	if ref != "" && hasGitRepo(root) {
-		out, err := GitRun(root, nil, "grep", "-I", "-m", "1", "-E", "-e", re.String(), ref)
+		out, err := GitRun(root, nil, "grep", "-I", "-m", "1", "-E", "-e", posix, ref,
+			"--", "*.php", ":(exclude)vendor", ":(exclude)node_modules", ":(exclude)target", ":(exclude)_*")
 		if err != nil {
 			return ""
 		}
@@ -524,6 +529,15 @@ func grepTargetRegex(root, ref string, exts map[string]bool, re *regexp.Regexp) 
 	return found
 }
 
+// evalRoot follows a symlinked project root: WalkDir does not follow a
+// root symlink, so the whole tree would read as absent.
+func evalRoot(root string) string {
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		return resolved
+	}
+	return root
+}
+
 func grepTarget(root, ref, needle string) string {
 	if ref != "" && hasGitRepo(root) {
 		out, err := GitRun(root, nil, "grep", "-I", "--fixed-strings", "-m", "1", "-e", needle, ref)
@@ -562,6 +576,7 @@ func grepProject(root, needle string) string {
 	if root == "" || needle == "" {
 		return ""
 	}
+	root = evalRoot(root)
 	var found string
 	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {

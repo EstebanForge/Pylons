@@ -5,6 +5,7 @@ package resolve
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -141,5 +142,89 @@ func TestWPHookNativeThroughPhpExtension(t *testing.T) {
 	plain := NewRegistry([]string{}, "")
 	if v := plain.Resolve(proj, Kind("wp-hook"), "acme/module/ready"); v.Resolved {
 		t.Fatal("wp-hook must not exist without the php extension")
+	}
+}
+
+// The git-grep ref path must speak POSIX ERE: the review found the
+// shared regex carried RE2-only syntax, so every hook died as an
+// unmatched grep under a configured ref. The ref path must also keep
+// the worktree path's file scoping, and the worktree path must follow
+// a symlinked project root.
+func TestWPHookRefPathResolves(t *testing.T) {
+	proj := t.TempDir()
+	run := func(args ...string) string {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = proj
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+		return string(out)
+	}
+	run("init", "-q")
+	run("config", "user.email", "t@t")
+	run("config", "user.name", "t")
+	if err := os.WriteFile(filepath.Join(proj, "boot.php"), []byte("<?php\nadd_action('acme/ready', 'b');\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A markdown file mentioning the tag must never satisfy the
+	// contract on the ref path, mirroring the worktree walk's .php
+	// scoping.
+	if err := os.WriteFile(filepath.Join(proj, "notes.md"), []byte("add_action('acme/mdtag')\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(proj, "vendor", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "vendor", "x", "v.php"), []byte("<?php\nadd_filter('acme/vendortag', 'v');\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "-A")
+	run("commit", "-qm", "seed")
+	reg := NewRegistryWithOptions(RegistryOptions{Extensions: []string{"php"}, Ref: "HEAD"})
+	if v := reg.Resolve(proj, Kind("wp-hook"), "acme/ready"); !v.Resolved {
+		t.Fatalf("hook must resolve through the configured ref: %s", v.Detail)
+	}
+	if v := reg.Resolve(proj, Kind("wp-hook"), "acme/mdtag"); v.Resolved {
+		t.Fatal("a non-PHP file must never satisfy a wp-hook contract on the ref path")
+	}
+	if v := reg.Resolve(proj, Kind("wp-hook"), "acme/vendortag"); v.Resolved {
+		t.Fatal("vendor must be skipped on the ref path like the worktree walk")
+	}
+	if v := reg.Resolve(proj, Kind("wp-hook"), "acme/ref-array"); v.Resolved {
+		t.Fatal("unset fixture leak")
+	}
+}
+
+// A symlinked project root must resolve: WalkDir does not follow a
+// root symlink, so the whole tree went dark.
+func TestWPHookSymlinkedRootResolves(t *testing.T) {
+	real := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	if err := os.WriteFile(filepath.Join(real, "boot.php"), []byte("<?php\nadd_action('acme/linktag', 'b');\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry([]string{"php"}, "")
+	if v := reg.Resolve(link, Kind("wp-hook"), "acme/linktag"); !v.Resolved {
+		t.Fatalf("symlinked root must resolve: %s", v.Detail)
+	}
+}
+
+// New family forms ship with the kind: ref-array, deprecated, and the
+// remove_all pair.
+func TestWPHookFamilyForms(t *testing.T) {
+	proj := t.TempDir()
+	src := "<?php\ndo_action_ref_array('acme/a', [$x]);\napply_filters_deprecated('acme/b', [], '1.0');\nremove_all_actions('acme/c');\n"
+	if err := os.WriteFile(filepath.Join(proj, "boot.php"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry([]string{"php"}, "")
+	for _, tag := range []string{"acme/a", "acme/b", "acme/c"} {
+		if v := reg.Resolve(proj, Kind("wp-hook"), tag); !v.Resolved {
+			t.Fatalf("%s must resolve: %s", tag, v.Detail)
+		}
 	}
 }

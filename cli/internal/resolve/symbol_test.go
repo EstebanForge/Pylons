@@ -66,3 +66,27 @@ func TestResolvePHPSymbolNamespacedClass(t *testing.T) {
 		t.Fatalf("bare class id must keep resolving: %s", v.Detail)
 	}
 }
+
+// PHP namespaces and class names are case-insensitive, a namespace may
+// share its line with the opening tag, and the braced form is legal.
+func TestPHPSymbolNamespaceForms(t *testing.T) {
+	cases := []struct{ name, src string }{
+		{"standalone", "<?php\nnamespace Acme\\Org;\n\nclass Thing { public function ping() {} }\n"},
+		{"same line as open tag", "<?php namespace Acme\\Org;\n\nclass Thing { public function ping() {} }\n"},
+		{"braced", "<?php\nnamespace Acme\\Org {\n\n  class Thing { public function ping() {} }\n}\n"},
+		{"case fold", "<?php\nnamespace acme\\org;\n\nclass THING { public function ping() {} }\n"},
+	}
+	for _, tc := range cases {
+		root := t.TempDir()
+		p := filepath.Join(root, "src", "Thing.php")
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(tc.src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		reg := NewRegistry([]string{"php"}, "")
+		v := reg.Resolve(root, Kind("php-symbol"), "src/Thing.php::Acme\\Org\\Thing::ping")
+		if !v.Resolved {
+			t.Fatalf("%s: namespaced symbol must resolve: %s", tc.name, v.Detail)
+		}
+	}
+}
