@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/estebanforge/pylons/cli/internal/report"
 )
 
 // RetroRecord is one structured review finding. The signature is the
@@ -91,6 +93,9 @@ func ReviewRetro(opts RetroOptions) (RetroReport, error) {
 		if err := json.Unmarshal([]byte(line), &r); err != nil {
 			return RetroReport{}, fmt.Errorf("findings record: %w", err)
 		}
+		if r.Shape != "" && !retroShapes[r.Shape] {
+			return RetroReport{}, fmt.Errorf("findings record shape %q must be convention, falsifier, or lint-rule", r.Shape)
+		}
 		day, err := time.Parse("2006-01-02", r.Date)
 		if err != nil {
 			return RetroReport{}, fmt.Errorf("findings record date %q: %w", r.Date, err)
@@ -100,6 +105,12 @@ func ReviewRetro(opts RetroOptions) (RetroReport, error) {
 		}
 		rep.Examined++
 		key := r.Lens + "\x00" + r.Rule + "\x00" + r.Contract + "\x00" + r.Path
+		// Free-text findings carry no structured identity; they
+		// accumulate on a normalized-text slug instead, so two
+		// different markers never share a signature.
+		if r.Rule == "" && r.Contract == "" && r.Path == "" {
+			key += "\x00" + harvestSlug(r.Text)
+		}
 		g := groups[key]
 		if g == nil {
 			g = &group{shapes: map[string]bool{}}
@@ -128,6 +139,7 @@ func ReviewRetro(opts RetroOptions) (RetroReport, error) {
 		return strings.Compare(a.key, b.key)
 	})
 	today := time.Now().Format("2006-01-02")
+	usedSlugs := map[string]int{}
 	for _, c := range countedSorted {
 		records := c.g.records
 		slices.SortFunc(records, func(a, b RetroRecord) int { return strings.Compare(a.Date, b.Date) })
@@ -143,23 +155,37 @@ func ReviewRetro(opts RetroOptions) (RetroReport, error) {
 				}
 			}
 		}
+		// A falsifier with no contract has nothing to anchor the
+		// wrong_if entry to; it falls back to a convention stub.
+		if shape == "falsifier" && latest.Contract == "" {
+			shape = "convention"
+		}
 		cand := RetroCandidate{
-			Signature: retroSignatureLabel(c.key),
+			Signature: retroOneLine(retroSignatureLabel(c.key)),
 			Count:     c.count,
 			Shape:     shape,
 			Sources:   retroSources(records),
 		}
+		latest.Text = retroOneLine(latest.Text)
+		cleanContract := retroOneLine(latest.Contract)
+		cleanRule := retroOneLine(ruleOrNone(latest.Rule))
+		cleanPath := retroOneLine(pathOrNone(latest.Path))
+		cleanLens := retroOneLine(latest.Lens)
 		switch shape {
 		case "falsifier":
-			cand.Summary = fmt.Sprintf("Append a wrong_if entry to contract %s:", latest.Contract)
+			cand.Summary = fmt.Sprintf("Append a wrong_if entry to contract %s:", cleanContract)
 			cand.Scaffold = fmt.Sprintf("wrong_if: %q\n", latest.Text)
 		case "lint-rule":
 			cand.Summary = "Proposed lint rule for the catalog:"
-			cand.Scaffold = fmt.Sprintf("Trigger: lens %s on %s %s\nFalsifier: %q\n", latest.Lens, ruleOrNone(latest.Rule), pathOrNone(latest.Path), latest.Text)
+			cand.Scaffold = fmt.Sprintf("Trigger: lens %s on %s %s\nFalsifier: %q\n", cleanLens, cleanRule, cleanPath, latest.Text)
 		default:
 			slug := "retrospective"
 			if s := harvestSlug(latest.Text); s != "footgun" {
 				slug = s
+			}
+			usedSlugs[slug]++
+			if n := usedSlugs[slug]; n > 1 {
+				slug = fmt.Sprintf("%s-%d", slug, n)
 			}
 			doc := strings.Join([]string{
 				"---",
@@ -182,7 +208,7 @@ func ReviewRetro(opts RetroOptions) (RetroReport, error) {
 				"",
 				"## Rule",
 				"",
-				latest.Text + ".",
+				retroSentence(latest.Text),
 				"",
 				"## Rationale",
 				"",
@@ -195,6 +221,25 @@ func ReviewRetro(opts RetroOptions) (RetroReport, error) {
 		rep.Candidates = append(rep.Candidates, cand)
 	}
 	return rep, nil
+}
+
+// retroSentence ends a rule line with one period, never two: text
+// already carrying terminal punctuation passes through unchanged.
+func retroSentence(s string) string {
+	if s == "" {
+		return "Unspecified finding."
+	}
+	if r := []rune(s); r[len(r)-1] == '.' || r[len(r)-1] == '!' || r[len(r)-1] == '?' {
+		return s
+	}
+	return s + "."
+}
+
+// retroOneLine flattens a field to one artifact line: control
+// characters dropped, every whitespace run collapsed to one space, so
+// record fields cannot inject headings into the rendered candidate.
+func retroOneLine(s string) string {
+	return strings.Join(strings.Fields(report.CleanText(s)), " ")
 }
 
 func retroSignatureLabel(key string) string {
@@ -227,7 +272,7 @@ func retroSources(records []RetroRecord) []string {
 	var out []string
 	for _, r := range records {
 		if r.Source != "" {
-			out = append(out, r.Source)
+			out = append(out, retroOneLine(r.Source))
 		}
 	}
 	slices.Sort(out)

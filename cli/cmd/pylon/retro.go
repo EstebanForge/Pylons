@@ -18,7 +18,7 @@ func cmdRetro(findingsPath, window string, min int, shape string) int {
 		fmt.Fprintln(os.Stderr, "pylon: review retro requires --findings <file|->")
 		return 2
 	}
-	data, err := readAnnotationInput(findingsPath)
+	data, err := readRetroFindings(findingsPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "pylon: review retro: %v\n", err)
 		return 2

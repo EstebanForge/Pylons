@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,10 +70,10 @@ var harvestDeclRules = []struct {
 	re   *regexp.Regexp
 	kind string
 }{
-	{[]string{".go"}, regexp.MustCompile(`^func\s+(?:\([^)]*\)\s*)?([A-Z]\w*)\s*\(|^(?:type|var|const)\s+([A-Z]\w*)`), "go-symbol"},
-	{[]string{".rs"}, regexp.MustCompile(`^pub\s+(?:const|static|fn|struct|enum|trait|type)\s+(\w+)`), "rust-item"},
+	{[]string{".go"}, regexp.MustCompile(`^func\s+(?:\([^)]*\)\s*)?([A-Z]\w*)(?:\[[^\]]*\])?\s*\(|^(?:type|var|const)\s+([A-Z]\w*)`), "go-symbol"},
+	{[]string{".rs"}, regexp.MustCompile(`^\s*pub(?:\([^)]*\))?\s+(?:(?:const|async|unsafe|extern(?:\([^)]*\))?)\s+)*(?:const|static|fn|struct|enum|trait|type)\s+(\w+)`), "rust-item"},
 	{[]string{".ts", ".tsx", ".js", ".jsx"}, regexp.MustCompile(`^export\s+(?:default\s+)?(?:async\s+)?(?:function\s*\*?\s*|class\s+|const\s+|let\s+|var\s+|interface\s+|type\s+|enum\s+)(\w+)`), "ts-export"},
-	{[]string{".php"}, regexp.MustCompile(`^public\s+(?:static\s+)?(?:function\s+([A-Za-z]\w*)|const\s+([A-Za-z]\w*)|class\s+(\w+)|interface\s+(\w+))`), "php-symbol"},
+	{[]string{".php"}, regexp.MustCompile(`^\s*public\s+(?:static\s+)?(?:function\s+([A-Za-z]\w*)|const\s+([A-Za-z]\w*)|class\s+(\w+)|interface\s+(\w+))`), "php-symbol"},
 }
 
 var harvestExts = func() map[string]int {
@@ -118,33 +119,65 @@ func HarvestPR(kbRoot string, diff []byte, meta []byte) (HarvestReport, error) {
 	}
 	var syms []fileSym
 	current := ""
-	binary := false
+	inHunk := false
+	goBlock := false
 	for _, line := range strings.Split(string(diff), "\n") {
 		if strings.HasPrefix(line, "diff --git ") {
-			current, binary = "", false
+			current, inHunk, goBlock = "", false, false
 			continue
 		}
-		if strings.HasPrefix(line, "+++ b/") {
-			current = strings.TrimPrefix(line, "+++ b/")
+		if inHunk {
+			// Inside a hunk every +++-prefixed line is added
+			// content; only diff --git ends the file above.
+			if line == "@@" || strings.HasPrefix(line, "@@ ") {
+				continue
+			}
+			if !strings.HasPrefix(line, "+") {
+				if strings.HasPrefix(line, "const ") || strings.HasPrefix(line, "var ") {
+					goBlock = false
+				}
+				continue
+			}
+		} else {
+			if strings.HasPrefix(line, "@@") {
+				inHunk = true
+				goBlock = false
+				continue
+			}
+			if strings.HasPrefix(line, "Binary files ") {
+				rep.Warnings = append(rep.Warnings, "binary file skipped: "+gitHeaderPath(line))
+				continue
+			}
+			if !strings.HasPrefix(line, "+++ ") {
+				continue
+			}
+			current = gitHeaderPath(line[4:])
 			continue
 		}
-		if strings.HasPrefix(line, "Binary files ") {
-			binary = true
-			rep.Warnings = append(rep.Warnings, "binary file skipped: "+current)
+		if current == "" || isHarvestTestFile(current) || strings.Contains(current, "/vendor/") {
 			continue
 		}
-		if current == "" || binary || !strings.HasPrefix(line, "+") || strings.HasPrefix(line, "+++") {
+		content := line[1:]
+		if goBlockOpenRe.MatchString(content) {
+			goBlock = true
 			continue
 		}
-		if isHarvestTestFile(current) || strings.Contains(current, "/vendor/") {
+		if content == ")" {
+			goBlock = false
 			continue
+		}
+		if goBlock {
+			if m := goBlockMemberRe.FindStringSubmatch(content); m != nil {
+				syms = append(syms, fileSym{path: current, kind: "go-symbol", name: m[1]})
+				continue
+			}
 		}
 		ext := strings.ToLower(filepath.Ext(current))
 		ruleIdx, ok := harvestExts[ext]
 		if !ok {
 			continue
 		}
-		m := harvestDeclRules[ruleIdx].re.FindStringSubmatch(line[1:])
+		m := harvestDeclRules[ruleIdx].re.FindStringSubmatch(content)
 		if m == nil {
 			continue
 		}
@@ -162,15 +195,22 @@ func HarvestPR(kbRoot string, diff []byte, meta []byte) (HarvestReport, error) {
 	}
 
 	seen := map[string]bool{}
+	unseen := map[string]bool{}
 	for _, s := range syms {
 		alias, absPath := harvestAlias(kbRoot, cfg, s.path)
 		cand := SymbolCandidate{Path: s.path, Alias: alias, Kind: s.kind, Name: s.name}
 		if alias == "" {
-			rep.Unattributed = append(rep.Unattributed, UnattributedSymbol{Path: s.path, Name: s.name})
+			if !unseen[s.path+"\x00"+s.name] {
+				unseen[s.path+"\x00"+s.name] = true
+				rep.Unattributed = append(rep.Unattributed, UnattributedSymbol{Path: s.path, Name: s.name})
+			}
 			rep.Symbols = append(rep.Symbols, cand)
 			continue
 		}
 		projPath := cfg.ProjectPath(kbRoot, alias)
+		if resolved, perr := filepath.EvalSymlinks(projPath); perr == nil {
+			projPath = resolved
+		}
 		rel, err := filepath.Rel(projPath, absPath)
 		if err != nil {
 			rel = filepath.Base(absPath)
@@ -200,6 +240,30 @@ func HarvestPR(kbRoot string, diff []byte, meta []byte) (HarvestReport, error) {
 	rep.Warnings = slices.Compact(rep.Warnings)
 	return rep, nil
 }
+
+// gitHeaderPath strips a git header path: the b/ prefix, a trailing
+// tab timestamp, CRLF, and git's C-style quoting of non-ASCII paths.
+func gitHeaderPath(raw string) string {
+	if i := strings.IndexByte(raw, '\t'); i >= 0 {
+		raw = raw[:i]
+	}
+	raw = strings.TrimRight(raw, "\r ")
+	if q := strings.HasSuffix(raw, "\"") && strings.HasPrefix(raw, "\""); q {
+		raw = strings.Trim(raw, "\"")
+	}
+	raw = strings.TrimPrefix(raw, "b/")
+	if out, err := strconv.Unquote("\"" + raw + "\""); err == nil && out != raw {
+		return out
+	}
+	return raw
+}
+
+// goBlockOpenRe opens a grouped const/var block.
+var goBlockOpenRe = regexp.MustCompile(`^(?:const|var)\s*\($`)
+
+// goBlockMemberRe extracts an exported member line inside an open
+// block (Alpha = 1); unexported names stay hidden.
+var goBlockMemberRe = regexp.MustCompile(`^\s*([A-Z]\w+)\s*(?:=|\b|$)`)
 
 // harvestAlias tries a diff path absolute from the caller's working
 // directory first (CI checkout root), then ledger-relative, resolving

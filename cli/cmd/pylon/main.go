@@ -257,8 +257,8 @@ func run(args []string) int {
 				retroFindingsPath = val
 			case "--min":
 				n, err := strconv.Atoi(val)
-				if err != nil || n < 0 {
-					fmt.Fprintln(os.Stderr, "pylon: --min must be a non-negative integer")
+				if err != nil || n < 1 {
+					fmt.Fprintln(os.Stderr, "pylon: --min must be a positive integer")
 					return 2
 				}
 				retroMin = n
@@ -1390,6 +1390,43 @@ func cmdAnnotations(from, pathPrefix string, format report.Format) int {
 		fmt.Printf("  %s:%d %s %s\n", report.CleanText(a.Path), a.StartLine, report.CleanText(a.Title), report.CleanText(firstAnnLine(a.Message)))
 	}
 	return 0
+}
+
+// readRetroFindings reads the append-only findings log with a wider
+// cap than one-shot inputs: the file grows across merges and the
+// window filter, not the read cap, bounds what retro examines.
+func readRetroFindings(from string) ([]byte, error) {
+	const maxFindingsBytes = 64 * 1024 * 1024
+	if from == "-" {
+		data, err := io.ReadAll(io.LimitReader(os.Stdin, maxFindingsBytes+1))
+		if err != nil {
+			return nil, err
+		}
+		if len(data) > maxFindingsBytes {
+			return nil, fmt.Errorf("findings exceed %d bytes; prune records outside every window you use", maxFindingsBytes)
+		}
+		return data, nil
+	}
+	f, err := os.Open(from)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !st.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", from)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxFindingsBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxFindingsBytes {
+		return nil, fmt.Errorf("findings exceed %d bytes; prune records outside every window you use", maxFindingsBytes)
+	}
+	return data, nil
 }
 
 // readAnnotationInput applies the shared bounded-regular-read guard to

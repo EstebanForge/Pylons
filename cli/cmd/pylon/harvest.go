@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/estebanforge/pylons/cli/internal/report"
 	"github.com/estebanforge/pylons/cli/internal/rules"
 )
 
@@ -25,6 +26,9 @@ func cmdHarvest(kbRoot, diffPath, metaPath, recordPath string) int {
 	}
 	diff, err := readAnnotationInput(diffPath)
 	if err != nil {
+		if strings.Contains(err.Error(), "exceeds") {
+			err = fmt.Errorf("%w; split the merge or harvest the diff in parts", err)
+		}
 		fmt.Fprintf(os.Stderr, "pylon: harvest: %v\n", err)
 		return 2
 	}
@@ -76,6 +80,15 @@ func appendRetroRecords(path string, quirks []rules.QuirkCandidate) error {
 func renderHarvest(rep rules.HarvestReport) string {
 	var b strings.Builder
 	b.WriteString("# Harvest candidates\n\n")
+	// Warnings render even with no candidates: a diff that only
+	// touches binary files must still say why nothing was extracted.
+	if len(rep.Warnings) > 0 {
+		b.WriteString("## Warnings\n\n")
+		for _, w := range rep.Warnings {
+			fmt.Fprintf(&b, "- %s\n", report.CleanText(w))
+		}
+		b.WriteString("\n")
+	}
 	if len(rep.Symbols) == 0 && len(rep.Quirks) == 0 {
 		b.WriteString("No candidates: the diff added no exported symbols and no footgun markers.\n")
 		return b.String()
@@ -98,7 +111,7 @@ func renderHarvest(rep rules.HarvestReport) string {
 			b.WriteString("- " + doc + ":\n")
 			for _, s := range byDoc[doc] {
 				if s.Proposed {
-					fmt.Fprintf(&b, "  - {kind: %s, id: %s}  # new in %s\n", s.Kind, s.ID, s.Path)
+					fmt.Fprintf(&b, "  - {kind: %s, id: %q}  # new in %s\n", s.Kind, s.ID, report.CleanText(s.Path))
 				}
 			}
 		}
@@ -107,21 +120,15 @@ func renderHarvest(rep rules.HarvestReport) string {
 	if len(rep.Quirks) > 0 {
 		b.WriteString("## quirk proposals\n\n")
 		for _, q := range rep.Quirks {
-			fmt.Fprintf(&b, "### quirks/proposals/%s.md\n(from %s)\n\n%s\n", q.Slug, q.Source, q.Body)
+			fmt.Fprintf(&b, "### quirks/proposals/%s.md\n(from %s)\n\n%s\n", q.Slug, report.CleanText(q.Source), q.Body)
 		}
 	}
 	if len(rep.Unattributed) > 0 {
 		b.WriteString("## Unattributed\n\n")
 		for _, u := range rep.Unattributed {
-			fmt.Fprintf(&b, "- %s :: %s\n", u.Path, u.Name)
+			fmt.Fprintf(&b, "- %s :: %s\n", report.CleanText(u.Path), report.CleanText(u.Name))
 		}
 		b.WriteString("\n")
-	}
-	if len(rep.Warnings) > 0 {
-		b.WriteString("## Warnings\n\n")
-		for _, w := range rep.Warnings {
-			b.WriteString("- " + w + "\n")
-		}
 	}
 	return b.String()
 }

@@ -4,6 +4,8 @@
 package main
 
 import (
+	"time"
+
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,8 +22,8 @@ func TestReviewRetroFlagPath(t *testing.T) {
 	}
 	findings := filepath.Join(base, "findings.jsonl")
 	if err := os.WriteFile(findings, []byte(
-		`{"date":"2026-06-01","lens":"review","rule":"","contract":"","path":"svc/x.go","text":"replays on retry","source":"pr 1"}`+"\n"+
-			`{"date":"2026-06-09","lens":"review","rule":"","contract":"","path":"svc/x.go","text":"replay race again","source":"pr 4"}`+"\n"), 0o644); err != nil {
+		`{"date":"`+retroDay(2)+`","lens":"review","rule":"","contract":"","path":"svc/x.go","text":"replays on retry","source":"pr 1"}`+"\n"+
+			`{"date":"`+retroDay(0)+`","lens":"review","rule":"","contract":"","path":"svc/x.go","text":"replay race again","source":"pr 4"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	bad := filepath.Join(base, "bad.jsonl")
@@ -40,6 +42,10 @@ func TestReviewRetroFlagPath(t *testing.T) {
 	// Non-integer --min is a usage error.
 	if code := run([]string{"review", "retro", "--pylons", base, "--findings", findings, "--min", "x"}); code != 2 {
 		t.Fatalf("non-integer --min must exit 2, got %d", code)
+	}
+	// Zero is not a threshold.
+	if code := run([]string{"review", "retro", "--pylons", base, "--findings", findings, "--min", "0"}); code != 2 {
+		t.Fatalf("--min 0 must exit 2, got %d", code)
 	}
 
 	stdout := captureStdout(t, func() {
@@ -116,4 +122,8 @@ func TestHarvestRecordFeedsRetro(t *testing.T) {
 	if !strings.Contains(stdout, "conventions/proposals/") || !strings.Contains(stdout, "2 repeats") {
 		t.Fatalf("two occurrences must open one candidate: %s", stdout)
 	}
+}
+
+func retroDay(daysAgo int) string {
+	return time.Now().AddDate(0, 0, -daysAgo).Format("2006-01-02")
 }
