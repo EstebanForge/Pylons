@@ -3,7 +3,7 @@ title: "Installing and Setting Up Pylons"
 type: meta
 status: active
 created: 2026-11-19
-updated: 2026-11-20
+updated: 2026-11-23
 ---
 
 # Installing and Setting Up Pylons
@@ -12,7 +12,7 @@ Pylons has two parts: the pylon itself (a directory of Markdown, `manifests/pylo
 
 ## 1. Prerequisites
 
-- One of: the one-line installer (needs `curl` or `wget`, plus `git`), Go 1.24+ (tested with Go 1.27) to build `pylon` from `cli/`, or a release tarball from the [GitHub releases](https://github.com/EstebanForge/Pylons/releases).
+- One of: the one-line installer (needs `curl` or `wget`, plus `git`), Go 1.27+ to build `pylon` from `cli/`, or a release tarball from the [GitHub releases](https://github.com/EstebanForge/Pylons/releases).
 - Git (optional, used for `--changed` staged-file checks and `@branch` validation).
 
 ## 2. Install the `pylon` CLI and a Pylon
@@ -94,7 +94,7 @@ The repo ships gate hooks in `.githooks/`. Enable them once per clone:
 
 The command is idempotent: it writes only missing hook scripts and reports what it kept. `pylon init` wires the same hooks automatically when it runs inside a git repository.
 
-The shipped hooks are thin shims: all gate logic lives in the compiled engine, so the shim files rarely change and `self-update` never needs to touch them.
+The shipped hooks are thin shims: all gate logic lives in the compiled engine, so the shim files rarely change and `self-update` never needs to touch them. When `bin/pylon` is absent the shim falls back to whatever `pylon` is on your `PATH`, and that fallback has no version check: a stale PATH copy can run old gate logic, so keep `bin/pylon` present in the ledger you gate.
 
 If another tool owns your hooks, `pylon install` refuses instead of silently leaving you ungated. Two ways out:
 

@@ -64,7 +64,7 @@ func TestAromaWalkSkipsUnderscoreDirs(t *testing.T) {
 	}
 	langs := []aroma.Language{aroma.GoLanguage}
 	root := corpusRoot{label: "", path: ".", abs: dir}
-	files := walk(root, []corpusRoot{root}, langs, false, &strings.Builder{})
+	files, _ := walk(root, []corpusRoot{root}, langs, false, &strings.Builder{})
 	if len(files) != 1 || filepath.Base(files[0].Path) != "main.go" {
 		t.Fatalf("underscore corpus files must be skipped, got %+v", files)
 	}

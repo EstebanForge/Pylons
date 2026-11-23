@@ -191,6 +191,13 @@ func validateJSON(input []byte) error {
 
 // capRunes truncates to the cap with an ellipsis, by rune so multi-byte
 // text cannot land mid-sequence.
+// AnnotationPathSafe reports whether p is usable as an annotation
+// path: relative, no parent segments. The cmd layer reuses it to
+// validate --path-prefix, so a prefix cannot walk out of the repo.
+func AnnotationPathSafe(p string) bool {
+	return annotationPathSafe(p)
+}
+
 // annotationPathSafe reports whether a finding path is usable as a
 // GitHub annotation path: non-empty, relative, and free of parent
 // hops.
@@ -233,7 +240,10 @@ func summaryBody(r AnnotationReport, counts map[string]int, reps map[string]stri
 	}
 	b.WriteString(".\n\n")
 	for _, rule := range slices.Sorted(maps.Keys(counts)) {
-		fmt.Fprintf(&b, "- `%s` x%d: %s\n", rule, counts[rule], summaryLine(reps[rule]))
+		// The rule id comes from parsed input and rides the same
+		// sanitizer as its message: a backtick or newline in it must
+		// not break the markdown list open.
+		fmt.Fprintf(&b, "- `%s` x%d: %s\n", summaryLine(rule), counts[rule], summaryLine(reps[rule]))
 	}
 	return b.String()
 }

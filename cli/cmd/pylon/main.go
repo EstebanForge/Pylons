@@ -31,6 +31,7 @@ import (
 const usage = `pylon validates and queries a Pylons pylon: the plain-text map of a platform, checked against its code.
 
 Usage:
+  pylon --version
   pylon lint             [--changed] [--doc-only] [--fix] [--parity] [--update-baseline] [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
   pylon contract <plan>  [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
   pylon check <paths...> [--stop-block] [--format=human|json|sarif] [--json] [--pylons <path>]
@@ -38,6 +39,7 @@ Usage:
   pylon context <paths...> [--preamble] [--format=human|json] [--json] [--pylons <path>]
   pylon context --diff-since <ref> [--manifest] [--format=human|json] [--json] [--pylons <path>]
   pylon context --graph <package> [--depth N] [--format=human|json] [--json] [--pylons <path>]
+  pylon context --slice <plan> [--format=human|json] [--json] [--pylons <path>]
   pylon staleness        [--package <pkg>] [--fix] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review plan <path> [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review postmortem [path] [--check-sources] [--format=human|json|sarif] [--json] [--pylons <path>]
@@ -58,7 +60,7 @@ Usage:
   pylon extensions [list|schema] [--format=human|json] [--json] [--pylons <path>]
   pylon map              [--type <t>] [--package <p>] [--tag <t>] [--status <s>] [--folder <dir>] [--query <q>] [--limit <n>] [--all] [--format=human|json] [--json] [--pylons <path>]
   pylon search <query>   [--limit <n>] [--all] [--format=human|json] [--json] [--pylons <path>]
-  pylon manifest [rules|packages|product] [--check] [--release-version <v>] [--pylons <path>]
+  pylon manifest [rules|packages|product] [--check] [--release-version <v>] [--binary <os-arch>=<file>]... [--pylons <path>]
   pylon self-update --from <staged-release-dir> [--dry-run] [--force] [--pylons <path>]
   pylon explain <rule_id>
   pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]
@@ -137,6 +139,7 @@ func run(args []string) int {
 	allowExternal := os.Getenv("PYLON_ALLOW_EXTERNAL_EXTENSIONS") == "1"
 	forceHooks, ratchetUpdate, lintParity := false, false, false
 	releaseVersion := ""
+	var binaryPins []string
 	dryRunUpdate := false
 	updateBaseline := false
 	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild := "", "", "", "", "", "", "", "", "", ""
@@ -213,7 +216,7 @@ func run(args []string) int {
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
-		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version" || arg == "--diff" || arg == "--metadata" || arg == "--record" || arg == "--findings" || arg == "--min" || arg == "--shape" || arg == "--title":
+		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version" || arg == "--binary" || arg == "--diff" || arg == "--metadata" || arg == "--record" || arg == "--findings" || arg == "--min" || arg == "--shape" || arg == "--title":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "pylon: flag %s requires a value\n", arg)
 				return 2
@@ -276,6 +279,8 @@ func run(args []string) int {
 				retroShape = val
 			case "--release-version":
 				releaseVersion = val
+			case "--binary":
+				binaryPins = append(binaryPins, val)
 			case "--depth":
 				n, err := strconv.Atoi(val)
 				if err != nil || n < 0 {
@@ -512,7 +517,7 @@ func run(args []string) int {
 
 	case "review":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "pylon: review requires subcommand: plan | postmortem | staleness | ratchet | rework | merge-danger | release-surface | gate-surface")
+			fmt.Fprintln(os.Stderr, "pylon: review requires subcommand: plan | postmortem | staleness | ratchet | rework | merge-danger | release-surface | gate-surface | annotations | retro")
 			return 2
 		}
 		switch rest[0] {
@@ -722,6 +727,17 @@ func run(args []string) int {
 				fmt.Fprintf(os.Stderr, "pylon: manifest product: %v\n", err)
 				return 1
 			}
+			for _, pin := range binaryPins {
+				platform, file, found := strings.Cut(pin, "=")
+				if !found || platform == "" || file == "" {
+					fmt.Fprintf(os.Stderr, "pylon: --binary wants <platform>=<file>, got %q\n", pin)
+					return 2
+				}
+				if err := install.PinBinary(&m, platform, file); err != nil {
+					fmt.Fprintf(os.Stderr, "pylon: manifest product: %v\n", err)
+					return 1
+				}
+			}
 			out, err := install.WriteProductManifest(m)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "pylon: manifest product: %v\n", err)
@@ -736,7 +752,7 @@ func run(args []string) int {
 			}
 			return cmdManifestJSON(filepath.Join(kbRoot, "manifests", "packages.json"), rules.BuildPackagesManifest(kbRoot), checkManifest)
 		default:
-			fmt.Fprintln(os.Stderr, "pylon: manifest supports 'rules' or 'packages'")
+			fmt.Fprintln(os.Stderr, "pylon: manifest supports 'rules', 'packages', or 'product'")
 			return 2
 		}
 
@@ -913,10 +929,20 @@ func cmdInstall(kbRoot string, force bool) int {
 		fmt.Fprintln(os.Stderr, "pylon: could not locate manifests/pylons.yaml")
 		return 3
 	}
+	// Fail closed before wiring anything: gates handed to an engine
+	// that cannot run are the confusing half-success the old order
+	// produced (hooks written, then exit 1).
+	if !install.BinaryPresent(kbRoot) {
+		fmt.Fprintf(os.Stderr, "pylon install: bin/pylon missing or not executable; build it: cd cli && go build -o ../bin/pylon ./cmd/pylon\n")
+		return 1
+	}
 	res, err := install.EnsureHooks(kbRoot, force)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "pylon install: %v\n", err)
 		return 1
+	}
+	for _, w := range res.Warnings {
+		fmt.Fprintf(os.Stderr, "pylon install: %s\n", w)
 	}
 	for _, name := range res.WroteHooks {
 		fmt.Printf("pylon install: wrote .githooks/%s\n", name)
@@ -946,10 +972,6 @@ func cmdInstall(kbRoot string, force bool) int {
 		fmt.Printf("pylon install: enabled core.hooksPath .githooks\n")
 	} else {
 		fmt.Printf("pylon install: core.hooksPath already set\n")
-	}
-	if !res.BinaryOK {
-		fmt.Fprintf(os.Stderr, "pylon install: bin/pylon missing or not executable; build it: cd cli && go build -o ../bin/pylon ./cmd/pylon\n")
-		return 1
 	}
 	return 0
 }
@@ -1396,8 +1418,13 @@ func cmdAnnotations(from, pathPrefix string, format report.Format) int {
 		return 2
 	}
 	// Findings are KB-relative; a KB living in a repo subdirectory
-	// needs the prefix to make annotation paths repo-relative.
+	// needs the prefix to make annotation paths repo-relative. The
+	// prefix must itself stay inside the repo.
 	if pathPrefix != "" {
+		if !rules.AnnotationPathSafe(strings.TrimSuffix(pathPrefix, "/")) {
+			fmt.Fprintf(os.Stderr, "pylon: --path-prefix must be a relative path without .. segments\n")
+			return 2
+		}
 		for i := range out.Annotations {
 			out.Annotations[i].Path = pathPrefix + "/" + out.Annotations[i].Path
 		}

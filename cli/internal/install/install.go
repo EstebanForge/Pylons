@@ -39,6 +39,9 @@ type Result struct {
 	// PreviousHooksPath carries the core.hooksPath value a --force
 	// takeover replaced, so the handover stays reversible.
 	PreviousHooksPath string
+	// Warnings name setups the operator should know about: legacy
+	// .git/hooks scripts benched by core.hooksPath, and the like.
+	Warnings []string
 }
 
 // EnsureHooks writes missing .githooks scripts into the git toplevel of
@@ -96,6 +99,13 @@ func EnsureHooks(kbRoot string, force bool) (Result, error) {
 					return res, err
 				}
 			}
+			// Never write through a symlink: replace the link with a
+			// real hook file and leave the link target untouched.
+			if info, err := os.Lstat(dst); err == nil && info.Mode()&os.ModeSymlink != 0 {
+				if err := os.Remove(dst); err != nil {
+					return res, err
+				}
+			}
 			if err := os.WriteFile(dst, body, 0o755); err != nil {
 				return res, err
 			}
@@ -118,13 +128,25 @@ func EnsureHooks(kbRoot string, force bool) (Result, error) {
 		res.HooksPathSet = true
 	}
 
-	res.BinaryOK = binaryPresent(top)
+	res.BinaryOK = BinaryPresent(top)
+
+	// core.hooksPath benches any legacy scripts in .git/hooks; the
+	// operator must hear about them rather than trust a gate that
+	// silently stopped running.
+	for _, name := range hookNames {
+		if st, err := os.Stat(filepath.Join(top, ".git", "hooks", name)); err == nil && st.Mode().IsRegular() {
+			res.Warnings = append(res.Warnings,
+				"legacy .git/hooks/"+name+" exists; core.hooksPath .githooks now disables it")
+		}
+	}
 	return res, nil
 }
 
-// binaryPresent reports whether a built CLI exists beside the KB
-// (bin/pylon, or bin/pylon.exe on Windows).
-func binaryPresent(top string) bool {
+// BinaryPresent reports whether a built CLI exists beside the KB
+// (bin/pylon, or bin/pylon.exe on Windows). Install refuses before it
+// wires anything when this is false, so gates never hand over to an
+// engine that cannot run.
+func BinaryPresent(top string) bool {
 	for _, name := range []string{"pylon", "pylon.exe"} {
 		if st, err := os.Stat(filepath.Join(top, "bin", name)); err == nil && st.Mode().IsRegular() {
 			return true

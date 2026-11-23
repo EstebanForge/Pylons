@@ -45,6 +45,7 @@ targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64"
 
 rm -rf dist
 mkdir -p dist
+pins=()
 for pair in $targets; do
 	os=${pair%/*}
 	arch=${pair#*/}
@@ -53,13 +54,15 @@ for pair in $targets; do
 	CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -C cli -trimpath -ldflags "-s -w" -o "../dist/pylon.tmp" ./cmd/pylon
 	mkdir -p "dist/$name/bin"
 	mv dist/pylon.tmp "dist/$name/bin/pylon"
+	exe="bin/pylon"
 	if [ "$os" = windows ]; then
 		mv "dist/$name/bin/pylon" "dist/$name/bin/pylon.exe"
+		exe="bin/pylon.exe"
 	fi
+	pins+=("$os-$arch=$PWD/dist/$name/$exe")
 	cp LICENSE NOTICE "dist/$name/"
 	cp bin/THIRD_PARTY_NOTICES "dist/$name/bin/"
 	tar -czf "dist/pylons-$tag-$os-$arch.tar.gz" -C "dist/$name" bin LICENSE NOTICE
-	rm -rf "dist/$name"
 done
 
 # Smoke test the host platform's artifact: correct version, runs.
@@ -87,8 +90,11 @@ fi
 # what self-update may replace, so the updater can three-way every
 # product file against user edits.
 product_manifest="$(mktemp)"
-./bin/pylon manifest product --release-version "$tag" --pylons . > "$product_manifest" \
+pin_args=()
+for p in "${pins[@]}"; do pin_args+=("--binary" "$p"); done
+./bin/pylon manifest product --release-version "$tag" --pylons . "${pin_args[@]}" > "$product_manifest" \
 	|| { echo "product manifest build failed; sweep before releasing" >&2; rm -f "$product_manifest"; exit 1; }
+for pair in $targets; do rm -rf "dist/pylon-${pair%/*}-${pair#*/}"; done
 
 stage="$(mktemp -d)"
 git archive --format=tar HEAD \

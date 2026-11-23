@@ -92,9 +92,11 @@ func runAroma(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	var files []aroma.SourceFile
+	walkSkips := 0
 	for _, root := range roots {
-		collected := walk(root, roots, languages, options.includeTests, stderr)
+		collected, skipped := walk(root, roots, languages, options.includeTests, stderr)
 		files = append(files, collected...)
+		walkSkips += skipped
 	}
 	index := aroma.BuildIndex(files, aroma.IndexOptions{Languages: languages})
 	if index.Stats.Files == 0 {
@@ -115,7 +117,7 @@ func runAroma(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	stats := fmt.Sprintf("indexed %d files, %d methods (%d duplicates), %d features, %d skips",
 		index.Stats.Files, index.Stats.Methods, index.Stats.DuplicateMethods, index.Stats.Features,
-		index.Stats.UnsupportedFiles+index.Stats.OversizedFiles+index.Stats.SkippedFiles)
+		index.Stats.UnsupportedFiles+index.Stats.OversizedFiles+index.Stats.SkippedFiles+walkSkips)
 	fmt.Fprintln(stderr, stats)
 
 	if options.json {
@@ -410,7 +412,7 @@ func resolveCorpus(explicit []string, stderr io.Writer) ([]corpusRoot, error) {
 // walk collects the corpus files under root: regular files of a known
 // language extension, under 1MB, not generated, with VCS and dependency
 // trees skipped. Per-entry errors are reported and the walk continues.
-func walk(root corpusRoot, all []corpusRoot, languages []aroma.Language, includeTests bool, stderr io.Writer) []aroma.SourceFile {
+func walk(root corpusRoot, all []corpusRoot, languages []aroma.Language, includeTests bool, stderr io.Writer) ([]aroma.SourceFile, int) {
 	extensions := map[string]bool{}
 	for _, language := range languages {
 		for _, ext := range language.Extensions {
@@ -418,6 +420,7 @@ func walk(root corpusRoot, all []corpusRoot, languages []aroma.Language, include
 		}
 	}
 	var files []aroma.SourceFile
+	skipped := 0
 	err := filepath.WalkDir(root.abs, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			if path == root.abs {
@@ -453,14 +456,17 @@ func walk(root corpusRoot, all []corpusRoot, languages []aroma.Language, include
 			return nil
 		}
 		if !info.Mode().IsRegular() || info.Size() > 1_000_000 {
+			skipped++
 			return nil
 		}
 		if isGenerated(path) {
+			skipped++
 			return nil
 		}
 		source, err := os.ReadFile(path)
 		if err != nil {
 			fmt.Fprintf(stderr, "pylon aroma: skipping %s: %v\n", path, err)
+			skipped++
 			return nil
 		}
 		rel, err := filepath.Rel(root.abs, path)
@@ -476,10 +482,10 @@ func walk(root corpusRoot, all []corpusRoot, languages []aroma.Language, include
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "pylon aroma: cannot read corpus %q: %v\n", root.path, err)
-		return nil
+		return nil, skipped
 	}
 	slices.SortFunc(files, func(a, b aroma.SourceFile) int { return strings.Compare(a.Path, b.Path) })
-	return files
+	return files, skipped
 }
 
 // isGenerated reports a Go file whose header says it was generated, in the

@@ -487,3 +487,25 @@ func TestAromaSymlinkedRootLinesAndDiff(t *testing.T) {
 		t.Fatalf("diff query lost the added symbol: %s stderr %s", stdout, stderr)
 	}
 }
+
+// Walk-level drops of known-language files (oversized, generated,
+// non-regular) must surface in the stats line instead of vanishing.
+func TestAromaStatsReportWalkSkips(t *testing.T) {
+	sandbox := t.TempDir()
+	write := func(rel, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(sandbox, rel)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(sandbox, rel), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("good.go", "package a\n\nfunc Good() {\n\tprintln(\"x\")\n}\n")
+	write("huge.go", "package a\n\n// "+strings.Repeat("x", 1_100_000)+"\n")
+	t.Chdir(sandbox)
+	_, _, stderr := runCmd(t, sandbox, "search", "--corpus", ".", "--lines", "good.go:3-5", "--min", "0.1")
+	if !strings.Contains(stderr, "1 skips") {
+		t.Fatalf("the stats line must report the dropped file: %s", stderr)
+	}
+}

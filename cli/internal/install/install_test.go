@@ -147,9 +147,9 @@ func TestEnsureHooksBinaryMissing(t *testing.T) {
 
 func TestEmbeddedAssetsMatchRepoHooks(t *testing.T) {
 	for _, name := range []string{"pre-commit", "pre-push"} {
-		repo, err := os.ReadFile(filepath.Join("..", "..", "..", ".githooks", name))
+		repo, err := os.ReadFile(filepath.Join(repoRoot(t), ".githooks", name))
 		if err != nil {
-			t.Skipf("repo .githooks/%s not present from this checkout: %v", name, err)
+			t.Fatalf("repo .githooks/%s: %v", name, err)
 		}
 		emb, err := assets.ReadFile("assets/" + name)
 		if err != nil {

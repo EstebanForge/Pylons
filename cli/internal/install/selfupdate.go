@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -43,6 +44,7 @@ type UpdateResult struct {
 type stagedManifest struct {
 	Version string            `json:"version"`
 	Files   map[string]string `json:"files"`
+	Binary  map[string]string `json:"binary_sha256,omitempty"`
 }
 
 func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, error) {
@@ -66,11 +68,17 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 		if unsafeManifestPath(rel) {
 			return res, fmt.Errorf("staged manifest has unsafe path %q", rel)
 		}
+		if !productOwnedPath(rel) {
+			return res, fmt.Errorf("staged manifest key %q is outside the product layer", rel)
+		}
 	}
 
 	// Fail closed before touching anything: every staged file must
 	// match the release manifest.
 	for rel, want := range newM.Files {
+		if st, err := os.Lstat(filepath.Join(stagedDir, filepath.FromSlash(rel))); err != nil || !st.Mode().IsRegular() {
+			return res, fmt.Errorf("staged file %s is missing or not a regular file", rel)
+		}
 		data, err := os.ReadFile(filepath.Join(stagedDir, filepath.FromSlash(rel)))
 		if err != nil {
 			return res, fmt.Errorf("staged release missing %s", rel)
@@ -145,6 +153,21 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 	res.BinaryPath = "bin/pylon"
 	if _, err := os.Stat(filepath.Join(stagedDir, "bin", "pylon")); err == nil {
 		res.BinaryNew = true
+		// A hostile release cannot swap an unpinned or unverified binary:
+		// the manifest must pin this platform's hash before anything is
+		// applied.
+		platform := runtime.GOOS + "-" + runtime.GOARCH
+		pin, ok := newM.Binary[platform]
+		if !ok {
+			return res, fmt.Errorf("staged release does not pin a binary for %s", platform)
+		}
+		bin, err := os.ReadFile(filepath.Join(stagedDir, "bin", "pylon"))
+		if err != nil {
+			return res, err
+		}
+		if sha256Hex(bin) != pin {
+			return res, fmt.Errorf("staged binary does not match the pinned %s hash", platform)
+		}
 	}
 
 	if dryRun {
@@ -152,12 +175,25 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 	}
 
 	backupRoot := ""
+	nextBackup := func() string {
+		// Same-version re-releases must not overwrite earlier backups.
+		label := oldVersionLabel(kbRoot)
+		root := filepath.Join(kbRoot, "_pylons-backup", label)
+		for n := 2; ; n++ {
+			if _, err := os.Stat(root); err == nil {
+				root = filepath.Join(kbRoot, "_pylons-backup", fmt.Sprintf("%s-%d", label, n))
+				continue
+			}
+			break
+		}
+		return root
+	}
 	for _, rel := range res.Replaced {
 		if _, exists := diskHash(rel); !exists {
 			continue
 		}
 		if backupRoot == "" {
-			backupRoot = filepath.Join(kbRoot, "_pylons-backup", oldVersionLabel(kbRoot))
+			backupRoot = nextBackup()
 			res.BackupDir, _ = filepath.Rel(kbRoot, backupRoot)
 		}
 		if err := backupFile(kbRoot, backupRoot, rel); err != nil {
@@ -166,7 +202,7 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 	}
 	for _, rel := range res.Removed {
 		if backupRoot == "" {
-			backupRoot = filepath.Join(kbRoot, "_pylons-backup", oldVersionLabel(kbRoot))
+			backupRoot = nextBackup()
 			res.BackupDir, _ = filepath.Rel(kbRoot, backupRoot)
 		}
 		if err := backupFile(kbRoot, backupRoot, rel); err != nil {
@@ -214,7 +250,7 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 	// compares against the hashes actually installed, not the ones
 	// from the release two hops ago.
 	if backupRoot == "" {
-		backupRoot = filepath.Join(kbRoot, "_pylons-backup", oldVersionLabel(kbRoot))
+		backupRoot = nextBackup()
 		res.BackupDir, _ = filepath.Rel(kbRoot, backupRoot)
 	}
 	if _, err := os.Stat(filepath.Join(kbRoot, "manifests", "product.json")); err == nil {

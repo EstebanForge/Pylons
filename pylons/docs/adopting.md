@@ -3,7 +3,7 @@ title: "Adopting an Existing Ledger"
 type: reference
 status: active
 created: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-23
 owners: [Pylons]
 sources: []
 description: "Bringing a ledger that predates Pylons under the engine, without losing your content."
@@ -22,7 +22,7 @@ A ledger can predate Pylons: its own frontmatter conventions, its own URI scheme
 4. Point `exclude:` at anything the engine should not judge, and configure `decision_prefix:` if your accepted-decision files are not named `DNNNN-slug.md`.
 5. Absorb the accepted debt once: `pylon lint --update-baseline`. The baseline is a readable ledger of what you accepted, with counts; anything not in it still fails. Re-run it after paid debt shrinks. Path-numbered entries stay distinct, so renumbering a file is new debt, not a free pass.
 6. Wire the gates last: `pylon install --pylons .` writes the hook shims, or chains the engine into your own hook template with one line: `bin/pylon gate pre-commit || exit 1`. See [INSTALL.md](../INSTALL.md), section 6.
-7. Update with `pylon self-update --from <staged-release>` or `scripts/install.sh` again. Product files three-way against the release; your edits come back as `.pylons-new` copies; user files are never touched.
+7. Update with `pylon self-update --from <staged-release>` or `scripts/install.sh` again. Product files three-way against the release; your edits come back as `.pylons-new` copies; user files are never touched. Two truths about that first update: `pylon new` reads `templates/` from the ledger itself, so a ledger created before templates shipped must copy the `templates/` directory from the release first; and the first `self-update` against a ledger that has no `manifests/product.json` yet reports every product file as drifted, which is the expected first-pass shape, resolved with `--force` or by hand.
 
 ## What the knobs absorb
 

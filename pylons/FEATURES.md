@@ -3,7 +3,7 @@ title: "Pylons: Feature Guide"
 type: meta
 status: active
 created: 2026-11-20
-updated: 2026-11-22
+updated: 2026-11-23
 tags: [features, workflow, agents, developer-guide]
 ---
 
@@ -392,7 +392,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `review-brief --validate <file>` | Stage-1 validation: verifies review completeness and empty evaluations. | Review submission | Incomplete reviews |
 | `review-brief --validate-resolutions <f>` | Stage-2 validation: verifies every finding was resolved before merge. | Pre-merge verification | Unresolved findings |
 | `manifest [packages\|rules]` | Compiles machine-readable JSON manifests. | Tooling build | Schema failure |
-| `manifest product --release-version <v>` | Writes the release product manifest (the managed-file allowlist `self-update` verifies against) to stdout. | Release build | Missing product layer |
+| `manifest product --release-version <v> --binary <os-arch>=<file>...` | Writes the release product manifest (the managed-file allowlist `self-update` verifies against, plus one pinned hash per platform binary) to stdout. | Release build | Missing product layer; unparsable or duplicate pin |
 | `self-update --from <dir>` | Applies a staged release: verifies staged hashes fail-closed, three-ways product files (drift returns `.pylons-new` copies), writes the new product manifest, and swaps the binary last. | Upgrading an installed pylon | Drifted product files, no `--from` |
 | `sync [--detached]` | Detached freshness: records a timestamp, spawns a background `git fetch origin main`, and fast-forwards `main` on a later clean run. | Long-lived checkouts | Diverged or dirty trees are never merged; a fetch failure surfaces in `pylon brief` |
 | `gate <pre-commit\|pre-push>` | The engine-side gate stage the shipped hooks exec: manifest freshness, lint, and staged review loops on commit; manifest checks, corpus lint, and quirk-source validation on push. | Hook shims and CI | Missing binary exits 1 unless `PYLON_HOOKS_OPTIONAL=1` |
@@ -404,7 +404,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `extensions [list\|schema]` | Lists built-in language extensions and the custom-extension schema. | Enabling code extraction | Unknown extension |
 | `explain <rule_id>` | Prints rule name, severity, auto-fixability, description, and fix hint. | Fixing lint failures | Unknown rule ID |
 | `install [--pylons <path>] [--force]` | Writes `.githooks/`, enables `core.hooksPath`, repairs mode bits. Idempotent. | One-time ledger wiring | Nested pylon, hook conflict, missing binary |
-| `init [dir]` | Scaffolds a fresh ledger: zones, templates, manifest, gitignore. Wires hooks inside a git repo. | Starting a new pylon | Existing manifest |
+| `init [dir]` | Scaffolds a fresh ledger: zones, templates, manifest, gitignore. Wires hooks inside a git repo. | Starting a new pylon | Existing manifest is left untouched and the command exits 0 |
 | `--version` | Prints the CLI version. | Release checks | Never |
 
 ### 5.2 Flags dictionary
@@ -458,6 +458,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--from <dir>` | The staged release directory to apply. | `self-update` |
 | `--dry-run` | Prints the update plan without writing. | `self-update` |
 | `--release-version <v>` | Versions the product manifest written to stdout. | `manifest product` |
+| `--binary <os-arch>=<file>` | Pins a platform binary hash into the product manifest; repeatable, identical content is idempotent, a conflicting hash is an error. | `manifest product` |
 | `--body <file\|->` | The PR body to validate; `-` reads stdin. | `review merge-danger` |
 | `--path-prefix <p>` | Prefix for annotation paths when the KB lives in a repo subdirectory. | `review annotations` |
 | `--pinned-releases <dir>` | Deployment directory holding `<alias> <version>` lockfiles; the pinned version resolves to a release tag. | `review release-surface` |
@@ -472,3 +473,5 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `1` | Blocking finding (`FORCED` collision, broken contract, lint error, ratchet regression, foreign baseline). | Fix the violation or coordinate with the conflicting plan owner. |
 | `2` | Usage or runtime setup error (unknown command, invalid flag or window, unresolvable package filter). | Check syntax via `pylon --help`. |
 | `3` | Environment failure (no `manifests/pylons.yaml` found). | Run from the ledger root or pass `--pylons <path>`. |
+
+Lint-family commands (lint, check, review) report unreadable input as findings and exit 1; command-style commands (contract, review-brief, annotations, merge-danger) treat unreadable input as a setup error and exit 2.

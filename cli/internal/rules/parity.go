@@ -331,13 +331,13 @@ var builtinProfileOrder = []string{
 var builtinParityExtractors = map[string]func(source, enumName string) ([]parityCase, error){
 	"go": extractGoEnum,
 	"rust": func(source, enumName string) ([]parityCase, error) {
-		return extractBracedEnum("enum", source, enumName, rustMemberRe)
+		return extractBracedEnum("enum", source, enumName, rustMemberRe, false)
 	},
 	"php": func(source, enumName string) ([]parityCase, error) {
-		return extractBracedEnum("enum", source, enumName, phpMemberRe)
+		return extractBracedEnum("enum", source, enumName, phpMemberRe, true)
 	},
 	"typescript": func(source, enumName string) ([]parityCase, error) {
-		return extractBracedEnum("enum", source, enumName, tsMemberRe)
+		return extractBracedEnum("enum", source, enumName, tsMemberRe, false)
 	},
 }
 
@@ -401,7 +401,7 @@ func extractGoEnum(source, enumName string) ([]parityCase, error) {
 	var out []parityCase
 	for _, m := range goConstStartRe.FindAllStringIndex(source, -1) {
 		open := strings.Index(source[m[0]:], "(")
-		body, ok := matchDelim(source[m[0]+open:], '(', ')')
+		body, ok := matchDelim(source[m[0]+open:], '(', ')', false)
 		if !ok {
 			continue
 		}
@@ -460,7 +460,7 @@ func parseGoConstBlock(body, enumName string) ([]parityCase, error) {
 // so a later enum in the same file is reachable and serde attributes
 // with braces cannot truncate the body. Only comment, attribute, and
 // member lines parse; anything else fails closed.
-func extractBracedEnum(keyword, source, enumName string, memberRe *regexp.Regexp) ([]parityCase, error) {
+func extractBracedEnum(keyword, source, enumName string, memberRe *regexp.Regexp, hashComments bool) ([]parityCase, error) {
 	var found bool
 	var out []parityCase
 	for _, m := range declEnumRe.FindAllStringSubmatchIndex(source, -1) {
@@ -471,11 +471,11 @@ func extractBracedEnum(keyword, source, enumName string, memberRe *regexp.Regexp
 		if open < 0 {
 			continue
 		}
-		body, ok := matchDelim(source[m[1]+open:], '{', '}')
+		body, ok := matchDelim(source[m[1]+open:], '{', '}', hashComments)
 		if !ok {
 			continue
 		}
-		cases, err := parseBracedBlock(body, memberRe, keyword)
+		cases, err := parseBracedBlock(body, memberRe, keyword, hashComments)
 		if err != nil {
 			return nil, err
 		}
@@ -488,17 +488,24 @@ func extractBracedEnum(keyword, source, enumName string, memberRe *regexp.Regexp
 	return out, nil
 }
 
-func parseBracedBlock(body string, memberRe *regexp.Regexp, keyword string) ([]parityCase, error) {
+func parseBracedBlock(body string, memberRe *regexp.Regexp, keyword string, hashComments bool) ([]parityCase, error) {
 	var out []parityCase
 	for _, raw := range strings.Split(body, "\n") {
 		line := stripLineComment(raw)
+		if hashComments {
+			line = stripHashComment(line)
+		}
+		line, ok := stripAttributes(line)
+		if !ok {
+			return nil, fmt.Errorf("an attribute in %s does not close on its line; put one member per line", keyword)
+		}
 		line = strings.TrimSpace(line)
-		if line == "" || line == "{" || line == "}" || strings.HasPrefix(line, "#[") {
+		if line == "" || line == "{" || line == "}" {
 			continue
 		}
 		m := memberRe.FindStringSubmatch(line)
 		if m == nil {
-			return nil, fmt.Errorf("unreadable %s member line %q", keyword, raw)
+			return nil, fmt.Errorf("unreadable %s member line %q; the canonical shape is one member per line", keyword, raw)
 		}
 		c := parityCase{name: m[1]}
 		// The value group position differs per member regex; the last
@@ -515,9 +522,85 @@ func parseBracedBlock(body string, memberRe *regexp.Regexp, keyword string) ([]p
 	return out, nil
 }
 
+// stripHashComment removes a # line comment that sits outside any
+// string literal, for languages whose comment grammar owns # (php).
+func stripHashComment(line string) string {
+	inSingle, inDouble := false, false
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case '\\':
+			i++
+		case '\'':
+			if !inDouble {
+				inSingle = !inSingle
+			}
+		case '"':
+			if !inSingle {
+				inDouble = !inDouble
+			}
+		case '#':
+			if !inSingle && !inDouble {
+				return line[:i]
+			}
+		}
+	}
+	return line
+}
+
+// stripAttributes removes leading #[...] attributes from a line,
+// string-aware so a bracket inside a literal stays put. The second
+// return is false when an attribute never closes on the line: fail
+// closed rather than silently eating the member behind it.
+func stripAttributes(line string) (string, bool) {
+	for {
+		t := strings.TrimLeft(line, " \t")
+		if !strings.HasPrefix(t, "#[") {
+			return t, true
+		}
+		depth, inQ, closed := 0, byte(0), false
+		i := 0
+		for ; i < len(t); i++ {
+			c := t[i]
+			if inQ != 0 {
+				if c == '\\' && inQ != '`' {
+					i++
+					continue
+				}
+				if c == inQ {
+					inQ = 0
+				}
+				continue
+			}
+			switch {
+			case c == '"' || c == '`':
+				inQ = c
+			case c == '\'':
+				if end := indexUnescaped(t, i+1, '\''); end >= 0 {
+					i = end
+				}
+			case c == '[':
+				depth++
+			case c == ']':
+				depth--
+				if depth == 0 {
+					closed = true
+				}
+			}
+			if closed {
+				i++
+				break
+			}
+		}
+		if !closed {
+			return t, false
+		}
+		line = t[i:]
+	}
+}
+
 // matchDelim returns the text between the first opener and its
 // matching closer at depth zero.
-func matchDelim(s string, open, close byte) (string, bool) {
+func matchDelim(s string, open, close byte, hashComments bool) (string, bool) {
 	start := strings.IndexByte(s, open)
 	if start < 0 {
 		return "", false
@@ -561,7 +644,12 @@ func matchDelim(s string, open, close byte) (string, bool) {
 			lineComment = true
 			i++
 		case c == '#':
-			lineComment = true
+			// Only languages whose comment grammar owns #; elsewhere a
+			// bare # is syntax (rust attributes, raw strings) and must
+			// not swallow the rest of the line.
+			if hashComments {
+				lineComment = true
+			}
 		case c == '/' && i+1 < len(s) && s[i+1] == '*':
 			blockComment = true
 			i++

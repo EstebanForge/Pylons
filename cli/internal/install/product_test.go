@@ -43,6 +43,7 @@ func writeProductTree(t *testing.T, root string) {
 	write(t, filepath.Join(root, "AGENTS.md"), "# guidelines\n")
 	write(t, filepath.Join(root, "LICENSE"), "apache\n")
 	write(t, filepath.Join(root, "NOTICE"), "notice\n")
+	write(t, filepath.Join(root, "bin", "pylon"), "#!/bin/sh\necho test\n")
 	write(t, filepath.Join(root, "bin", "THIRD_PARTY_NOTICES"), "third party\n")
 	write(t, filepath.Join(root, "bin", "AGENTS.md"), "# bin guide\n")
 	write(t, filepath.Join(root, "extensions", "AGENTS.md"), "# extensions guide\n")

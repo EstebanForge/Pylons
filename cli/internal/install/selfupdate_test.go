@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -27,8 +28,10 @@ func buildStaged(t *testing.T, dir, version string, mutate func(dir string)) {
 	if mutate != nil {
 		mutate(dir)
 	}
-	writeProductManifestFor(t, dir, version)
+	// The binary is written before the manifest: the manifest now pins
+	// its hash, so the staged tree must be final before it is hashed.
 	write(t, filepath.Join(dir, "bin", "pylon"), "#!/bin/sh\necho "+version+"\n")
+	writeProductManifestFor(t, dir, version)
 }
 
 func writeProductManifestFor(t *testing.T, root, version string) {
@@ -351,4 +354,150 @@ func TestSelfUpdateRejectsUnsafeInstalledManifestKeys(t *testing.T) {
 	if _, err := os.Stat(evil); err != nil {
 		t.Errorf("the removal-list escape target must survive: %v", err)
 	}
+}
+
+func writeStagedManifest(t *testing.T, dir, version string, files map[string]string, binaries map[string]string) {
+	t.Helper()
+	data, err := json.Marshal(stagedManifest{Version: version, Files: files, Binary: binaries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "manifests", "product.json"), string(data))
+}
+
+func stagedFile(t *testing.T, dir, rel, content string) string {
+	t.Helper()
+	write(t, filepath.Join(dir, filepath.FromSlash(rel)), content)
+	return sha256Hex([]byte(content))
+}
+
+// A staged release may only write product-layer paths. A hash-matching
+// key naming .githooks/ or any user file is a hostile release and must
+// be rejected before anything is touched.
+func TestSelfUpdateRejectsForeignProductKeys(t *testing.T) {
+	kb, staged := t.TempDir(), t.TempDir()
+	buildInstalled(t, kb, "1.0.0")
+	sha := stagedFile(t, staged, ".githooks/pre-commit", "#!/bin/sh\ncurl evil\n")
+	writeProductTree(t, staged)
+	writeStagedManifest(t, staged, "9.9.9", map[string]string{
+		"pylons/MANIFESTO.md":  sha256Hex([]byte("manifesto\n")),
+		".githooks/pre-commit": sha,
+	}, nil)
+
+	if _, err := SelfUpdate(kb, staged, false, false); err == nil || !strings.Contains(err.Error(), "outside the product layer") {
+		t.Fatalf("a foreign key must be rejected, got: %v", err)
+	}
+	requireNoFile(t, kb, ".githooks/pre-commit")
+}
+
+// The staged binary is pinned by its platform hash: a manifest without
+// the entry, or with a mismatched one, must fail closed before apply.
+func TestSelfUpdatePinsTheStagedBinary(t *testing.T) {
+	platform := runtime.GOOS + "-" + runtime.GOARCH
+	files := map[string]string{"pylons/MANIFESTO.md": sha256Hex([]byte("manifesto\n"))}
+
+	t.Run("missing entry", func(t *testing.T) {
+		kb, staged := t.TempDir(), t.TempDir()
+		buildInstalled(t, kb, "1.0.0")
+		writeProductTree(t, staged)
+		write(t, filepath.Join(staged, "bin", "pylon"), "#!/bin/sh\necho hostile\n")
+		writeStagedManifest(t, staged, "1.1.0", files, nil)
+		if _, err := SelfUpdate(kb, staged, false, false); err == nil || !strings.Contains(err.Error(), "does not pin a binary") {
+			t.Fatalf("a staged binary without a pin must fail closed, got: %v", err)
+		}
+	})
+
+	t.Run("mismatched hash", func(t *testing.T) {
+		kb, staged := t.TempDir(), t.TempDir()
+		buildInstalled(t, kb, "1.0.0")
+		writeProductTree(t, staged)
+		write(t, filepath.Join(staged, "bin", "pylon"), "#!/bin/sh\necho hostile\n")
+		writeStagedManifest(t, staged, "1.1.0", files, map[string]string{platform: "deadbeef"})
+		if _, err := SelfUpdate(kb, staged, false, false); err == nil || !strings.Contains(err.Error(), "does not match the pinned") {
+			t.Fatalf("a mismatched binary pin must fail closed, got: %v", err)
+		}
+	})
+
+	t.Run("matching hash applies", func(t *testing.T) {
+		kb, staged := t.TempDir(), t.TempDir()
+		buildInstalled(t, kb, "1.0.0")
+		writeProductTree(t, staged)
+		sha := stagedFile(t, staged, "bin/pylon", "#!/bin/sh\necho 1.1.0\n")
+		writeStagedManifest(t, staged, "1.1.0", files, map[string]string{platform: sha})
+		res, err := SelfUpdate(kb, staged, false, false)
+		if err != nil {
+			t.Fatalf("SelfUpdate: %v", err)
+		}
+		if !res.BinaryNew {
+			t.Fatal("a pinned binary must swap")
+		}
+		if readInstalled(t, kb, "bin/pylon") != "#!/bin/sh\necho 1.1.0\n" {
+			t.Error("the verified binary must be installed")
+		}
+	})
+}
+
+// A same-version re-release must not overwrite the previous run's
+// backups: each apply gets its own directory.
+func TestSelfUpdateBackupDirDedupesSameVersion(t *testing.T) {
+	kb := t.TempDir()
+	buildInstalled(t, kb, "1.1.0")
+	write(t, filepath.Join(kb, "manifests", "pylons.yaml"), "version: 1\n")
+
+	stagedA := t.TempDir()
+	writeProductTree(t, stagedA)
+	write(t, filepath.Join(stagedA, "pylons", "MANIFESTO.md"), "manifesto re-release A\n")
+	writeProductManifestFor(t, stagedA, "1.1.0")
+	resA, err := SelfUpdate(kb, stagedA, false, false)
+	if err != nil {
+		t.Fatalf("first update: %v", err)
+	}
+
+	stagedB := t.TempDir()
+	writeProductTree(t, stagedB)
+	write(t, filepath.Join(stagedB, "pylons", "MANIFESTO.md"), "manifesto re-release B\n")
+	writeProductManifestFor(t, stagedB, "1.1.0")
+	resB, err := SelfUpdate(kb, stagedB, false, false)
+	if err != nil {
+		t.Fatalf("second update: %v", err)
+	}
+	if resB.BackupDir == resA.BackupDir {
+		t.Fatalf("a same-version re-run must get its own backup dir, both %q", resB.BackupDir)
+	}
+}
+
+// A staged tree may not smuggle a symlink: the hash pins content, but
+// the write must land as a real file inside the KB, not through a link.
+func TestSelfUpdateRejectsSymlinkedStagedFile(t *testing.T) {
+	kb, staged := t.TempDir(), t.TempDir()
+	buildInstalled(t, kb, "1.0.0")
+	writeProductTree(t, staged)
+	outside := filepath.Join(t.TempDir(), "real-manifesto.md")
+	if err := os.WriteFile(outside, []byte("manifesto v2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(staged, "pylons", "MANIFESTO.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(staged, "pylons", "MANIFESTO.md")); err != nil {
+		t.Fatal(err)
+	}
+	// Hand-crafted manifest: BuildProductManifest refuses to hash a
+	// symlinked key, so the hostile case is exactly a release that
+	// lists one by hand.
+	data, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeStagedManifest(t, staged, "1.1.0", map[string]string{
+		"pylons/MANIFESTO.md": sha256Hex(data),
+	}, nil)
+
+	if _, err := SelfUpdate(kb, staged, false, false); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("a symlinked staged file must fail closed, got: %v", err)
+	}
+	requireNoFile(t, kb, "pylons/MANIFESTO.md.pylons-new")
 }

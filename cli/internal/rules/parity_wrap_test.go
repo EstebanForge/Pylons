@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -169,5 +170,62 @@ func TestRustTupleBindingsFallThrough(t *testing.T) {
 	}
 	if len(trs) != 1 || trs[0] != (parityTransition{from: "Idle", event: "Pull", to: "Pulling"}) {
 		t.Fatalf("want only the canonical triple, got %+v", trs)
+	}
+}
+
+// A case sharing a line with a #[...] attribute must still extract:
+// the attribute strips string-aware and the member behind it parses.
+func TestRustAttributeAndCaseShareALine(t *testing.T) {
+	src := "pub enum State {\n    A,\n    #[serde(rename = \"a}\")] B,\n}\n"
+	cases, err := builtinParityExtractors["rust"](src, "State")
+	if err != nil {
+		t.Fatalf("attribute line must not swallow the case: %v", err)
+	}
+	if len(cases) != 2 || cases[1].name != "B" {
+		t.Fatalf("want A and B, got %+v", cases)
+	}
+}
+
+// Raw strings and serde attributes stay inert inside the enum body.
+func TestRustAttributeWithRawStringIsInert(t *testing.T) {
+	src := "pub enum State {\n    #[doc = r#\"}\"#]\n    A,\n    B,\n}\n"
+	cases, err := builtinParityExtractors["rust"](src, "State")
+	if err != nil {
+		t.Fatalf("raw-string attribute must be inert: %v", err)
+	}
+	if len(cases) != 2 {
+		t.Fatalf("want A and B, got %+v", cases)
+	}
+}
+
+// PHP keeps # as a line comment: the canonical php shape leans on it.
+func TestPhpHashCommentStillSkipped(t *testing.T) {
+	src := "<?php\nenum State: string {\n    case A = 'a';\n    # legacy note\n    case B = 'b';\n}\n"
+	cases, err := builtinParityExtractors["php"](src, "State")
+	if err != nil {
+		t.Fatalf("php hash comment must stay skipped: %v", err)
+	}
+	if len(cases) != 2 {
+		t.Fatalf("want A and B, got %+v", cases)
+	}
+}
+
+// Fail-closed messages name the canonical shape, so an adopter whose
+// enum carries data variants learns the fix, not just the failure.
+func TestRustUnreadableMemberNamesTheShape(t *testing.T) {
+	src := "pub enum State {\n    A(u32),\n    B,\n}\n"
+	_, err := builtinParityExtractors["rust"](src, "State")
+	if err == nil || !strings.Contains(err.Error(), "one member per line") {
+		t.Fatalf("the error must name the canonical shape, got: %v", err)
+	}
+}
+
+// An attribute that never closes on its line must fail closed instead
+// of silently eating the member behind it.
+func TestRustUnterminatedAttributeFailsClosed(t *testing.T) {
+	src := "pub enum State {\n    #[serde(rename = \"x\"\n    A,\n}\n"
+	_, err := builtinParityExtractors["rust"](src, "State")
+	if err == nil || !strings.Contains(err.Error(), "does not close") {
+		t.Fatalf("an unterminated attribute must fail closed, got: %v", err)
 	}
 }

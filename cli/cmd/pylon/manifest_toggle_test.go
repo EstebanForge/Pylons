@@ -107,13 +107,15 @@ func TestSelfUpdateFlagPath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(staged, "AGENTS.md"), []byte("# guidelines v2\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	seedManifest(t, staged, "1.1.0")
+	// The staged binary is final before the manifest: the manifest
+	// pins its hash and self-update refuses an unpinned binary.
 	if err := os.MkdirAll(filepath.Join(staged, "bin"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(staged, "bin", "pylon"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	seedManifest(t, staged, "1.1.0")
 
 	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "bin", "pylon"))
 	if err != nil {
@@ -293,5 +295,64 @@ func TestLintRejectsStrayPositionals(t *testing.T) {
 	}
 	if code := run([]string{"lint", "extra", "--pylons", dir}); code != 2 {
 		t.Fatalf("a stray positional must be a usage error, got %d", code)
+	}
+}
+
+// The release manifest must pin every platform binary the updater may
+// install; --binary extends the host pin with the cross builds.
+func TestManifestProductPinsPlatformBinaries(t *testing.T) {
+	pwd, _ := os.Getwd()
+	repo := filepath.Dir(filepath.Dir(filepath.Dir(pwd)))
+	code, out, stderr := runPylon(t, repo, "manifest", "product",
+		"--release-version", "9.9.9", "--binary", "darwin-arm64="+filepath.Join(repo, "bin", "pylon"))
+	if code != 0 {
+		t.Fatalf("pinning a cross binary must succeed: %d %s", code, stderr)
+	}
+	if !strings.Contains(out, "darwin-arm64") || !strings.Contains(out, "binary_sha256") {
+		t.Fatalf("the manifest must carry the platform pin: %s", out)
+	}
+
+	// The host auto-pin makes an identical explicit pin idempotent; a
+	// conflicting hash for the same platform is a release bug.
+	code, _, _ = runPylon(t, repo, "manifest", "product",
+		"--release-version", "9.9.9", "--binary", "linux-amd64="+filepath.Join(repo, "bin", "pylon"))
+	if code != 0 {
+		t.Fatalf("an identical duplicate pin must be accepted, got %d", code)
+	}
+	other := filepath.Join(repo, "LICENSE")
+	code, _, stderr = runPylon(t, repo, "manifest", "product",
+		"--release-version", "9.9.9", "--binary", "linux-amd64="+other)
+	if code != 1 || !strings.Contains(stderr, "different hash") {
+		t.Fatalf("a conflicting pin must fail, got %d %s", code, stderr)
+	}
+
+	code, _, stderr = runPylon(t, repo, "manifest", "product",
+		"--release-version", "9.9.9", "--binary", "linux-amd64")
+	if code != 2 {
+		t.Fatalf("a pin without = must be usage, got %d", code)
+	}
+	if !strings.Contains(stderr, "<platform>=<file>") {
+		t.Fatalf("usage message must name the shape: %s", stderr)
+	}
+}
+
+// The annotation path prefix lands inside GitHub's repo-relative
+// paths; an escaping prefix must be a usage error.
+func TestAnnotationsPathPrefixRejectsEscape(t *testing.T) {
+	sarif := `{"runs":[{"results":[]}]}`
+	dir := t.TempDir()
+	in := filepath.Join(dir, "in.json")
+	if err := os.WriteFile(in, []byte(sarif), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifests", "pylons.yaml"), []byte("version: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := runPylon(t, dir, "review", "annotations", "--from", in, "--path-prefix", "../evil")
+	if code != 2 || !strings.Contains(stderr, "relative path without ..") {
+		t.Fatalf("an escaping prefix must be usage, got %d %s", code, stderr)
 	}
 }

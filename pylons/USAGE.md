@@ -50,7 +50,7 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 | `pylon sync --detached` | Start a detached background fetch when the last one is over an hour old, then fast-forward onto `origin/main` on a clean tree; never blocks. |
 | `pylon review-brief <plan>` | Generate `.pylon-review-brief.md` or validate review packets (`--validate`, `--validate-resolutions`). |
 | `pylon protocol [list|<name>]` | List or render CLI protocols (`pylon reflect` is the hygiene pass; `pylon protocol agent` is the session loop). |
-| `pylon manifest [rules|packages|product]` | Generate or `--check` `manifests/rules.json` and `manifests/packages.json` (a `generate:` list in pylons.yaml disables either; a disabled manifest never regenerates and is never stale). `product` renders `manifests/product.json`, the release-time hash list of the product layer. |
+| `pylon manifest [rules|packages|product]` | Generate or `--check` `manifests/rules.json` and `manifests/packages.json` (a `generate:` list in pylons.yaml disables either; a disabled manifest never regenerates and is never stale). `product` renders `manifests/product.json`, the release-time hash list of the product layer plus one pinned hash per platform binary (pass `--binary <os-arch>=<file>` per cross build). |
 | `pylon explain <rule_id>` | Print rule description and fix hint for any `PYLON*` rule. |
 | `pylon install` | Write `.githooks/` and enable `core.hooksPath`; idempotent. Refuses a pylon below the repository root, refuses to replace another tool's `core.hooksPath` unless `--force`, and reports hooks that drifted from the shipped assets. |
 | `pylon init [dir]` | Scaffold a new pylon; wires gate hooks when run inside a git repository. |

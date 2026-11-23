@@ -12,7 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"runtime"
 	"strings"
 )
 
@@ -65,9 +65,42 @@ var productTrees = []string{"pylons", "templates", "extensions/_examples", "_exa
 
 // ProductManifest is the release-time record of the product layer:
 // one sha256 per file, consumed by self-update for three-way drift.
+// Binary pins the shipped binary per platform ("os-arch", matching
+// the release asset names): the updater refuses a staged binary its
+// manifest does not pin.
 type ProductManifest struct {
 	Version string            `json:"version"`
 	Files   map[string]string `json:"files"`
+	Binary  map[string]string `json:"binary_sha256,omitempty"`
+}
+
+// productOwnedPath reports whether rel names a path the updater may
+// ever write: the product layer exactly, never user state. The staged
+// manifest keys are release-controlled, so ownership is checked
+// against this spec rather than trusted from the manifest.
+func productOwnedPath(rel string) bool {
+	rel = filepath.ToSlash(rel)
+	for _, p := range productExactFiles {
+		if rel == p {
+			return true
+		}
+	}
+	for _, z := range docZones {
+		if rel == z+"/AGENTS.md" {
+			return true
+		}
+	}
+	for _, k := range productKeepers {
+		if rel == k+"/.gitkeep" {
+			return true
+		}
+	}
+	for _, t := range productTrees {
+		if strings.HasPrefix(rel, t+"/") {
+			return true
+		}
+	}
+	return rel == "manifests/product.json"
 }
 
 func sha256Hex(data []byte) string {
@@ -94,6 +127,14 @@ func BuildProductManifest(root, version string) (ProductManifest, error) {
 			return m, fmt.Errorf("product layer missing %s", rel)
 		}
 		m.Files[rel] = sha256Hex(data)
+	}
+	// Pin the host build: a release manifest that cannot verify the
+	// binary it ships with must not be produced. Cross-platform hashes
+	// join through the manifest command's --binary flags at release time.
+	if data, err := os.ReadFile(filepath.Join(root, "bin", "pylon")); err == nil {
+		m.Binary = map[string]string{
+			runtime.GOOS + "-" + runtime.GOARCH: sha256Hex(data),
+		}
 	}
 	for _, tree := range productTrees {
 		base := filepath.Join(root, filepath.FromSlash(tree))
@@ -127,25 +168,40 @@ func BuildProductManifest(root, version string) (ProductManifest, error) {
 	return m, nil
 }
 
+// PinBinary records a platform binary hash in the manifest. release.sh
+// calls it once per cross build so the updater can verify every asset
+// it may install.
+func PinBinary(m *ProductManifest, platform, path string) error {
+	if m.Binary == nil {
+		m.Binary = map[string]string{}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	sum := sha256Hex(data)
+	if prev, dup := m.Binary[platform]; dup {
+		// The host auto-pin and the release script's explicit pin name
+		// the same build twice; identical content is idempotent, a
+		// conflicting hash is a release bug.
+		if prev == sum {
+			return nil
+		}
+		return fmt.Errorf("binary for %s already pinned with a different hash", platform)
+	}
+	m.Binary[platform] = sum
+	return nil
+}
+
 // WriteProductManifest renders the manifest as JSON bytes, stable
 // order, no self-entry (the file is added after it is built).
 func WriteProductManifest(m ProductManifest) ([]byte, error) {
-	names := make([]string, 0, len(m.Files))
-	for name := range m.Files {
-		names = append(names, name)
+	// encoding/json sorts map keys, so the render stays stable.
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return nil, err
 	}
-	sort.Strings(names)
-	var b strings.Builder
-	b.WriteString("{\n  \"version\": " + quoteJSON(m.Version) + ",\n  \"files\": {\n")
-	for i, name := range names {
-		b.WriteString("    " + quoteJSON(name) + ": " + quoteJSON(m.Files[name]))
-		if i < len(names)-1 {
-			b.WriteString(",")
-		}
-		b.WriteString("\n")
-	}
-	b.WriteString("  }\n}\n")
-	return []byte(b.String()), nil
+	return append(data, '\n'), nil
 }
 
 func quoteJSON(s string) string {

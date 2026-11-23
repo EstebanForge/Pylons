@@ -228,3 +228,36 @@ func TestAnnotationsUnsafePathsNeverAnnotate(t *testing.T) {
 		t.Fatalf("only the clean path annotates, got %+v", r.Annotations[0])
 	}
 }
+
+// A rule id arrives from parsed input; a backtick or newline inside it
+// must not break the markdown list open.
+func TestAnnotationsSummaryEscapesRuleId(t *testing.T) {
+	evil := "Ev`il\n- injected"
+	sarif, merr := json.Marshal(map[string]any{
+		"runs": []any{map[string]any{
+			"tool": map[string]any{"driver": map[string]any{"rules": []any{
+				map[string]any{"id": evil},
+			}}},
+			"results": []any{map[string]any{
+				"ruleId": evil, "level": "error",
+				"locations": []any{map[string]any{"physicalLocation": map[string]any{
+					"artifactLocation": map[string]any{"uri": "a.go"},
+					"region":           map[string]any{"startLine": 1},
+				}}},
+			}},
+		}},
+	})
+	if merr != nil {
+		t.Fatal(merr)
+	}
+	rep, err := Annotations(sarif)
+	if err != nil {
+		t.Fatalf("Annotations: %v", err)
+	}
+	if strings.Contains(rep.Summary, "Ev`") || strings.Contains(rep.Summary, "injected") {
+		t.Fatalf("the rule id must be sanitized in the summary: %q", rep.Summary)
+	}
+	if !strings.Contains(rep.Summary, "x1") {
+		t.Fatalf("the finding must still be counted: %q", rep.Summary)
+	}
+}
