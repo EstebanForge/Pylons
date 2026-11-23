@@ -4,6 +4,7 @@
 package rules
 
 import (
+	"fmt"
 	"io/fs"
 	"maps"
 	"os"
@@ -23,7 +24,17 @@ type normalizedTarget struct {
 
 // Check intersects target paths against active plans and package protected globs.
 func Check(kbRoot string, targets []string) []report.Finding {
+	findings, _ := CheckFor(kbRoot, "", targets)
+	return findings
+}
+
+// CheckFor is Check with planArg held as the caller's own plan: the contract.editing and contract.unstable sets of that plan are its declared work and do not stop the caller. Every other plan, every protected glob, and every ripple still reports.
+func CheckFor(kbRoot, planArg string, targets []string) ([]report.Finding, error) {
 	kbRoot = resolve.EvalRoot(kbRoot)
+	ownPlan, err := ownPlanPath(kbRoot, planArg)
+	if err != nil {
+		return nil, err
+	}
 	cfg, cfgErr := config.Load(kbRoot)
 	var findings []report.Finding
 	if cfgErr != nil {
@@ -79,7 +90,7 @@ func Check(kbRoot string, targets []string) []report.Finding {
 				findings = append(findings, errFinding("PYLON001", rel, 1, "plan frontmatter cannot parse; collisions and ripple are skipped for this document"))
 			}
 		}
-		if pfParsed {
+		if pfParsed && rel != ownPlan {
 			for _, nt := range normTargets {
 				for _, raw := range pf.Contract.Editing {
 					if gs, ok := extractGlobString(raw); ok && globMatchesTarget(gs, nt, pf.Components) {
@@ -151,7 +162,35 @@ func Check(kbRoot string, targets []string) []report.Finding {
 		return nil
 	})
 	findings = append(findings, rippleFindings(kbRoot, cfg, normTargets)...)
-	return findings
+	return findings, nil
+}
+
+// ownPlanPath validates a --plan argument and returns it relative to the ledger root, the form the collision walk compares.
+func ownPlanPath(kbRoot, planArg string) (string, error) {
+	if planArg == "" {
+		return "", nil
+	}
+	abs := planArg
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(kbRoot, planArg)
+	}
+	content, err := readManifest(abs)
+	if err != nil {
+		return "", fmt.Errorf("%s: no such document under the ledger root", planArg)
+	}
+	rel, err := filepath.Rel(kbRoot, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%s: outside the ledger root", planArg)
+	}
+	rel = filepath.ToSlash(rel)
+	var pf resolve.PlanFrontMatter
+	if !resolve.ParsePlanFrontMatter(content, &pf) || pf.Type != "plan" {
+		return "", fmt.Errorf("%s: not a plan document", rel)
+	}
+	if pf.Status != "accepted" && pf.Status != "in-progress" {
+		return "", fmt.Errorf("%s: not an active plan (status %s)", rel, pf.Status)
+	}
+	return rel, nil
 }
 
 func normalizeCheckTarget(kbRoot, raw string, cfg config.Config) normalizedTarget {

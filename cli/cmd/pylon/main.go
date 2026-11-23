@@ -34,9 +34,9 @@ Usage:
   pylon --version
   pylon lint             [--changed] [--doc-only] [--fix] [--parity] [--update-baseline] [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
   pylon contract <plan>  [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
-  pylon check <paths...> [--stop-block] [--format=human|json|sarif] [--json] [--pylons <path>]
+  pylon check <paths...> [--plan <plan>] [--stop-block] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon brief            [--format=human|json] [--json] [--pylons <path>]
-  pylon context <paths...> [--preamble] [--format=human|json] [--json] [--pylons <path>]
+  pylon context <paths...> [--plan <plan>] [--preamble] [--format=human|json] [--json] [--pylons <path>]
   pylon context --diff-since <ref> [--manifest] [--format=human|json] [--json] [--pylons <path>]
   pylon context --graph <package> [--depth N] [--format=human|json] [--json] [--pylons <path>]
   pylon context --slice <plan> [--format=human|json] [--json] [--pylons <path>]
@@ -142,7 +142,7 @@ func run(args []string) int {
 	var binaryPins []string
 	dryRunUpdate := false
 	updateBaseline := false
-	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild := "", "", "", "", "", "", "", "", "", ""
+	pylonsPath, pkgArg, diffBase, rbValidate, rbValidateRes, protoTmpl, reworkWindow, slicePlan, mergeBody, syncChild, ownPlan := "", "", "", "", "", "", "", "", "", "", ""
 	pinnedReleases, sessionSince := "", ""
 	sessionManifest, diffSinceSet := false, false
 	graphPkg, annFrom, annPrefix := "", "", ""
@@ -216,7 +216,7 @@ func run(args []string) int {
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
-		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version" || arg == "--binary" || arg == "--diff" || arg == "--metadata" || arg == "--record" || arg == "--findings" || arg == "--min" || arg == "--shape" || arg == "--title":
+		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--plan" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version" || arg == "--binary" || arg == "--diff" || arg == "--metadata" || arg == "--record" || arg == "--findings" || arg == "--min" || arg == "--shape" || arg == "--title":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "pylon: flag %s requires a value\n", arg)
 				return 2
@@ -242,6 +242,8 @@ func run(args []string) int {
 				reworkWindow = val
 			case "--slice":
 				slicePlan = val
+			case "--plan":
+				ownPlan = val
 			case "--body":
 				mergeBody = val
 			case "--pinned-releases":
@@ -430,7 +432,11 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, "pylon: check requires <paths...>")
 			return 2
 		}
-		findings := rules.Check(kbRoot, rest)
+		findings, err := rules.CheckFor(kbRoot, ownPlan, rest)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: check --plan: %v\n", err)
+			return 2
+		}
 		rules.Remediate(findings)
 		if stopBlock && format == report.FormatHuman {
 			if err := report.RenderStopBlocks(os.Stdout, findings); err != nil {
@@ -504,7 +510,11 @@ func run(args []string) int {
 			cfg := loadConfigOrWarn(kbRoot)
 			fmt.Printf("=== Pylons Context (%s | projects: %d | extensions: %v) ===\n", kbRoot, len(cfg.Projects), cfg.Extensions)
 		}
-		findings := rules.Check(kbRoot, rest)
+		findings, err := rules.CheckFor(kbRoot, ownPlan, rest)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: context --plan: %v\n", err)
+			return 2
+		}
 		rules.Remediate(findings)
 		if err := report.Render(os.Stdout, format, findings); err != nil {
 			return 2

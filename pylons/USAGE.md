@@ -3,7 +3,7 @@ title: "Using Pylons and the pylon CLI"
 type: meta
 status: active
 created: 2026-11-19
-updated: 2026-11-19
+updated: 2026-11-23
 ---
 
 # Using Pylons and the `pylon` CLI
@@ -13,7 +13,7 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 ## Daily workflow
 
 1. Orient: run `./bin/pylon brief` at session start, then `pylon map --type plan --status in-progress` or `pylon search "<query>"` to find existing context before starting work.
-2. Check collisions: before editing code, run `./bin/pylon check <paths...>` (or `--stop-block` for agents). Run `pylon context --preamble <paths...>` to get active plan collisions and protected globs.
+2. Check collisions: before editing code, run `./bin/pylon check <paths...>` (or `--stop-block` for agents). Run `pylon context --preamble <paths...>` to get active plan collisions and protected globs. When you work an accepted plan, add `--plan <plan>`: the scope of that plan is yours, and every other plan still stops you.
 3. Draft work: track bugs, tasks, and improvements in `tickets/` from `templates/ticket.md`. Draft new feature or refactor plans in `proposals/` from `templates/plan.md`. When accepted, move the plan to `plans/`, add `ticket:` (`PYLON016`), and add `wrong_if:` to every `contract.stable` entry (`PYLON014`).
 4. Record traps and decisions: document non-obvious integration traps in `quirks/` from `templates/quirk.md` with `contracts:` and `sources:`, and set `guard:` within 30 days (`PYLON028`). Record architecture decisions in `decisions/proposals/` and number them `DNNNN-<slug>.md` on acceptance (`PYLON010`). Record complex bug root-cause analyses in `investigations/YYYY-MM-DD-<slug>.md` (`PYLON030`).
 5. Ship and archive: set `status: shipped` with `artifact:` (`PYLON009`) on completed plans, `done` on completed tickets, and move terminal docs to `<zone>/archive/` (or run `pylon lint --fix`).
@@ -25,6 +25,7 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 |---|---|
 | `pylon brief` | Non-blocking session summary (always exits 0). |
 | `pylon check <paths...>` | Intersect target paths with `contract.editing`, `contract.unstable`, and `protected:` globs. |
+| `pylon check --plan <plan> <paths...>` | Same check with one accepted or in-progress plan held as yours: its `editing` and `unstable` sets do not stop you. A name that is not an active plan exits 2. |
 | `pylon context <paths...>` | Emit architectural slice for target files (`--preamble` adds workspace header). |
 | `pylon context --slice <plan>` | Print only one plan's contracts with resolution state, linked quirks, and linked domain terms (`--json` supported). |
 | `pylon context --diff-since <ref> [--manifest]` | Report declared surfaces the diff touched whose docs did not move in the same range; uncommitted edits count on both sides, warnings name unreadable projects, `--manifest` emits the JSON document. Report-only. Glob contract ids are out of scope. |

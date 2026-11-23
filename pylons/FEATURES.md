@@ -73,7 +73,7 @@ Every card answers in the same order: **What** names the feature, **The pain** n
 - **What**: A contract is a written promise about a piece of code: its name, what it does, and whether other code may depend on it. Every plan declares its contracts with a status: `contract.stable` (safe to build on), `contract.unstable` (moving soon, ask first), `contract.editing` (somebody is in there right now).
 - **The pain**: Two branches touch the same in-flight interface. One renames a symbol, the other merges against the old name, and staging fails days later. Nobody planned the collision; it just happened.
 - **How it works**: Contracts are typed across 7 kinds: `file`, `glob`, `symbol`, `route`, `cli`, `event`, `schema`. Every stable contract carries a `wrong_if`: a falsifiable statement of what change would break the promise. A contract you cannot falsify is a wish, so accepted plans do not take those (`PYLON014`).
-- **For agents**: `pylon check <paths>` before editing. If a path intersects `contract.editing` or `contract.unstable`, the CLI emits a blocking stop signal, and the agent stops instead of writing code on contested ground.
+- **For agents**: `pylon check <paths>` before editing. If a path intersects `contract.editing` or `contract.unstable`, the CLI emits a blocking stop signal, and the agent stops instead of writing code on contested ground. When the agent works that plan, `check --plan <plan>` holds the scope of the plan as its own, and every other plan still stops it.
 - **Guard**: `pylon contract <plan>` resolves every stable contract against tracked repositories. A missing symbol, route, or file fails validation.
 
 #### Ubiquitous language (`domain/`)
@@ -155,7 +155,7 @@ An agent with the wrong context ships the wrong thing fast. These features feed 
 
 - **What**: Hard stops for agents and humans. Package maps declare `protected:` globs; touching one is a `FORCED` finding. `--stop-block` renders the halt as a structured block an agent cannot misread.
 - **The pain**: An autonomous agent editing machine-generated config, vendored manifests, or a security boundary without authorization is how quiet incidents start.
-- **How it works**: `check <paths>` intersects your paths with every active plan's `contract.editing` and `contract.unstable` sets, evaluates `wrong_if` falsifiers, and matches `protected:` globs.
+- **How it works**: `check <paths>` intersects your paths with every active plan's `contract.editing` and `contract.unstable` sets, evaluates `wrong_if` falsifiers, and matches `protected:` globs. `--plan <plan>` leaves out the `editing` and `unstable` sets of that one active plan.
 - **For humans**: The same command answers the daily question "is anyone else in here right now?" before you write a line.
 
 #### Discovery (`pylon map`, `pylon search`)
@@ -360,6 +360,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `brief [--pylons <path>]` | Non-blocking session summary: root, projects, extensions, corpus size. | Session boot | Never (exit 3 without a ledger root) |
 | `check <paths...>` | Intersects target paths with `contract.editing`, `contract.unstable`, and `protected:` globs. Evaluates `wrong_if` falsifiers. | Before editing code | Any `FORCED` collision or protected path |
 | `check --stop-block` | Renders `FORCED` check findings as structured agent stop blocks. | Agent session gate before writing code | Any `FORCED` collision |
+| `check --plan <plan> <paths...>` | Holds one accepted or in-progress plan as the plan of the caller: its `contract.editing` and `contract.unstable` sets do not stop it. Every other plan and every `protected:` glob still reports. | After you take a plan, before you edit | Any `FORCED` collision or protected path. Exit 2 when the named plan is missing or not active |
 | `context <paths...>` | Emits token-efficient architectural context: contracts, collisions, quirk guardrails, conventions. | Before file edits | Clean output |
 | `context --slice <plan>` | Prints only one plan's contracts with resolution state, linked quirks, and linked domain terms. | Starting a slice task | Missing plan exits 2 |
 | `context --preamble` | Emits `context` plus the cache-friendly architecture preamble. | Agent prompt boot | Clean output |

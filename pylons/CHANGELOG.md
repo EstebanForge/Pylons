@@ -3,7 +3,7 @@ title: "Pylons Changelog"
 type: meta
 status: active
 created: 2026-01-26
-updated: 2026-11-22
+updated: 2026-11-23
 ---
 
 # Pylons Changelog
@@ -11,6 +11,8 @@ updated: 2026-11-22
 Notable changes to the Pylons format and `pylon` CLI.
 
 ## 2026-11-23
+
+- `pylon check --plan <plan> <paths...>` fixes the self-collision: `check` reported `FORCED` on the paths that the caller's own active plan edits, so the author of a plan could not pass on its scope and had to ignore a stop signal. The flag names one accepted or in-progress plan. Its `contract.editing` and `contract.unstable` sets no longer stop the caller, while every other plan, every `protected:` glob, and every ripple finding still reports. Without the flag nothing changes. `pylon context <paths...>` takes the same flag. A name that is missing, outside the ledger, not a plan, or not active is a usage error (exit 2), never a silent exemption. The agent protocol re-checks with `--plan` after it takes a plan.
 
 - The self-update contract closed its hostile-release holes: a release manifest may only write product-layer paths, every platform binary is pinned by hash (release.sh passes all five cross builds, and the updater refuses an unpinned or mismatched binary), staged trees may not smuggle symlinks, and same-version re-releases get their own backup directories. Install refuses before it wires anything when `bin/pylon` cannot run, warns about legacy `.git/hooks` scripts that `core.hooksPath` benches, and replaces a symlinked hook with a real file on takeover. The gate's pre-commit drift stage honors `generate: []` per manifest kind and can no longer die on missing manifest files. Parity extractors gained language-true comment handling (rust attributes no longer swallow cases), fail-closed canonical-shape messages, and the annotations summary escapes rule ids from parsed input. Test fixtures now locate the repo root by walking up, four previously untested rules carry pinning tests, and the usage text, exit-code table, and adoption docs state the real behavior.
 

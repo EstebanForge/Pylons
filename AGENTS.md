@@ -14,7 +14,7 @@ Pylons documents reference files with URI schemes, never machine paths.
 
 ## Rules
 
-1. **Check before coding.** Run `pylon check <paths...>` or scan `plans/` for overlapping contracts.
+1. **Check before coding.** Run `pylon check <paths...>`, add `--plan <plan>` when you work that plan, or scan `plans/` for overlapping contracts.
 2. **Use templates.** Scaffold new documents from `templates/`. Preserve frontmatter fields.
 3. **Define typed contracts.** Contract entries require `kind` and `id`. Built-in kinds: `file`, `glob`, `symbol`, `route`, `cli`, `event`, `schema`. Enabled extensions in `manifests/pylons.yaml` add language-specific kinds.
 4. **Keep decisions immutable.** Never edit accepted ADRs in place. Write a new ADR that supersedes the old decision.
@@ -28,9 +28,9 @@ Pylons documents reference files with URI schemes, never machine paths.
 
 - `pylon lint [--changed] [--doc-only] [--fix] [--parity] [--update-baseline] [--ci] [--format=human|json|sarif]` - judge the ledger, or the staged docs, against every rule.
 - `pylon contract <plan> [--ci] [--format=human|json|sarif]` - resolve one plan's typed contracts against real code.
-- `pylon check <paths...> [--stop-block] [--format=human|json|sarif]` - ground-check specific paths before editing them.
+- `pylon check <paths...> [--plan <plan>] [--stop-block] [--format=human|json|sarif]` - ground-check specific paths before editing them. `--plan` holds that active plan as yours.
 - `pylon brief [--format=human|json]` - one-line orientation: root, projects, extensions, doc count.
-- `pylon context <paths...> [--preamble] [--format=human|json]` - load the docs and contracts that surround given paths.
+- `pylon context <paths...> [--plan <plan>] [--preamble] [--format=human|json]` - load the docs and contracts that surround given paths.
 - `pylon context --diff-since <ref> [--manifest]` - list surfaces whose code moved since a ref but whose docs did not.
 - `pylon context --graph <package> [--depth N]` - compare a package's actual import graph against its declared `depends_on`.
 - `pylon staleness [--package <pkg>] [--fix]` - find documents past their zone's age gate.
