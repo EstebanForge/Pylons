@@ -179,13 +179,16 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return res, err
 		}
-		src, err := os.ReadFile(filepath.Join(stagedDir, filepath.FromSlash(rel)))
+		srcPath := filepath.Join(stagedDir, filepath.FromSlash(rel))
+		src, err := os.ReadFile(srcPath)
 		if err != nil {
 			return res, err
 		}
+		// Keep the staged file's permission bits: the example plugins
+		// ship executable and a rebuild at 0644 breaks their dispatch.
 		mode := os.FileMode(0o644)
-		if strings.HasSuffix(rel, "bin/THIRD_PARTY_NOTICES") {
-			mode = 0o644
+		if info, err := os.Stat(srcPath); err == nil {
+			mode = info.Mode().Perm()
 		}
 		if err := atomicWrite(dst, src, mode); err != nil {
 			return res, err

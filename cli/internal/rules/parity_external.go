@@ -25,11 +25,11 @@ type parityExtRequest struct {
 	Source        string         `json:"source"`
 }
 
-// parityExtCase mirrors parityCase on the wire. Valued is encoded by
-// the presence of a value; an empty-string value uses "value": "".
+// parityExtCase mirrors parityCase on the wire. A null or absent value
+// means the case name only; "value": "" is a valued empty string.
 type parityExtCase struct {
-	Name  string `json:"name"`
-	Value string `json:"value,omitempty"`
+	Name  string  `json:"name"`
+	Value *string `json:"value"`
 }
 
 type parityExtResponse struct {
@@ -69,7 +69,11 @@ func extractExternalStates(cfg config.Config, alias, lang, enumName, source stri
 		if c.Name == "" {
 			return nil, fmt.Errorf("external parity profile %s returned a case without a name", name)
 		}
-		cases = append(cases, parityCase{name: c.Name, value: c.Value, valued: c.Value != ""})
+		val := ""
+		if c.Value != nil {
+			val = *c.Value
+		}
+		cases = append(cases, parityCase{name: c.Name, value: val, valued: c.Value != nil})
 	}
 	return cases, nil
 }
@@ -114,7 +118,7 @@ func extractExternalTransitions(cfg config.Config, alias, lang, machineID, sourc
 	}
 	out := make([]parityTransition, 0, len(resp.Triples))
 	for _, tr := range resp.Triples {
-		if tr.From == "" || tr.Event == "" || tr.To == "" {
+		if tr.From == "" || tr.To == "" {
 			return nil, fmt.Errorf("external parity profile %s returned an incomplete triple", name)
 		}
 		out = append(out, parityTransition{from: tr.From, event: tr.Event, to: tr.To})

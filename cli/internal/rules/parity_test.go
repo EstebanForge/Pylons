@@ -413,3 +413,38 @@ func TestParityExternalBadOutput(t *testing.T) {
 		t.Fatal("a plugin emitting garbage must yield the not-evaluated advisory with the cause")
 	}
 }
+
+// The wire contract: "value": "" is a valued empty-string case, and a
+// plugin may answer event-less triples.
+func TestParityExternalValuedEmptyString(t *testing.T) {
+	kb, _ := newParityExternalFixture(t, "#!/bin/sh\nIFS= read -r line\nprintf '{\"cases\":[{\"name\":\"Draft\",\"value\":\"\"},{\"name\":\"Sent\",\"value\":\"sent\"}]}'\n",
+		"repo://svc/state.kt::Status")
+	// Valued cases compare by backing value, so the declared side names
+	// the empty string as a state value.
+	fm := "---\ntitle: \"Message\"\ntype: domain-entity\nstatus: accepted\ncreated: 2026-11-20\nupdated: 2026-11-20\nowners: [o]\nstates: [\"\", sent]\nstates_symbol: \"repo://svc/state.kt::Status\"\ntags: [domain]\n---\n\n# Message\n"
+	mustWrite(t, filepath.Join(kb, "domain/message.md"), fm)
+	for _, f := range lintParity(kb, cfgMust(t, kb), true) {
+		if f.RuleID == "PYLON049" && strings.Contains(f.Message, "cannot resolve") {
+			continue
+		}
+		if f.RuleID == "PYLON049" || f.RuleID == "PYLON050" || f.RuleID == "PYLON051" {
+			t.Fatalf("a valued empty-string case must extract as valued, got %+v", f)
+		}
+	}
+}
+
+func TestParityExternalEventlessTriples(t *testing.T) {
+	kb, _ := newParityExternalFixture(t, "#!/bin/sh\nIFS= read -r line\nprintf '{\"triples\":[{\"from\":\"draft\",\"to\":\"sent\"}]}'\n",
+		"repo://svc/state.kt::Status")
+	// The declared machine carries the eventless triple so the sides match.
+	fm := "---\ntitle: \"Message\"\ntype: domain-entity\nstatus: accepted\ncreated: 2026-11-20\nupdated: 2026-11-20\nowners: [o]\nmachines:\n  - machine: shipment\n    states: [draft, sent]\n    initial: [draft]\n    terminal: [sent]\n    transitions_symbol: \"repo://svc/state.kt::shipment\"\n    transitions:\n      - {from: draft, to: sent}\ntags: [domain]\n---\n\n# Message\n"
+	mustWrite(t, filepath.Join(kb, "domain/message.md"), fm)
+	for _, f := range lintParity(kb, cfgMust(t, kb), true) {
+		if f.RuleID == "PYLON053" && strings.Contains(f.Message, "incomplete triple") {
+			t.Fatalf("an event-less triple is complete, got %+v", f)
+		}
+		if f.RuleID == "PYLON054" || (f.RuleID == "PYLON049" && strings.Contains(f.Message, "transport")) {
+			t.Fatalf("event-less external triples must compare silently, got %+v", f)
+		}
+	}
+}

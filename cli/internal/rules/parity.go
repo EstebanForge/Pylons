@@ -161,9 +161,12 @@ func compareStates(rel string, states resolve.StringOrList, cases []parityCase) 
 	}
 	declared := make([]string, 0, len(states))
 	for _, s := range states {
-		if strings.TrimSpace(s) != "" {
-			declared = append(declared, s)
+		// An empty string is a legitimate valued state; only pure
+		// whitespace junk is dropped.
+		if s != "" && strings.TrimSpace(s) == "" {
+			continue
 		}
+		declared = append(declared, s)
 	}
 	var out []report.Finding
 	if len(declared) != len(extracted) {
