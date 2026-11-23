@@ -28,7 +28,10 @@ import (
 
 var productExactFiles = []string{
 	"AGENTS.md", "LICENSE", "NOTICE",
+	"bin/AGENTS.md",
 	"bin/THIRD_PARTY_NOTICES",
+	"extensions/AGENTS.md",
+	"protocols/AGENTS.md",
 	"manifests/rules.json",
 	"manifests/vocabulary.json",
 	"manifests/parity.json",

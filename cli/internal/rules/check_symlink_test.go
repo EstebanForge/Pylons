@@ -38,3 +38,39 @@ func TestCheckTargetAttributionSurvivesSymlinks(t *testing.T) {
 		t.Fatalf("realpath query through a symlinked registration attributed %q, want svc", got.alias)
 	}
 }
+
+// A protected glob must also catch a file that does not exist yet: agents
+// check the target before writing it, and the query rides the same
+// symlinked name the project was registered under.
+func TestCheckTargetProtectedGlobCatchesUnwrittenFile(t *testing.T) {
+	kb := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kb, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := "version: 1\nextensions: [go]\nprojects:\n  svc:\n    path: svc-link\nprotected:\n  - {glob: src/**, owner: human-only}\n"
+	// The link must be live: a dangling link leaves both comparison
+	// sides unresolved and the test passes without exercising the bug.
+	if err := os.MkdirAll(filepath.Join(kb, "svc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(kb, "svc-link")
+	if err := os.Symlink(filepath.Join(kb, "svc"), link); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	if err := os.WriteFile(filepath.Join(kb, "manifests", "pylons.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(kb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// src/ does not exist yet; the file is only about to be created.
+	target := filepath.Join(link, "src", "new.go")
+	got := normalizeCheckTarget(kb, target, cfg)
+	if got.alias != "svc" {
+		t.Fatalf("unwritten file through the symlinked name attributed %q, want svc", got.alias)
+	}
+	if got.path != "src/new.go" {
+		t.Fatalf("unwritten file path came back %q, want src/new.go", got.path)
+	}
+}

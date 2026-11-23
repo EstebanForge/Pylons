@@ -48,6 +48,9 @@ Usage:
   pylon review release-surface --pinned-releases <dir> [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review gate-surface [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review annotations --from <file|-> [--path-prefix <p>] [--format=human|json] [--json] [--pylons <path>]
+  pylon review retro --findings <file|-> [--window <period>] [--min <n>] [--shape <s>] [--pylons <path>]
+  pylon harvest pr --diff <patch|-> [--metadata <json>] [--record <file>] [--pylons <path>]
+  pylon gate <pre-commit|pre-push>
   pylon sync             [--detached] [--pylons <path>]
   pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>] [--format=human|json] [--pylons <path>]
   pylon protocol [list|<name>] [--template <path>] [--pylons <path>]

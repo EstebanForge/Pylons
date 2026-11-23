@@ -174,6 +174,6 @@ main() {
 	log "installed $VERSION in $DEST/"
 	log "next steps:"
 	log "  1. cd $q and register your code repositories in manifests/pylons.yaml"
-	log "  2. ./bin/pylon help"
+	log "  2. ./bin/pylon --help"
 }
 main "$@"

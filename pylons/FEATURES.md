@@ -3,7 +3,7 @@ title: "Pylons: Feature Guide"
 type: meta
 status: active
 created: 2026-11-20
-updated: 2026-11-20
+updated: 2026-11-22
 tags: [features, workflow, agents, developer-guide]
 ---
 
@@ -394,8 +394,11 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `manifest [packages\|rules]` | Compiles machine-readable JSON manifests. | Tooling build | Schema failure |
 | `manifest product --release-version <v>` | Writes the release product manifest (the managed-file allowlist `self-update` verifies against) to stdout. | Release build | Missing product layer |
 | `self-update --from <dir>` | Applies a staged release: verifies staged hashes fail-closed, three-ways product files (drift returns `.pylons-new` copies), writes the new product manifest, and swaps the binary last. | Upgrading an installed pylon | Drifted product files, no `--from` |
+| `sync [--detached]` | Detached freshness: records a timestamp, spawns a background `git fetch origin main`, and fast-forwards `main` on a later clean run. | Long-lived checkouts | Diverged or dirty trees are never merged; a fetch failure surfaces in `pylon brief` |
+| `gate <pre-commit\|pre-push>` | The engine-side gate stage the shipped hooks exec: manifest freshness, lint, and staged review loops on commit; manifest checks, corpus lint, and quirk-source validation on push. | Hook shims and CI | Missing binary exits 1 unless `PYLON_HOOKS_OPTIONAL=1` |
 | `manifest --check` | Verifies the committed manifests match the compiled catalogs without writing. | CI verification | Catalog drift |
 | `protocol [list\|<name>]` | Lists or renders shipped CLI protocols (`pylon reflect`, `pylon protocol agent`). | Session rituals | Unknown protocol |
+| `reflect [--template <path>]` | Renders the session retro protocol for the closing record. | Session close | Unknown template |
 | `new <type> <name>` | Creates a typed document from the ledger's own template with zone placement, default status, and today's dates filled. | Authoring | Unknown type, dirty name, existing file |
 | `new decision <slug> --number` | Assigns the next four-digit number under the configured prefix (default D), scanning decisions/ recursively, so the proposal carries its accepted-side name from birth. | Authoring | Numbering exhausted |
 | `extensions [list\|schema]` | Lists built-in language extensions and the custom-extension schema. | Enabling code extraction | Unknown extension |

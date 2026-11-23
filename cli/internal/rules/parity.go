@@ -523,13 +523,29 @@ func matchDelim(s string, open, close byte) (string, bool) {
 		return "", false
 	}
 	depth := 0
-	// Quoted spans never count their delimiters: a serde rename holding
-	// a brace, a backtick literal, a PHP string would otherwise end the
-	// scan early. Fail-closed on the rare comment apostrophe that opens
-	// a phantom span.
+	// Quoted spans and comments never count their delimiters: a serde
+	// rename holding a brace, a backtick literal, a PHP string, or a
+	// comment carrying an apostrophe would otherwise end or corrupt the
+	// scan. A single quote counts as a string only when it closes on the
+	// same line; an unterminated one is an apostrophe, a rust lifetime,
+	// or comment prose and stays inert.
 	var q byte
+	var lineComment, blockComment bool
 	for i := start; i < len(s); i++ {
 		c := s[i]
+		if lineComment {
+			if c == '\n' {
+				lineComment = false
+			}
+			continue
+		}
+		if blockComment {
+			if c == '*' && i+1 < len(s) && s[i+1] == '/' {
+				blockComment = false
+				i++
+			}
+			continue
+		}
 		if q != 0 {
 			if c == '\\' && q != '`' && i+1 < len(s) {
 				i++
@@ -540,12 +556,24 @@ func matchDelim(s string, open, close byte) (string, bool) {
 			}
 			continue
 		}
-		switch c {
-		case '\'', '"', '`':
+		switch {
+		case c == '/' && i+1 < len(s) && s[i+1] == '/':
+			lineComment = true
+			i++
+		case c == '#':
+			lineComment = true
+		case c == '/' && i+1 < len(s) && s[i+1] == '*':
+			blockComment = true
+			i++
+		case c == '\'':
+			if end := indexUnescaped(s, i+1, '\''); end >= 0 {
+				i = end
+			}
+		case c == '"', c == '`':
 			q = c
-		case open:
+		case c == open:
 			depth++
-		case close:
+		case c == close:
 			depth--
 			if depth == 0 {
 				return s[start+1 : i], true
@@ -553,6 +581,27 @@ func matchDelim(s string, open, close byte) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// indexUnescaped finds the first unescaped needle at or after from,
+// bounded to the needle's own line: an escaped quote defers to the next
+// one, and -1 means the line carries no closer.
+func indexUnescaped(s string, from int, needle byte) int {
+	nl := strings.IndexByte(s[from:], '\n')
+	end := len(s)
+	if nl >= 0 {
+		end = from + nl
+	}
+	for i := from; i < end; i++ {
+		if s[i] == '\\' {
+			i++
+			continue
+		}
+		if s[i] == needle {
+			return i
+		}
+	}
+	return -1
 }
 
 // stripLineComment removes a trailing line comment that sits outside

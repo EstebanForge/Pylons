@@ -48,3 +48,19 @@ func TestRouteRefExcludesVendoredDecoy(t *testing.T) {
 		t.Fatalf("route resolved against %q, want zz/real.php (vendored decoy must be excluded)", v.Detail)
 	}
 }
+
+// Underscore directories are never live content on any path: the
+// ref-pinned grep excludes them, so the worktree walk must too.
+func TestGrepProjectSkipsUnderscoreDirs(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "_hidden"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "_hidden", "a.go"),
+		[]byte("// GET /only-in-underscore\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := grepProject(root, "GET /only-in-underscore"); got != "" {
+		t.Fatalf("underscore content resolved as %q; underscore dirs are never live content", got)
+	}
+}

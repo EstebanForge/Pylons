@@ -44,6 +44,9 @@ func writeProductTree(t *testing.T, root string) {
 	write(t, filepath.Join(root, "LICENSE"), "apache\n")
 	write(t, filepath.Join(root, "NOTICE"), "notice\n")
 	write(t, filepath.Join(root, "bin", "THIRD_PARTY_NOTICES"), "third party\n")
+	write(t, filepath.Join(root, "bin", "AGENTS.md"), "# bin guide\n")
+	write(t, filepath.Join(root, "extensions", "AGENTS.md"), "# extensions guide\n")
+	write(t, filepath.Join(root, "protocols", "AGENTS.md"), "# protocols guide\n")
 	write(t, filepath.Join(root, "manifests", "rules.json"), "{}\n")
 	write(t, filepath.Join(root, "manifests", "vocabulary.json"), "{}\n")
 	write(t, filepath.Join(root, "manifests", "parity.json"), "{}\n")
@@ -97,7 +100,7 @@ func TestProductManifestIsTheAllowlist(t *testing.T) {
 		"extensions/_examples/pylon-ext-js",
 		"_examples/ledger/README.md",
 		"packages/AGENTS.md", "plans/archive/.gitkeep", "domain/entities/.gitkeep",
-		"bin/THIRD_PARTY_NOTICES",
+		"bin/THIRD_PARTY_NOTICES", "bin/AGENTS.md", "extensions/AGENTS.md", "protocols/AGENTS.md",
 	} {
 		if _, ok := m.Files[want]; !ok {
 			t.Errorf("product manifest missing %s", want)

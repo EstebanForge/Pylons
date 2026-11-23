@@ -116,3 +116,38 @@ func TestIntBackedEnumsExtractValued(t *testing.T) {
 		t.Fatalf("ts cases wrong: %+v", cases)
 	}
 }
+
+// Comment apostrophes are prose, not quotes: an enum whose comments
+// carry one must still extract.
+func TestCommentApostrophesDoNotOpenQuotes(t *testing.T) {
+	rust := "pub enum State {\n    // don't rename these states\n    Idle,\n    Busy,\n}\n"
+	cases, err := builtinParityExtractors["rust"](rust, "State")
+	if err != nil {
+		t.Fatalf("rust comment apostrophe must not break extraction: %v", err)
+	}
+	if len(cases) != 2 {
+		t.Fatalf("rust got %d cases, want 2", len(cases))
+	}
+
+	php := "<?php\nenum S: string {\n    // it's the idle state marker\n    case Idle = 'idle';\n    case Busy = 'busy';\n}\n"
+	cases, err = builtinParityExtractors["php"](php, "S")
+	if err != nil {
+		t.Fatalf("php comment apostrophe must not break extraction: %v", err)
+	}
+	if len(cases) != 2 {
+		t.Fatalf("php got %d cases, want 2", len(cases))
+	}
+}
+
+// An apostrophe in prose near the enum never corrupts block matching:
+// the canonical member parser still judges what is inside.
+func TestRustApostropheNearEnumIsInert(t *testing.T) {
+	rust := "pub enum State {\n    Idle,\n    Busy,\n}\n\n// A borrowed handle wraps &'a str; the enum above stays canonical.\n"
+	cases, err := builtinParityExtractors["rust"](rust, "State")
+	if err != nil {
+		t.Fatalf("nearby apostrophe prose must not break extraction: %v", err)
+	}
+	if len(cases) != 2 {
+		t.Fatalf("got %d cases, want 2", len(cases))
+	}
+}

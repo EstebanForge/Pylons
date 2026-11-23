@@ -30,8 +30,10 @@ origin_sha="$(git rev-parse origin/main)"
 # Gates: format, vet, tests, lint, junk. AppleDouble stubs inside a
 # tarball are a known hazard on this tree. bsdtar must not embed them.
 [ -z "$(gofmt -l cli)" ] || { echo "gofmt needed:"; gofmt -l cli; exit 1; }
-(cd cli && go vet ./... && go test ./... -count=1)
+# Build first: the cmd-level tests exec bin/pylon, so vet and test gate
+# the same binary the release ships.
 go build -C cli -o ../bin/pylon ./cmd/pylon
+(cd cli && go vet ./... && go test ./... -count=1)
 ./bin/pylon lint >/dev/null
 junk="$(find . -name '._*' -not -path './.git/*' -print | head -n1)"
 [ -z "$junk" ] || { echo "AppleDouble junk present: $junk; sweep before releasing" >&2; exit 1; }
@@ -54,7 +56,7 @@ for pair in $targets; do
 	if [ "$os" = windows ]; then
 		mv "dist/$name/bin/pylon" "dist/$name/bin/pylon.exe"
 	fi
-	cp LICENSE NOTICE bin/THIRD_PARTY_NOTICES "dist/$name/"
+	cp LICENSE NOTICE "dist/$name/"
 	cp bin/THIRD_PARTY_NOTICES "dist/$name/bin/"
 	tar -czf "dist/pylons-$tag-$os-$arch.tar.gz" -C "dist/$name" bin LICENSE NOTICE
 	rm -rf "dist/$name"

@@ -164,7 +164,9 @@ func normalizeCheckTarget(kbRoot, raw string, cfg config.Config) normalizedTarge
 	if filepath.IsAbs(raw) {
 		// Both sides resolve through symlinks: a checkout registered via a
 		// symlinked path and a query through the realpath name one directory.
-		absTarget := resolve.EvalRoot(filepath.Clean(raw))
+		// ResolveExisting keeps not-yet-written files inside the match: a
+		// guard must fire on the file an agent is about to create.
+		absTarget := resolve.ResolveExisting(filepath.Clean(raw))
 		type match struct {
 			alias string
 			rel   string

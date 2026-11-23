@@ -650,6 +650,11 @@ func resolveQueryPath(path string, roots []corpusRoot) (string, string, error) {
 	// giving up.
 	if !filepath.IsAbs(path) {
 		rel := filepath.ToSlash(filepath.Clean(path))
+		// A cleaned path that still climbs (b/../outside.go) is outside
+		// every corpus root by construction.
+		if strings.HasPrefix(rel, "..") {
+			return "", "", fmt.Errorf("%s is not inside any corpus root", path)
+		}
 		for _, root := range roots {
 			candidate := filepath.Join(root.abs, filepath.FromSlash(rel))
 			if ev, err := filepath.EvalSymlinks(candidate); err == nil {

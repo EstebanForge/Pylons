@@ -153,7 +153,7 @@ func seedProductTree(t *testing.T, root string) {
 	if err := os.MkdirAll(filepath.Join(root, "manifests"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{"manifests/pylons.yaml", "AGENTS.md", "LICENSE", "NOTICE", "bin/THIRD_PARTY_NOTICES",
+	for _, p := range []string{"manifests/pylons.yaml", "AGENTS.md", "LICENSE", "NOTICE", "bin/AGENTS.md", "extensions/AGENTS.md", "protocols/AGENTS.md", "bin/THIRD_PARTY_NOTICES",
 		"manifests/rules.json", "manifests/vocabulary.json", "manifests/parity.json",
 		"manifests/extensions.example.json", "manifests/packages.example.json",
 		"manifests/pylons.example.yaml", "protocols/agent.md", "protocols/reflect.md",

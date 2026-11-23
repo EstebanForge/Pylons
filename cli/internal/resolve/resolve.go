@@ -558,6 +558,28 @@ func EvalRoot(root string) string {
 	return root
 }
 
+// ResolveExisting evaluates the deepest existing ancestor of path through
+// symlinks and re-appends the remainder, so a file that does not exist
+// yet resolves to its future real path (EvalSymlinks alone fails on any
+// missing final component). Returns path unchanged when nothing along it
+// resolves.
+func ResolveExisting(path string) string {
+	path = filepath.Clean(path)
+	cur := path
+	var tail []string
+	for {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(append([]string{resolved}, tail...)...)
+		}
+		dir, base := filepath.Split(cur)
+		if dir == "" || dir == cur {
+			return path
+		}
+		tail = append([]string{base}, tail...)
+		cur = filepath.Clean(dir)
+	}
+}
+
 func grepTarget(root, ref, needle string) string {
 	if ref != "" && hasGitRepo(root) {
 		out, err := GitRun(root, nil, "grep", "-I", "--fixed-strings", "-m", "1",
@@ -607,7 +629,7 @@ func grepProject(root, needle string) string {
 		}
 		if d.IsDir() {
 			base := d.Name()
-			if base == ".git" || base == "node_modules" || base == "target" || base == "vendor" {
+			if base == ".git" || base == "node_modules" || base == "target" || base == "vendor" || strings.HasPrefix(base, "_") {
 				return filepath.SkipDir
 			}
 			return nil
