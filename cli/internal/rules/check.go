@@ -162,14 +162,16 @@ func normalizeCheckTarget(kbRoot, raw string, cfg config.Config) normalizedTarge
 		}
 	}
 	if filepath.IsAbs(raw) {
-		absTarget := filepath.Clean(raw)
+		// Both sides resolve through symlinks: a checkout registered via a
+		// symlinked path and a query through the realpath name one directory.
+		absTarget := resolve.EvalRoot(filepath.Clean(raw))
 		type match struct {
 			alias string
 			rel   string
 		}
 		var matches []match
 		for _, alias := range slices.Sorted(maps.Keys(cfg.Projects)) {
-			projPath := cfg.ProjectPath(kbRoot, alias)
+			projPath := resolve.EvalRoot(cfg.ProjectPath(kbRoot, alias))
 			if projPath == "" {
 				continue
 			}
