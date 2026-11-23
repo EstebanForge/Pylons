@@ -40,11 +40,16 @@ def error(message):
 
 
 def machine_region(source, name):
-    """The text after the // pylon:machine <name> marker line."""
-    marker = "// pylon:machine " + name
-    for line in source.splitlines():
-        if line.strip() == marker:
-            return source.split(line, 1)[1]
+    """The text between this machine's marker and the next one."""
+    lines = source.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() == "// pylon:machine " + name:
+            region = []
+            for later in lines[i + 1:]:
+                if later.strip().startswith("// pylon:machine "):
+                    break
+                region.append(later)
+            return "\n".join(region)
     return None
 
 

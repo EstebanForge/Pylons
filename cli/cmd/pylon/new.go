@@ -172,7 +172,13 @@ func cmdNew(kbRoot, docType, name, title string, numbered bool) int {
 		return 1
 	}
 	fmt.Printf("wrote %s (%s, %s)\n", rel, spec.typ, spec.status)
-	fmt.Printf("link it from another document or the orphan advisory (PYLON004) fires\n")
+	// The orphan walk skips these zone prefixes, so their docs cannot
+	// be orphans and the hint would be noise.
+	if orphanable := !strings.HasPrefix(spec.dir, "packages") &&
+		!strings.HasPrefix(spec.dir, "conventions") &&
+		!strings.HasPrefix(spec.dir, "domain"); orphanable {
+		fmt.Printf("link it from another document or the FORCED orphan check (PYLON004) fails the lint\n")
+	}
 	return 0
 }
 

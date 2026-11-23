@@ -473,12 +473,18 @@ func grepTargetRegex(root, ref string, exts map[string]bool, pattern string) str
 	lineRe := regexp.MustCompile(pattern)
 	root = EvalRoot(root)
 	if ref != "" && hasGitRepo(root) {
-		out, err := GitRun(root, nil, "grep", "-I", "-m", "1", "-E", "-e", pattern, ref,
-			"--", "*.php",
+		args := []string{"grep", "-I", "-m", "1", "-E", "-e", pattern, ref, "--"}
+		if len(exts) > 0 {
+			for _, ext := range slices.Sorted(maps.Keys(exts)) {
+				args = append(args, "*"+ext)
+			}
+		}
+		args = append(args,
 			":(glob,exclude)**/vendor/**",
 			":(glob,exclude)**/node_modules/**",
 			":(glob,exclude)**/target/**",
 			":(glob,exclude)**/_*/**")
+		out, err := GitRun(root, nil, args...)
 		if err != nil {
 			return ""
 		}

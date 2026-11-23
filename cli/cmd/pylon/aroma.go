@@ -345,12 +345,15 @@ type corpusRoot struct {
 func resolveCorpus(explicit []string, stderr io.Writer) ([]corpusRoot, error) {
 	var roots []corpusRoot
 	if len(explicit) > 0 {
+		// Labels land after dedup: a nested root dropped below must not
+		// leave its label on the surviving outer root's identity.
 		for _, root := range explicit {
-			label := ""
-			if len(explicit) > 1 {
-				label = strings.TrimPrefix(filepath.Clean(root), "./")
+			roots = append(roots, corpusRoot{path: root})
+		}
+		if len(explicit) > 1 {
+			for i := range roots {
+				roots[i].label = strings.TrimPrefix(filepath.Clean(roots[i].path), "./")
 			}
-			roots = append(roots, corpusRoot{label: label, path: root})
 		}
 	} else if kbRoot := findPylonsRoot(""); kbRoot != "" {
 		cfg, err := config.Load(kbRoot)

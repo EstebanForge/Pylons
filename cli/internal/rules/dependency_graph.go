@@ -178,7 +178,7 @@ func dedupeNodes(nodes []GraphNode) []GraphNode {
 
 func dedupeEdges(edges []GraphEdge) []GraphEdge {
 	seen := map[string]bool{}
-	var out []GraphEdge
+	out := make([]GraphEdge, 0, len(edges))
 	for _, e := range edges {
 		key := e.From + "->" + e.To
 		if !seen[key] {

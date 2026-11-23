@@ -26,7 +26,7 @@ type URI struct {
 // carry backslashes), so only the file path itself is path-checked; an
 // empty fragment leaves the string untouched.
 func stripSymbolFragment(path string) string {
-	if i := strings.Index(path, "::"); i > 0 && i < len(path)-1 {
+	if i := strings.Index(path, "::"); i > 0 && i < len(path)-2 {
 		return path[:i]
 	}
 	return path

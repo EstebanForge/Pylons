@@ -55,7 +55,8 @@ for pair in $targets; do
 		mv "dist/$name/bin/pylon" "dist/$name/bin/pylon.exe"
 	fi
 	cp LICENSE NOTICE bin/THIRD_PARTY_NOTICES "dist/$name/"
-	tar -czf "dist/pylons-$tag-$os-$arch.tar.gz" -C "dist/$name" bin LICENSE NOTICE THIRD_PARTY_NOTICES
+	cp bin/THIRD_PARTY_NOTICES "dist/$name/bin/"
+	tar -czf "dist/pylons-$tag-$os-$arch.tar.gz" -C "dist/$name" bin LICENSE NOTICE
 	rm -rf "dist/$name"
 done
 
