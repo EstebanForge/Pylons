@@ -446,3 +446,44 @@ func TestLinesSpecReversedOrOutOfRangeIsUsage(t *testing.T) {
 		t.Fatalf("the out-of-range error must say so, stderr = %q", stderr)
 	}
 }
+
+// A symlinked corpus root and diff paths written against the realpath must
+// meet: resolveQueryPath evaluates query symlinks while roots are already
+// evaluated, so both spellings of one directory resolve to the same files.
+func TestAromaSymlinkedRootLinesAndDiff(t *testing.T) {
+	real := t.TempDir()
+	src := filepath.Join(real, "a.go")
+	// The diff change is already applied on disk: diff queries read the
+	// checked-out file at the new line numbers.
+	if err := os.WriteFile(src, []byte("package a\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn Alpha() + 1\n}\n\nfunc Gamma() int {\n\treturn 3\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "root-link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	// Lines query through the symlinked root.
+	code, stdout, stderr := runCmd(t, "", "search", "--corpus", link, "--lines", link+"/a.go:3-5", "--json")
+	if code != 0 {
+		t.Fatalf("lines through symlinked root: code %d stderr %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "a.go") {
+		t.Fatalf("no result for symlinked lines query: %s", stdout)
+	}
+	// Diff whose b/ side is the realpath while the corpus is the link.
+	diff := "diff --git a/a.go b/a.go\nindex 111..222 100644\n--- a/a.go\n+++ b/a.go\n@@ -10,2 +10,5 @@\n\n+func Gamma() int {\n+\treturn 3\n+}\n"
+	diffFile := filepath.Join(t.TempDir(), "sample.diff")
+	if err := os.WriteFile(diffFile, []byte(diff), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Applied from a foreign working directory: the relative b/ path must
+	// resolve against the corpus root, not the caller's CWD.
+	chdir(t, t.TempDir())
+	code, stdout, stderr = runCmd(t, "", "search", "--corpus", link, "--diff", diffFile, "--json")
+	if code != 0 {
+		t.Fatalf("diff from foreign cwd: code %d stderr %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Gamma") {
+		t.Fatalf("diff query lost the added symbol: %s stderr %s", stdout, stderr)
+	}
+}

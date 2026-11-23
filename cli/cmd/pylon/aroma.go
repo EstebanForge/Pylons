@@ -625,6 +625,12 @@ func resolveQueryPath(path string, roots []corpusRoot) (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("cannot resolve %q: %v", path, err)
 	}
+	// Corpus roots carry symlink-evaluated abs paths; the query side must
+	// evaluate too or a link through which the checkout is reached misses
+	// every root.
+	if ev, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = ev
+	}
 	for _, root := range roots {
 		rel, err := filepath.Rel(root.abs, abs)
 		if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
@@ -635,6 +641,23 @@ func resolveQueryPath(path string, roots []corpusRoot) (string, string, error) {
 			return filepath.Join(root.abs, rel), rel, nil
 		}
 		return filepath.Join(root.abs, rel), root.label + "/" + rel, nil
+	}
+	// A diff recorded inside a corpus but applied from another working
+	// directory carries relative b/ paths: try each root directly before
+	// giving up.
+	if !filepath.IsAbs(path) {
+		rel := filepath.ToSlash(filepath.Clean(path))
+		for _, root := range roots {
+			candidate := filepath.Join(root.abs, filepath.FromSlash(rel))
+			if ev, err := filepath.EvalSymlinks(candidate); err == nil {
+				if st, err := os.Lstat(ev); err == nil && st.Mode().IsRegular() {
+					if root.label == "" {
+						return candidate, rel, nil
+					}
+					return candidate, root.label + "/" + rel, nil
+				}
+			}
+		}
 	}
 	return "", "", fmt.Errorf("%q is not inside any corpus root", path)
 }
