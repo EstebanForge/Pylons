@@ -13,6 +13,7 @@ Notable changes to the Pylons format and `pylon` CLI.
 ## 2026-11-22
 - Full-product review hardening: symlinked ledger roots and checkouts resolve instead of vanishing, aroma queries cross roots and cwds, ref-pinned contract grep honors the skip list, parity extractors read rustfmt wrapping, comments, and raw strings, self-update keeps exec bits, the parity wire keeps valued-empty strings and event-less triples, and the low sweep closes graph nulls, URI fragment edges, pathspec derivation, and doc corruption.
 - Exit review: unwritten files resolve through symlinked checkouts so protected globs fire before the first write, parity delimiter matching treats comments as prose and single quotes as line-bounded strings, the worktree contract walk skips underscore directories, release.sh builds the binary before the gates, and the feature guide carries gate, sync, and reflect rows.
+- Protected globs match the target alias against the package name and its declared components, so a package doc titled differently from its project alias still guards the alias's paths.
 
 - Self-update writes the staged product manifest, so a second hop compares against the hashes actually installed; identical content is skipped instead of rewritten, and the binary swap checks its own hash.
 - Self-update rejects release-manifest keys that could escape the ledger (absolute paths, parent segments, drive forms), on both the staged and the installed side.

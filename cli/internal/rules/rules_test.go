@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/estebanforge/pylons/cli/internal/report"
 )
 
 func mustWrite(t *testing.T, path, content string) {
@@ -153,5 +155,40 @@ Core app.
 	}
 	if forced != 2 || advisory != 1 {
 		t.Fatalf("expected 2 forced and 1 advisory, got forced=%d advisory=%d", forced, advisory)
+	}
+}
+
+// The component filter must accept the package's components, not only its
+// name: a package doc titled differently from the project alias still
+// protects the alias's paths.
+func TestProtectedGlobFiresThroughComponents(t *testing.T) {
+	kb := t.TempDir()
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"),
+		"version: 1\nextensions: [go]\nprojects:\n  svc:\n    path: svc\n")
+	mustWrite(t, filepath.Join(kb, "svc/src/api.go"), "package svc\n")
+	mustWrite(t, filepath.Join(kb, "packages/core.md"), `---
+title: "Core"
+type: package
+status: active
+package: core
+components: [svc]
+protected:
+  - glob: src/**
+    owner: human-only
+    reason: "vault keys"
+---
+
+# Core
+`)
+	target := filepath.Join(kb, "svc", "src", "api.go")
+	findings := Check(kb, []string{target})
+	var found *report.Finding
+	for i := range findings {
+		if findings[i].RuleID == "PYLON029" {
+			found = &findings[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("protected glob must fire through components, got %+v", findings)
 	}
 }

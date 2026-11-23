@@ -108,9 +108,12 @@ func Check(kbRoot string, targets []string) []report.Finding {
 
 		var pkg resolve.PackageFrontMatter
 		if resolve.ParsePackageFrontMatter(content, &pkg) && pkg.Type == "package" {
-			var comps []string
-			if pkg.Package != "" {
-				comps = []string{pkg.Package}
+			// The filter matches the target alias against the package name
+			// AND its declared components, so a doc titled differently from
+			// the project alias still protects the alias's paths.
+			comps := pkg.Components
+			if pkg.Package != "" && !slices.Contains(comps, pkg.Package) {
+				comps = append([]string{pkg.Package}, comps...)
 			}
 			for _, raw := range pkg.Protected {
 				m, ok := raw.(map[string]any)
