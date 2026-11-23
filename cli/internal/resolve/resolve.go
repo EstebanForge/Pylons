@@ -554,7 +554,10 @@ func EvalRoot(root string) string {
 
 func grepTarget(root, ref, needle string) string {
 	if ref != "" && hasGitRepo(root) {
-		out, err := GitRun(root, nil, "grep", "-I", "--fixed-strings", "-m", "1", "-e", needle, ref)
+		out, err := GitRun(root, nil, "grep", "-I", "--fixed-strings", "-m", "1",
+			"-e", needle, ref, "--",
+			":(glob,exclude)**/vendor/**", ":(glob,exclude)**/node_modules/**",
+			":(glob,exclude)**/target/**", ":(glob,exclude)**/_*/**")
 		if err != nil {
 			return ""
 		}
