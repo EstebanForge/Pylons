@@ -383,3 +383,136 @@ var rustWrapperTokens = map[string]bool{
 // guardRe matches a Rust match-arm guard: `State if cond =>`, a
 // conditional transition the canonical flat form cannot represent.
 var guardRe = regexp.MustCompile(`(^|[^A-Za-z0-9_])if([^A-Za-z0-9_]|$)`)
+
+// The canonical typescript shape is the nested switch reducer: the outer
+// switch reads the state, inner switches read the event, and every
+// transition is a string-literal return. Absorbs (state-level or
+// non-literal returns), default arms, and throw guards declare no triples;
+// anything else inside the switch fails closed.
+var (
+	tsSwitchRe    = regexp.MustCompile(`^\s*switch\s*\(\s*[A-Za-z_]\w*\s*\)\s*\{\s*$`)
+	tsCaseRe      = regexp.MustCompile(`^\s*case\s+("((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*:\s*$`)
+	tsReturnRe    = regexp.MustCompile(`^\s*return\s+("((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*;\s*$`)
+	tsReturnAnyRe = regexp.MustCompile(`^\s*return\b`)
+	tsDefaultRe   = regexp.MustCompile(`^\s*default\s*:\s*(.*)$`)
+	tsCloseRe     = regexp.MustCompile(`^\s*\}\s*;?\s*$`)
+)
+
+func tsLiteral(m []string) string {
+	if strings.HasPrefix(m[1], `"`) {
+		return m[2]
+	}
+	return m[3]
+}
+
+func extractTSTransitions(source, machineID string) ([]parityTransition, error) {
+	lines := strings.Split(source, "\n")
+	found, sawID := false, ""
+	var out []parityTransition
+	for i, line := range lines {
+		id, ok := markerLineID(line)
+		if !ok {
+			continue
+		}
+		if id != machineID {
+			sawID = id
+			continue
+		}
+		found = true
+		triples, err := tsSwitchTriples(lines[i+1:], id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, triples...)
+	}
+	if !found {
+		if sawID != "" {
+			return nil, fmt.Errorf("no pylon:machine %s directive found (the file carries %s)", machineID, sawID)
+		}
+		return nil, fmt.Errorf("no pylon:machine %s directive found", machineID)
+	}
+	return out, nil
+}
+
+func tsSwitchTriples(lines []string, id string) ([]parityTransition, error) {
+	depth := 0 // 1 = the state switch, 2 = an event switch
+	fromSet, eventSet := false, false
+	var from, event string
+	var out []parityTransition
+	leading, leadBudget := true, 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "/*") || strings.HasPrefix(trimmed, "*") {
+			continue
+		}
+		if tsSwitchRe.MatchString(trimmed) {
+			leading = false
+			depth++
+			continue
+		}
+		if leading {
+			leadBudget++
+			if leadBudget > 10 {
+				return nil, fmt.Errorf("machine %s: no switch follows the directive; the canonical typescript shape is a nested switch reducer", id)
+			}
+			if strings.Contains(trimmed, "case ") || strings.Contains(trimmed, "return ") {
+				return nil, fmt.Errorf("machine %s: reducer logic appears before the state switch; the canonical typescript shape opens with switch (state) {", id)
+			}
+			continue
+		}
+		if tsCloseRe.MatchString(trimmed) {
+			if depth == 0 {
+				return nil, fmt.Errorf("machine %s: an unbalanced closing brace inside the reducer", id)
+			}
+			depth--
+			if depth <= 0 {
+				if len(out) == 0 {
+					return nil, fmt.Errorf("machine %s: the switch reducer declares no transitions", id)
+				}
+				return out, nil
+			}
+			eventSet = false
+			event = ""
+			continue
+		}
+		if m := tsCaseRe.FindStringSubmatch(trimmed); m != nil {
+			switch depth {
+			case 1:
+				from, fromSet = tsLiteral(m), true
+				event, eventSet = "", false
+			case 2:
+				if !fromSet {
+					return nil, fmt.Errorf("machine %s: an event case appears without a state case; the outer switch must read the state", id)
+				}
+				event, eventSet = tsLiteral(m), true
+			default:
+				return nil, fmt.Errorf("machine %s: switches nest two levels deep (state, then event); the canonical typescript shape is two levels", id)
+			}
+			continue
+		}
+		if m := tsReturnRe.FindStringSubmatch(trimmed); m != nil {
+			if eventSet {
+				out = append(out, parityTransition{from: from, event: event, to: tsLiteral(m)})
+			}
+			continue
+		}
+		if tsReturnAnyRe.MatchString(trimmed) {
+			if eventSet {
+				return nil, fmt.Errorf("machine %s: a computed return inside an event case cannot be compared; return a string literal", id)
+			}
+			continue
+		}
+		if m := tsDefaultRe.FindStringSubmatch(trimmed); m != nil {
+			rest := strings.TrimSpace(m[1])
+			if rest == "" || strings.HasPrefix(rest, "throw ") || strings.HasPrefix(rest, "break") {
+				continue
+			}
+			return nil, fmt.Errorf("machine %s: a default arm must not declare a transition; defaults are guards, not triples", id)
+		}
+		if strings.HasPrefix(trimmed, "throw ") || strings.HasPrefix(trimmed, "break") {
+			continue
+		}
+		return nil, fmt.Errorf("machine %s: %q does not parse; the canonical typescript shape is a nested switch reducer with string-literal cases and returns", id, trimmed)
+	}
+	return nil, fmt.Errorf("machine %s: the state switch never closes", id)
+}

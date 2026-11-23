@@ -27,9 +27,10 @@ var parityMachineMarkerRe = `^// pylon:machine (\S+)\s*$`
 // extractors per language. A binding for a language missing here has
 // no shipped transition extractor yet.
 var builtinParityTransitionExtractors = map[string]func(source, machineID string) ([]parityTransition, error){
-	"go":   extractGoTransitions,
-	"php":  extractPhpTransitions,
-	"rust": extractRustTransitions,
+	"go":         extractGoTransitions,
+	"php":        extractPhpTransitions,
+	"rust":       extractRustTransitions,
+	"typescript": extractTSTransitions,
 }
 
 // goConstEntry is one const-table row: the token a case identifier

@@ -10,6 +10,10 @@ updated: 2026-11-22
 
 Notable changes to the Pylons format and `pylon` CLI.
 
+## 2026-11-23
+
+- TypeScript joins the parity transition profiles: the canonical shape is the nested switch reducer (outer switch on the state, inner switches on the event, string-literal returns) under the `// pylon:machine` directive. Absorbs, default arms, and throw guards declare no triples; computed returns, casts, single-line case bodies, and other reducer logic fail closed.
+
 ## 2026-11-22
 - Full-product review hardening: symlinked ledger roots and checkouts resolve instead of vanishing, aroma queries cross roots and cwds, ref-pinned contract grep honors the skip list, parity extractors read rustfmt wrapping, comments, and raw strings, self-update keeps exec bits, the parity wire keeps valued-empty strings and event-less triples, and the low sweep closes graph nulls, URI fragment edges, pathspec derivation, and doc corruption.
 - Exit review: unwritten files resolve through symlinked checkouts so protected globs fire before the first write, parity delimiter matching treats comments as prose and single quotes as line-bounded strings, the worktree contract walk skips underscore directories, release.sh builds the binary before the gates, and the feature guide carries gate, sync, and reflect rows.
