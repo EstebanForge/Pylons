@@ -257,6 +257,26 @@ func extractRustTransitions(source, machineID string) ([]parityTransition, error
 // tokens but parses to nothing is a canonical-shape error, never a
 // silent skip. A multi-line arm body ({ after =>) is a
 // canonical-shape error too.
+// rustPatternBinds reports whether a parenthesized pattern carries a
+// lowercase bare identifier: that is a Rust binding, not a state path,
+// so the arm is a catch-all and declares no triples. Single-identifier
+// adjacency patterns stay states by design.
+var rustBindingRe = regexp.MustCompile(`^[a-z][A-Za-z0-9_]*$`)
+
+func rustPatternBinds(alt string) bool {
+	inner := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(alt), "("), ")")
+	for _, p := range strings.Split(inner, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" || p == "_" {
+			continue
+		}
+		if rustBindingRe.MatchString(p) {
+			return true
+		}
+	}
+	return false
+}
+
 func parseRustArm(arm string) ([]parityTransition, error) {
 	before, after, ok := strings.Cut(arm, "=>")
 	if !ok {
@@ -295,7 +315,7 @@ func parseRustArm(arm string) ([]parityTransition, error) {
 	var triples []parityTransition
 	for _, alt := range strings.Split(before, "|") {
 		alt = strings.TrimSpace(alt)
-		if rustPatternIsWildcard(alt) {
+		if rustPatternIsWildcard(alt) || rustPatternBinds(alt) {
 			return triples, nil
 		}
 		to, ok := rustStateToken(value)
@@ -437,16 +457,33 @@ func extractTSTransitions(source, machineID string) ([]parityTransition, error) 
 func tsSwitchTriples(lines []string, id string) ([]parityTransition, error) {
 	depth := 0 // 1 = the state switch, 2 = an event switch
 	fromSet, eventSet := false, false
+	caseBody, defaultSeen := true, false
+	inBlock := false
 	var from, event string
 	var out []parityTransition
 	leading, leadBudget := true, 0
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "/*") || strings.HasPrefix(trimmed, "*") {
+		if trimmed == "" || strings.HasPrefix(trimmed, "//") {
+			continue
+		}
+		// Block comments stay open across lines and swallow everything,
+		// so prose braces and case-like lines cannot touch the parse.
+		if inBlock {
+			if strings.Contains(trimmed, "*/") {
+				inBlock = false
+			}
+			continue
+		}
+		if strings.HasPrefix(trimmed, "/*") || strings.HasPrefix(trimmed, "*") {
+			if strings.HasPrefix(trimmed, "/*") {
+				inBlock = !strings.Contains(trimmed, "*/")
+			}
 			continue
 		}
 		if tsSwitchRe.MatchString(trimmed) {
 			leading = false
+			caseBody, defaultSeen = true, false
 			depth++
 			continue
 		}
@@ -464,6 +501,10 @@ func tsSwitchTriples(lines []string, id string) ([]parityTransition, error) {
 			if depth == 0 {
 				return nil, fmt.Errorf("machine %s: an unbalanced closing brace inside the reducer", id)
 			}
+			if !caseBody {
+				return nil, fmt.Errorf("machine %s: an empty case body declares a state the code never uses; write the inner switch or the return", id)
+			}
+			caseBody, defaultSeen = true, false
 			depth--
 			if depth <= 0 {
 				if len(out) == 0 {
@@ -476,6 +517,10 @@ func tsSwitchTriples(lines []string, id string) ([]parityTransition, error) {
 			continue
 		}
 		if m := tsCaseRe.FindStringSubmatch(trimmed); m != nil {
+			if !caseBody {
+				return nil, fmt.Errorf("machine %s: an empty case body declares a state the code never uses; write the inner switch or the return", id)
+			}
+			caseBody, defaultSeen = false, false
 			switch depth {
 			case 1:
 				from, fromSet = tsLiteral(m), true
@@ -491,12 +536,17 @@ func tsSwitchTriples(lines []string, id string) ([]parityTransition, error) {
 			continue
 		}
 		if m := tsReturnRe.FindStringSubmatch(trimmed); m != nil {
+			caseBody = true
+			if defaultSeen {
+				return nil, fmt.Errorf("machine %s: a return under default declares a fallback transition; defaults are guards, not triples", id)
+			}
 			if eventSet {
 				out = append(out, parityTransition{from: from, event: event, to: tsLiteral(m)})
 			}
 			continue
 		}
 		if tsReturnAnyRe.MatchString(trimmed) {
+			caseBody = true
 			if eventSet {
 				return nil, fmt.Errorf("machine %s: a computed return inside an event case cannot be compared; return a string literal", id)
 			}
@@ -505,11 +555,15 @@ func tsSwitchTriples(lines []string, id string) ([]parityTransition, error) {
 		if m := tsDefaultRe.FindStringSubmatch(trimmed); m != nil {
 			rest := strings.TrimSpace(m[1])
 			if rest == "" || strings.HasPrefix(rest, "throw ") || strings.HasPrefix(rest, "break") {
+				eventSet, event, defaultSeen = false, "", rest == ""
+				caseBody = true
 				continue
 			}
 			return nil, fmt.Errorf("machine %s: a default arm must not declare a transition; defaults are guards, not triples", id)
 		}
 		if strings.HasPrefix(trimmed, "throw ") || strings.HasPrefix(trimmed, "break") {
+			caseBody = true
+			defaultSeen = false
 			continue
 		}
 		return nil, fmt.Errorf("machine %s: %q does not parse; the canonical typescript shape is a nested switch reducer with string-literal cases and returns", id, trimmed)

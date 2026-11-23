@@ -74,3 +74,60 @@ func TestCheckTargetProtectedGlobCatchesUnwrittenFile(t *testing.T) {
 		t.Fatalf("unwritten file path came back %q, want src/new.go", got.path)
 	}
 }
+
+// Lexical cleaning before symlink resolution collapses .. through a
+// link: proj/outside_link/../src/x.go resolves on disk to a file OUTSIDE
+// the project, and the attribution must follow the disk, not the text.
+func TestCheckTargetDotDotThroughSymlinkAttribution(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	if err := os.MkdirAll(filepath.Join(real, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(base, "kb", "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "kb", "manifests", "pylons.yaml"),
+		[]byte("version: 1\nextensions: [go]\nprojects:\n  svc:\n    path: "+filepath.Join(base, "real")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(base, "elsewhere"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(base, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "src", "api.go"), []byte("package api\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// real/outside_link/../src lands at base/src: outside the project.
+	if err := os.Symlink(filepath.Join(base, "elsewhere"), filepath.Join(real, "outside_link")); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(base, "kb", "packages", "core.md"), `---
+title: "Core"
+type: package
+status: active
+package: core
+components: [svc]
+protected:
+  - glob: "src/**"
+    owner: human-only
+    reason: "vault keys"
+---
+
+# Core
+`)
+	kb := filepath.Join(base, "kb")
+	// real/outside_link/../src/api.go lives at base/src/api.go on disk:
+	// outside the project, so it must stay unattributed. String concat
+	// keeps the .. on the wire: filepath.Join would Clean it away before
+	// the engine sees it.
+	target := real + "/outside_link/../src/api.go"
+	findings := Check(kb, []string{target})
+	for _, f := range findings {
+		if f.RuleID == "PYLON029" {
+			t.Fatalf("a target resolving outside the project must not attribute to it: %+v", f)
+		}
+	}
+}

@@ -135,3 +135,54 @@ func TestTSTransitionsCastReturnFails(t *testing.T) {
 		t.Fatal("a cast return must fail closed; declare the literal only")
 	}
 }
+
+// A bare default: clears the event scope, so a return after it can never
+// attach to the previous event as a phantom triple.
+func TestTSTransitionsDefaultReturnFailsClosed(t *testing.T) {
+	src := strings.Replace(tsMachineFixture,
+		`default:
+          throw new Error("unknown event");`,
+		"default:\n          return \"cancelled\";", 1)
+	_, err := extractTSTransitions(src, "order")
+	if err == nil || !strings.Contains(err.Error(), "default") {
+		t.Fatalf("a return under default must fail closed, got: %v", err)
+	}
+}
+
+// A case with no body between it and the next case drops its state
+// silently; that must fail closed instead.
+func TestTSTransitionsEmptyCaseFails(t *testing.T) {
+	src := `// pylon:machine order
+function next(s: State, e: Event): State {
+  switch (s) {
+    case "pending":
+      switch (e) {
+        case "pay":
+          return "paid";
+      }
+    case "paid":
+    case "refunded":
+      return s;
+  }
+}
+`
+	if _, err := extractTSTransitions(src, "order"); err == nil || !strings.Contains(err.Error(), "empty case") {
+		t.Fatalf("an empty case body must fail closed, got: %v", err)
+	}
+}
+
+// Block comments inside the reducer may carry braces and case-like prose;
+// none of it may open phantom states or close the switch early.
+func TestTSTransitionsBlockCommentBody(t *testing.T) {
+	src := strings.Replace(tsMachineFixture, `  switch (s) {
+    case "pending":`, `  switch (s) {
+    /* maps pending to paid
+       } stray brace in prose
+       case "fake": return "fake";
+     */
+    case "pending":`, 1)
+	got := tsTriples(t, src, "order")
+	if len(got) != 3 {
+		t.Fatalf("block comment must stay inert, got %+v", got)
+	}
+}

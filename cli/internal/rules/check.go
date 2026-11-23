@@ -108,12 +108,15 @@ func Check(kbRoot string, targets []string) []report.Finding {
 
 		var pkg resolve.PackageFrontMatter
 		if resolve.ParsePackageFrontMatter(content, &pkg) && pkg.Type == "package" {
-			// The filter matches the target alias against the package name
-			// AND its declared components, so a doc titled differently from
-			// the project alias still protects the alias's paths.
-			comps := pkg.Components
-			if pkg.Package != "" && !slices.Contains(comps, pkg.Package) {
-				comps = append([]string{pkg.Package}, comps...)
+			// The alias filter exists only when the doc declares which
+			// aliases it speaks for; a components-less package covers
+			// every alias its globs match.
+			var comps []string
+			if len(pkg.Components) > 0 {
+				comps = pkg.Components
+				if pkg.Package != "" && !slices.Contains(comps, pkg.Package) {
+					comps = append([]string{pkg.Package}, comps...)
+				}
 			}
 			for _, raw := range pkg.Protected {
 				m, ok := raw.(map[string]any)
@@ -169,7 +172,9 @@ func normalizeCheckTarget(kbRoot, raw string, cfg config.Config) normalizedTarge
 		// symlinked path and a query through the realpath name one directory.
 		// ResolveExisting keeps not-yet-written files inside the match: a
 		// guard must fire on the file an agent is about to create.
-		absTarget := resolve.ResolveExisting(filepath.Clean(raw))
+		// No lexical Clean before resolution: Clean collapses .. through a
+		// symlink and misattributes paths the OS resolves elsewhere.
+		absTarget := resolve.ResolveExisting(raw)
 		type match struct {
 			alias string
 			rel   string

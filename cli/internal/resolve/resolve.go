@@ -558,26 +558,63 @@ func EvalRoot(root string) string {
 	return root
 }
 
-// ResolveExisting evaluates the deepest existing ancestor of path through
-// symlinks and re-appends the remainder, so a file that does not exist
-// yet resolves to its future real path (EvalSymlinks alone fails on any
-// missing final component). Returns path unchanged when nothing along it
-// resolves.
+// ResolveExisting walks path one component at a time, following symlinks
+// and popping .. against the resolved parent on disk. EvalSymlinks alone
+// cannot serve here: it pre-cleans, collapsing .. against the lexical
+// text, so real/link/../src resolves to real/src even when the OS lands
+// elsewhere. A missing tail resolves to its future real path: the deepest
+// existing prefix is evaluated and the remaining segments re-appended
+// lexically against it. Returns path unchanged when a component cannot
+// be resolved.
 func ResolveExisting(path string) string {
-	path = filepath.Clean(path)
-	cur := path
-	var tail []string
-	for {
-		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
-			return filepath.Join(append([]string{resolved}, tail...)...)
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	abs := strings.HasPrefix(path, "/")
+	resolved := ""
+	if abs {
+		resolved = "/"
+	}
+	for i := 0; i < len(parts); i++ {
+		seg := parts[i]
+		if seg == "" || seg == "." {
+			continue
 		}
-		dir, base := filepath.Split(cur)
-		if dir == "" || dir == cur {
+		if seg == ".." {
+			if resolved != "" {
+				resolved = filepath.Dir(resolved)
+			}
+			continue
+		}
+		next := filepath.Join(resolved, seg)
+		linked := false
+		for d := 0; d < 8; d++ {
+			fi, err := os.Lstat(next)
+			if err != nil {
+				// Missing: the rest stays lexical against the real prefix.
+				return filepath.Join(resolved, strings.Join(parts[i:], "/"))
+			}
+			if fi.Mode()&os.ModeSymlink == 0 {
+				linked = true
+				break
+			}
+			dst, err := os.Readlink(next)
+			if err != nil {
+				return path
+			}
+			if filepath.IsAbs(filepath.FromSlash(dst)) {
+				next = filepath.FromSlash(dst)
+			} else {
+				next = filepath.Join(filepath.Dir(next), filepath.FromSlash(dst))
+			}
+		}
+		if !linked {
 			return path
 		}
-		tail = append([]string{base}, tail...)
-		cur = filepath.Clean(dir)
+		resolved = next
 	}
+	if resolved == "" {
+		return path
+	}
+	return resolved
 }
 
 func grepTarget(root, ref, needle string) string {

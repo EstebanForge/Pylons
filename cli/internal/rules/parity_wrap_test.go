@@ -34,9 +34,12 @@ func TestRustWrappedTupleAndRHSArmsExtract(t *testing.T) {
 
 // A serde rename holding a brace must not end the enum scan.
 func TestRustSerdeBraceInStringExtracts(t *testing.T) {
+	// The closing brace sits inside a string literal INSIDE the enum body:
+	// a naive brace counter closes the block early and loses Paid, so this
+	// fixture is the honesty gate for the string-aware scanner.
 	src := `#[derive(Serialize)]
-#[serde(rename = "pending}")]
 pub enum OrderState {
+    #[serde(rename = "pending}")]
     Pending,
     Paid,
 }
@@ -142,12 +145,29 @@ func TestCommentApostrophesDoNotOpenQuotes(t *testing.T) {
 // An apostrophe in prose near the enum never corrupts block matching:
 // the canonical member parser still judges what is inside.
 func TestRustApostropheNearEnumIsInert(t *testing.T) {
-	rust := "pub enum State {\n    Idle,\n    Busy,\n}\n\n// A borrowed handle wraps &'a str; the enum above stays canonical.\n"
+	// The apostrophe sits inside the enum body: a naive quote-span opener
+	// would swallow the remaining cases, so this fixture gates the
+	// line-bounded single-quote heuristic.
+	rust := "pub enum State {\n    // a borrowed handle wraps &'a str\n    Idle,\n    Busy,\n}\n"
 	cases, err := builtinParityExtractors["rust"](rust, "State")
 	if err != nil {
 		t.Fatalf("nearby apostrophe prose must not break extraction: %v", err)
 	}
 	if len(cases) != 2 {
 		t.Fatalf("got %d cases, want 2", len(cases))
+	}
+}
+
+// Lowercase bare identifiers in a parenthesized pattern are Rust
+// bindings, not states: (s, e) => Err(...) is a catch-all and must
+// fall through instead of extracting a phantom triple.
+func TestRustTupleBindingsFallThrough(t *testing.T) {
+	src := "// pylon:machine sync\nimpl SyncState {\n    fn next(&self, e: Event) -> SyncState {\n        match (self, e) {\n            (State::Idle, Event::Pull) => State::Pulling,\n            (s, e) => Err(format!(\"x\")),\n            (other, ev) => Ok(other),\n            (s, _) => Err(no),\n            _ => State::Idle,\n        }\n    }\n}\n"
+	trs, err := extractRustTransitions(src, "sync")
+	if err != nil {
+		t.Fatalf("binding arms must fall through: %v", err)
+	}
+	if len(trs) != 1 || trs[0] != (parityTransition{from: "Idle", event: "Pull", to: "Pulling"}) {
+		t.Fatalf("want only the canonical triple, got %+v", trs)
 	}
 }

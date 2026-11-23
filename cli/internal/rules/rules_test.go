@@ -192,3 +192,64 @@ protected:
 		t.Fatalf("protected glob must fire through components, got %+v", findings)
 	}
 }
+
+// A package doc with no components: list covers every alias; the alias
+// filter exists only when the doc declares which aliases it speaks for.
+func TestProtectedGlobNoComponentsCoversAliases(t *testing.T) {
+	kb := t.TempDir()
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"),
+		"version: 1\nextensions: [go]\nprojects:\n  svc:\n    path: svc\n")
+	mustWrite(t, filepath.Join(kb, "svc/src/api.go"), "package svc\n")
+	mustWrite(t, filepath.Join(kb, "packages/core.md"), `---
+title: "Core"
+type: package
+status: active
+package: core
+protected:
+  - glob: "**"
+    owner: human-only
+    reason: "vault keys"
+---
+
+# Core
+`)
+	findings := Check(kb, []string{filepath.Join(kb, "svc", "src", "api.go")})
+	found := false
+	for i := range findings {
+		if findings[i].RuleID == "PYLON029" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("a components-less package must still protect its globs, got %+v", findings)
+	}
+}
+
+// Declared components exclude foreign aliases: a package speaking for
+// svc must not guard other's paths.
+func TestProtectedGlobComponentsExcludeForeignAlias(t *testing.T) {
+	kb := t.TempDir()
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"),
+		"version: 1\nextensions: [go]\nprojects:\n  svc:\n    path: svc\n  other:\n    path: other\n")
+	mustWrite(t, filepath.Join(kb, "other/api.go"), "package other\n")
+	mustWrite(t, filepath.Join(kb, "packages/core.md"), `---
+title: "Core"
+type: package
+status: active
+package: core
+components: [svc]
+protected:
+  - glob: "**"
+    owner: human-only
+    reason: "vault keys"
+---
+
+# Core
+`)
+	findings := Check(kb, []string{filepath.Join(kb, "other", "api.go")})
+	for i := range findings {
+		if findings[i].RuleID == "PYLON029" {
+			t.Fatalf("a foreign alias must not fire a components-scoped glob: %+v", findings[i])
+		}
+	}
+}

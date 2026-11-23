@@ -31,10 +31,15 @@ func runGate(kbRoot, stage string) int {
 
 func gatePreCommit(kbRoot string) int {
 	// Commit-time convenience: auto-stage manifest drift. Push time blocks instead.
+	// Only the kinds the generate knob enables take part: a foreign-owned
+	// manifest (generate: []) is nobody's drift to sweep into this commit,
+	// and diffing a disabled kind with no file on disk is a git fatal.
+	var kinds []string
 	for _, kind := range []string{"rules", "packages"} {
 		if !generatesManifest(kbRoot, kind) {
 			continue
 		}
+		kinds = append(kinds, kind)
 		path := filepath.Join(kbRoot, "manifests", kind+".json")
 		if kind == "rules" {
 			cmdManifestJSON(path, rules.AllRules(), false)
@@ -42,12 +47,20 @@ func gatePreCommit(kbRoot string) int {
 			cmdManifestJSON(path, rules.BuildPackagesManifest(kbRoot), false)
 		}
 	}
-	if _, err := gitOut(kbRoot, "diff", "--exit-code", "manifests/rules.json", "manifests/packages.json"); err != nil {
-		// Non-zero exit means drift; stage it.
-		if _, err := gitOut(kbRoot, "add", "manifests/rules.json", "manifests/packages.json"); err != nil {
-			fmt.Fprintf(os.Stderr, "pylon: stage manifests: %v\n", err)
-		} else {
-			fmt.Fprintln(os.Stderr, "pylon: auto-staged regenerated manifests")
+	if len(kinds) > 0 {
+		var paths []string
+		for _, kind := range kinds {
+			paths = append(paths, "manifests/"+kind+".json")
+		}
+		diff := append([]string{"diff", "--exit-code", "--"}, paths...)
+		if _, err := gitOut(kbRoot, diff...); err != nil {
+			// Non-zero exit means drift; stage it.
+			add := append([]string{"add", "--"}, paths...)
+			if _, err := gitOut(kbRoot, add...); err != nil {
+				fmt.Fprintf(os.Stderr, "pylon: stage manifests: %v\n", err)
+			} else {
+				fmt.Fprintln(os.Stderr, "pylon: auto-staged regenerated manifests")
+			}
 		}
 	}
 
