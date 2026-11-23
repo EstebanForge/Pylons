@@ -138,7 +138,7 @@ main() {
 		if "$work/stage/bin/pylon" self-update --from "$work/stage" --pylons "$DEST"; then
 			log "update applied; review with: cd $q2 && git status"
 		else
-			die "self-update reported drift or failed; inspect $DEST (.pylons-new copies) or rerun with --force"
+			die "self-update reported drift or failed; inspect $DEST (.pylons-new copies), resolve or accept each one, then rerun this installer"
 		fi
 		log "done"
 		return 0

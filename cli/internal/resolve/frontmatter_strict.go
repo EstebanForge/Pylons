@@ -21,7 +21,7 @@ var TemplateKeys = map[string][]string{
 	"investigation": {"title", "type", "status", "severity", "reproducible", "created", "updated", "owners", "ticket", "components", "links", "description", "tags"},
 	"package":       {"title", "type", "status", "created", "updated", "owners", "ticket", "package", "repo", "ref", "tier", "rollout", "depends_on", "components", "exposes", "protected", "description", "tags"},
 	"plan":          {"title", "type", "status", "created", "updated", "owners", "ticket", "artifact", "target_release", "components", "links", "description", "slice", "scenarios", "tags", "contract"},
-	"quirk":         {"title", "type", "status", "created", "updated", "owners", "package", "sources", "contracts", "guard", "guardrail", "ai_authored_contributed", "volume_pressure", "tags"},
+	"quirk":         {"title", "type", "status", "created", "updated", "owners", "description", "package", "sources", "contracts", "guard", "guardrail", "ai_authored_contributed", "volume_pressure", "tags"},
 	"reference":     {"title", "type", "status", "created", "updated", "owners", "sources", "description", "tags"},
 	"ticket":        {"title", "type", "kind", "status", "priority", "created", "updated", "owners", "components", "plan", "description", "tags"},
 }

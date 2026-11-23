@@ -196,6 +196,7 @@
       "created",
       "updated",
       "owners",
+      "description",
       "package",
       "sources",
       "contracts",
