@@ -1170,6 +1170,7 @@ type docEntry struct {
 }
 
 func scanDocs(kbRoot string, includeArchive bool) []docEntry {
+	kbRoot = resolve.EvalRoot(kbRoot)
 	var docs []docEntry
 	_ = filepath.WalkDir(kbRoot, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {

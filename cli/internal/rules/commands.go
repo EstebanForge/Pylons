@@ -285,6 +285,7 @@ type PackageManifestEntry struct {
 
 // BuildPackagesManifest walks packages/ and returns sorted package entries.
 func BuildPackagesManifest(kbRoot string) []PackageManifestEntry {
+	kbRoot = resolve.EvalRoot(kbRoot)
 	pkgDir := filepath.Join(kbRoot, "packages")
 	var out []PackageManifestEntry
 	_ = filepath.WalkDir(pkgDir, func(p string, d fs.DirEntry, err error) error {

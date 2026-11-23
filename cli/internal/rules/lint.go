@@ -57,6 +57,7 @@ func isRootSkippedDir(kbRoot, dirPath string) bool {
 
 // Lint runs deterministic checks across all markdown files in kbRoot.
 func Lint(kbRoot string, opts LintOptions) []report.Finding {
+	kbRoot = resolve.EvalRoot(kbRoot)
 	cfg, err := config.Load(kbRoot)
 	if err != nil {
 		return []report.Finding{{

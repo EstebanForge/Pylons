@@ -23,6 +23,7 @@ type normalizedTarget struct {
 
 // Check intersects target paths against active plans and package protected globs.
 func Check(kbRoot string, targets []string) []report.Finding {
+	kbRoot = resolve.EvalRoot(kbRoot)
 	cfg, cfgErr := config.Load(kbRoot)
 	var findings []report.Finding
 	if cfgErr != nil {

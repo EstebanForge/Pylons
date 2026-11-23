@@ -471,7 +471,7 @@ func resolveSchema(projectRoot, ref string, kind Kind, id string) Verdict {
 // depth.
 func grepTargetRegex(root, ref string, exts map[string]bool, pattern string) string {
 	lineRe := regexp.MustCompile(pattern)
-	root = evalRoot(root)
+	root = EvalRoot(root)
 	if ref != "" && hasGitRepo(root) {
 		out, err := GitRun(root, nil, "grep", "-I", "-m", "1", "-E", "-e", pattern, ref,
 			"--", "*.php",
@@ -543,9 +543,9 @@ func grepTargetRegex(root, ref string, exts map[string]bool, pattern string) str
 	return found
 }
 
-// evalRoot follows a symlinked project root: WalkDir does not follow a
+// EvalRoot follows a symlinked project root: WalkDir does not follow a
 // root symlink, so the whole tree would read as absent.
-func evalRoot(root string) string {
+func EvalRoot(root string) string {
 	if resolved, err := filepath.EvalSymlinks(root); err == nil {
 		return resolved
 	}
@@ -590,7 +590,7 @@ func grepProject(root, needle string) string {
 	if root == "" || needle == "" {
 		return ""
 	}
-	root = evalRoot(root)
+	root = EvalRoot(root)
 	var found string
 	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
