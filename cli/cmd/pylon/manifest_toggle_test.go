@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -191,7 +192,12 @@ func seedManifest(t *testing.T, root, version string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := exec.Command(bin, "manifest", "product", "--release-version", version, "--pylons", root).Output()
+	args := []string{"manifest", "product", "--release-version", version, "--pylons", root}
+	// A staged tree carrying its binary pins it, the way a release does.
+	if _, err := os.Stat(filepath.Join(root, "bin", "pylon")); err == nil {
+		args = append(args, "--binary", runtime.GOOS+"-"+runtime.GOARCH+"="+filepath.Join(root, "bin", "pylon"))
+	}
+	out, err := exec.Command(bin, args...).Output()
 	if err != nil {
 		t.Fatalf("manifest product: %v\n%s", err, out)
 	}
@@ -299,29 +305,31 @@ func TestLintRejectsStrayPositionals(t *testing.T) {
 }
 
 // The release manifest must pin every platform binary the updater may
-// install; --binary extends the host pin with the cross builds.
+// install; the builder itself pins nothing because the host build is
+// not the distributed artifact (stripped cross builds hash differently).
 func TestManifestProductPinsPlatformBinaries(t *testing.T) {
 	pwd, _ := os.Getwd()
 	repo := filepath.Dir(filepath.Dir(filepath.Dir(pwd)))
+	bin := filepath.Join(repo, "bin", "pylon")
 	code, out, stderr := runPylon(t, repo, "manifest", "product",
-		"--release-version", "9.9.9", "--binary", "darwin-arm64="+filepath.Join(repo, "bin", "pylon"))
+		"--release-version", "9.9.9", "--binary", "darwin-arm64="+bin, "--binary", "linux-amd64="+bin)
 	if code != 0 {
-		t.Fatalf("pinning a cross binary must succeed: %d %s", code, stderr)
+		t.Fatalf("pinning cross binaries must succeed: %d %s", code, stderr)
 	}
 	if !strings.Contains(out, "darwin-arm64") || !strings.Contains(out, "binary_sha256") {
 		t.Fatalf("the manifest must carry the platform pin: %s", out)
 	}
 
-	// The host auto-pin makes an identical explicit pin idempotent; a
+	// Repeating one platform with identical content is idempotent; a
 	// conflicting hash for the same platform is a release bug.
 	code, _, _ = runPylon(t, repo, "manifest", "product",
-		"--release-version", "9.9.9", "--binary", "linux-amd64="+filepath.Join(repo, "bin", "pylon"))
+		"--release-version", "9.9.9", "--binary", "linux-amd64="+bin, "--binary", "linux-amd64="+bin)
 	if code != 0 {
 		t.Fatalf("an identical duplicate pin must be accepted, got %d", code)
 	}
 	other := filepath.Join(repo, "LICENSE")
 	code, _, stderr = runPylon(t, repo, "manifest", "product",
-		"--release-version", "9.9.9", "--binary", "linux-amd64="+other)
+		"--release-version", "9.9.9", "--binary", "linux-amd64="+bin, "--binary", "linux-amd64="+other)
 	if code != 1 || !strings.Contains(stderr, "different hash") {
 		t.Fatalf("a conflicting pin must fail, got %d %s", code, stderr)
 	}

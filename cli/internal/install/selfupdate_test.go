@@ -40,6 +40,11 @@ func writeProductManifestFor(t *testing.T, root, version string) {
 	if err != nil {
 		t.Fatalf("BuildProductManifest: %v", err)
 	}
+	// The builder pins nothing; fixtures pin the staged tree's binary
+	// the way a real release does, so the updater's pin check runs.
+	if data, err := os.ReadFile(filepath.Join(root, "bin", "pylon")); err == nil {
+		m.Binary = map[string]string{runtime.GOOS + "-" + runtime.GOARCH: sha256Hex(data)}
+	}
 	data, err := WriteProductManifest(m)
 	if err != nil {
 		t.Fatal(err)

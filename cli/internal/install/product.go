@@ -12,7 +12,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -127,14 +126,6 @@ func BuildProductManifest(root, version string) (ProductManifest, error) {
 			return m, fmt.Errorf("product layer missing %s", rel)
 		}
 		m.Files[rel] = sha256Hex(data)
-	}
-	// Pin the host build: a release manifest that cannot verify the
-	// binary it ships with must not be produced. Cross-platform hashes
-	// join through the manifest command's --binary flags at release time.
-	if data, err := os.ReadFile(filepath.Join(root, "bin", "pylon")); err == nil {
-		m.Binary = map[string]string{
-			runtime.GOOS + "-" + runtime.GOARCH: sha256Hex(data),
-		}
 	}
 	for _, tree := range productTrees {
 		base := filepath.Join(root, filepath.FromSlash(tree))
