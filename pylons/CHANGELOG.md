@@ -41,6 +41,7 @@ Roadmap build-out. Every lint finding now carries a remediation line sourced fro
 - Licensed as Apache-2.0
 
 ## 2026-11-22
+- Full-product review hardening: symlinked ledger roots and checkouts resolve instead of vanishing, aroma queries cross roots and cwds, ref-pinned contract grep honors the skip list, parity extractors read rustfmt wrapping, comments, and raw strings, self-update keeps exec bits, the parity wire keeps valued-empty strings and event-less triples, and the low sweep closes graph nulls, URI fragment edges, pathspec derivation, and doc corruption.
 
 - Self-update writes the staged product manifest, so a second hop compares against the hashes actually installed; identical content is skipped instead of rewritten, and the binary swap checks its own hash.
 - Self-update rejects release-manifest keys that could escape the ledger (absolute paths, parent segments, drive forms), on both the staged and the installed side.
