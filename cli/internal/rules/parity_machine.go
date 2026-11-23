@@ -62,8 +62,7 @@ func goConstTables(f *ast.File) map[string]goConstEntry {
 				entry := goConstEntry{token: name.Name}
 				if i < len(vs.Values) {
 					if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-						entry.token = strings.TrimSpace(lit.Value)
-						entry.token = strings.Trim(entry.token, `"`)
+						entry.token = strings.Trim(lit.Value, "\"`")
 						entry.valued = true
 					}
 				}

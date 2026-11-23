@@ -308,11 +308,11 @@ func scanRoutePaths(root string, paths []string) map[string]bool {
 
 var (
 	goConstStartRe = regexp.MustCompile(`(?m)^\s*const\s*\(`)
-	goConstLineRe  = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?::?\s*([A-Za-z_][\w.]*))?\s*(?:=\s*(?:(iota)|"((?:[^"\\]|\\.)*)"))?\s*$`)
+	goConstLineRe  = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?::?\s*([A-Za-z_][\w.]*))?\s*(?:=\s*(?:(iota)|"((?:[^"\\]|\\.)*)"|` + "`" + `((?:[^` + "`" + `])*)` + "`" + `))?\s*$`)
 	declEnumRe     = regexp.MustCompile(`\benum\s+(\w+)`)
 	rustMemberRe   = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*[^,}\s]+)?\s*,?\s*$`)
-	phpMemberRe    = regexp.MustCompile(`^\s*case\s+([A-Za-z_]\w*)\s*(?:=\s*['"]((?:[^'\\]|\\.)*)['"])?\s*;`)
-	tsMemberRe     = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*'((?:[^'\\]|\\.)*)'|=\s*"((?:[^"\\]|\\.)*)")?\s*,?\s*$`)
+	phpMemberRe    = regexp.MustCompile(`^\s*case\s+([A-Za-z_]\w*)\s*(?:=\s*['"]((?:[^'\\]|\\.)*)['"]|=\s*(-?\d+))?\s*;`)
+	tsMemberRe     = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*'((?:[^'\\]|\\.)*)'|=\s*"((?:[^"\\]|\\.)*)"|=\s*(-?\d+))?\s*,?\s*$`)
 )
 
 // builtinProfileOrder fixes the language claim precedence when one
@@ -408,7 +408,7 @@ func extractGoEnum(source, enumName string) ([]parityCase, error) {
 		}
 		if len(cases) > 0 {
 			found = true
-			out = cases
+			out = append(out, cases...)
 		}
 	}
 	if !found {
@@ -443,6 +443,9 @@ func parseGoConstBlock(body, enumName string) ([]parityCase, error) {
 		c := parityCase{name: m[1], valued: valued}
 		if valued && m[3] == "" {
 			c.value = m[4]
+			if c.value == "" {
+				c.value = m[5]
+			}
 		}
 		out = append(out, c)
 	}
@@ -474,7 +477,7 @@ func extractBracedEnum(keyword, source, enumName string, memberRe *regexp.Regexp
 			return nil, err
 		}
 		found = true
-		out = cases
+		out = append(out, cases...)
 	}
 	if !found {
 		return nil, fmt.Errorf("no enum named %s found in the states_symbol file", enumName)
@@ -517,8 +520,26 @@ func matchDelim(s string, open, close byte) (string, bool) {
 		return "", false
 	}
 	depth := 0
+	// Quoted spans never count their delimiters: a serde rename holding
+	// a brace, a backtick literal, a PHP string would otherwise end the
+	// scan early. Fail-closed on the rare comment apostrophe that opens
+	// a phantom span.
+	var q byte
 	for i := start; i < len(s); i++ {
-		switch s[i] {
+		c := s[i]
+		if q != 0 {
+			if c == '\\' && q != '`' && i+1 < len(s) {
+				i++
+				continue
+			}
+			if c == q {
+				q = 0
+			}
+			continue
+		}
+		switch c {
+		case '\'', '"', '`':
+			q = c
 		case open:
 			depth++
 		case close:

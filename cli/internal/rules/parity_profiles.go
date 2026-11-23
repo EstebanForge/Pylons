@@ -76,6 +76,9 @@ func phpArrayTriples(lines []string, id string) ([]parityTransition, error) {
 	seenBody := false
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		if c := stripLineComment(trimmed); c != trimmed {
+			trimmed = strings.TrimSpace(c)
+		}
 		trimmed = strings.TrimSuffix(trimmed, ",")
 		if trimmed == "" || strings.HasPrefix(trimmed, "//") {
 			continue
@@ -190,29 +193,38 @@ func extractRustTransitions(source, machineID string) ([]parityTransition, error
 				continue
 			}
 		}
-		if !strings.Contains(trimmed, "=>") && arm.Len() == 0 {
+		if arm.Len() == 0 {
 			// Structural lines (the fn signature, the match header)
-			// carry no triples.
-			continue
+			// carry no triples. An arm opens on => or on a lone (
+			// (rustfmt's wrapped tuple pattern).
+			if trimmed != "(" && !strings.Contains(trimmed, "=>") {
+				continue
+			}
 		}
 		if arm.Len() > 0 {
 			// Continuation lines keep their commas: they separate the
-			// successor list items.
+			// successor list and tuple-pattern items.
 			arm.WriteString(" ")
 			arm.WriteString(trimmed)
 		} else {
-			arm.WriteString(strings.TrimSuffix(trimmed, ","))
+			arm.WriteString(trimmed)
 		}
 		armLines++
-		if depth := strings.Count(arm.String(), "[") - strings.Count(arm.String(), "]"); depth > 0 {
+		text := arm.String()
+		hasEndComma := strings.HasSuffix(text, ",")
+		text = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(text), ","))
+		depth := strings.Count(text, "[") - strings.Count(text, "]")
+		depth += strings.Count(text, "(") - strings.Count(text, ")")
+		// A trailing => continues only without a comma: `A => ,` is an
+		// empty value and must fail, not swallow the next arm.
+		if depth > 0 || (!hasEndComma && strings.HasSuffix(text, "=>")) {
 			if armLines > 50 {
 				return nil, fmt.Errorf("machine %s: adjacency arm never closes", machineID)
 			}
-			// rustfmt wraps long successor lists; keep reading lines
-			// until the bracket closes.
+			// rustfmt wraps long successor lists and tuple patterns;
+			// keep reading until brackets close and the value lands.
 			continue
 		}
-		text := strings.TrimSuffix(arm.String(), ",")
 		arm.Reset()
 		armLines = 0
 		trs, err := parseRustArm(text)
@@ -290,9 +302,13 @@ func parseRustArm(arm string) ([]parityTransition, error) {
 		if !ok {
 			return nil, fmt.Errorf("rust arm %q: cannot read the target state", arm)
 		}
-		alt = strings.TrimPrefix(alt, "(")
-		alt = strings.TrimSuffix(alt, ")")
-		parts := strings.Split(alt, ",")
+		alt = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(alt), "("), ")")
+		var parts []string
+		for _, p := range strings.Split(alt, ",") {
+			if strings.TrimSpace(p) != "" {
+				parts = append(parts, strings.TrimSpace(p))
+			}
+		}
 		switch len(parts) {
 		case 1:
 			from, ok := rustStateToken(strings.TrimSpace(parts[0]))
