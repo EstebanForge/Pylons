@@ -34,8 +34,30 @@ func newParityFixture(t *testing.T, lang, source, states, symbol string) (kb, ro
 	case "php":
 		mk("composer.json", "{\n  \"name\": \"svc/svc\"\n}\n")
 		mk("state.php", source)
+	case "c":
+		mk("Makefile", "all:\n\tcc -c state.c\n")
+		mk("state.c", source)
+	case "cpp":
+		mk("Makefile", "all:\n\tc++ -c state.cpp\n")
+		mk("state.cpp", source)
+		mk("state.h", source)
+	case "java":
+		mk("pom.xml", "<project/>\n")
+		mk("State.java", source)
+	case "kotlin":
+		mk("build.gradle.kts", "// kotlin build\n")
+		mk("State.kt", source)
+	case "dart":
+		mk("pubspec.yaml", "name: svc\n")
+		mk("state.dart", source)
+	case "sql":
+		mk("schema.sql", source)
 	}
-	exts := map[string]string{"go": "go", "rust": "rust", "typescript": "typescript", "php": "php"}[lang]
+	exts := map[string]string{
+		"go": "go", "rust": "rust", "typescript": "typescript", "php": "php",
+		"c": "c", "cpp": "cpp", "java": "java", "kotlin": "kotlin",
+		"dart": "dart", "sql": "sql",
+	}[lang]
 	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"),
 		"version: 1\nextensions: ["+exts+"]\nprojects:\n  svc:\n    path: "+root+"\n    ref: main\n")
 	fm := "---\ntitle: \"Message\"\ntype: domain-entity\nstatus: accepted\ncreated: 2026-11-20\nupdated: 2026-11-20\nowners: [o]\nstates: " + states + "\nstates_symbol: \"" + symbol + "\"\ntags: [domain]\n---\n\n# Message\n"

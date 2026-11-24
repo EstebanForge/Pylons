@@ -225,6 +225,11 @@ func projectIdentities(kbRoot string, cfg config.Config) []projectIdentity {
 		}
 		id.names = append(id.names, composerPrefixes(root)...)
 		id.names = append(id.names, pythonIdentities(root)...)
+		id.names = append(id.names, pomIdentity(root)...)
+		id.names = append(id.names, gradleIdentity(root)...)
+		if n := pubspecName(root); n != "" {
+			id.names = append(id.names, n)
+		}
 		slices.Sort(id.names)
 		id.names = slices.Compact(id.names)
 		if len(id.names) > 0 {
@@ -232,6 +237,175 @@ func projectIdentities(kbRoot string, cfg config.Config) []projectIdentity {
 		}
 	}
 	return out
+}
+
+// pomIdentity reads a maven project's own coordinates: only tags that
+// are direct children of <project> count, so an inherited parent block
+// and dependency coordinates never stand in for the project's own.
+// XML comments are skipped: a commented-out coordinate is not an
+// identity. Only the qualified group.artifact name is an identity; the
+// bare artifact name is not, because artifact words are too generic to
+// match import namespaces across languages.
+func pomIdentity(root string) []string {
+	raw, err := readManifest(filepath.Join(root, "pom.xml"))
+	if err != nil {
+		return nil
+	}
+	var group, artifact string
+	depth := 0
+	inComment := false
+	for _, line := range strings.Split(raw, "\n") {
+		t := stripXMLComments(line, &inComment)
+		t = strings.TrimSpace(t)
+		if t == "" {
+			continue
+		}
+		opens := strings.Count(t, "<") - strings.Count(t, "</") - strings.Count(t, "<?") - strings.Count(t, "<!")
+		closes := strings.Count(t, "</")
+		selfClose := strings.HasSuffix(t, "/>")
+		if depth == 1 {
+			if group == "" {
+				if m := pomGroupIdRe.FindStringSubmatch(t); m != nil {
+					group = m[1]
+				}
+			}
+			if artifact == "" {
+				if m := pomArtifactIdRe.FindStringSubmatch(t); m != nil {
+					artifact = m[1]
+				}
+			}
+		}
+		if selfClose {
+			continue
+		}
+		depth += opens - closes
+		if depth < 0 {
+			depth = 0
+		}
+	}
+	if artifact == "" || group == "" {
+		return nil
+	}
+	return []string{group + "." + artifact}
+}
+
+// stripXMLComments removes <!-- --> spans from one line, carrying an
+// unterminated comment across lines through inComment.
+func stripXMLComments(line string, inComment *bool) string {
+	var b strings.Builder
+	for i := 0; i < len(line); i++ {
+		if *inComment {
+			if i+2 < len(line) && line[i:i+3] == "-->" {
+				*inComment = false
+				i += 2
+			}
+			continue
+		}
+		if i+3 < len(line) && line[i:i+4] == "<!--" {
+			*inComment = true
+			i += 3
+			continue
+		}
+		b.WriteByte(line[i])
+	}
+	return b.String()
+}
+
+// gradleIdentity reads a gradle project's root name and group from the
+// groovy and kotlin dialects alike, in both quote styles; commented
+// lines never count.
+func gradleIdentity(root string) []string {
+	var name, group string
+	for _, f := range []string{"settings.gradle.kts", "settings.gradle"} {
+		raw, err := readManifest(filepath.Join(root, f))
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(raw, "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "//") {
+				continue
+			}
+			if m := gradleRootNameRe.FindStringSubmatch(line); m != nil {
+				name = m[1]
+				break
+			}
+		}
+		if name != "" {
+			break
+		}
+	}
+	for _, f := range []string{"build.gradle.kts", "build.gradle"} {
+		raw, err := readManifest(filepath.Join(root, f))
+		if err != nil {
+			continue
+		}
+		// Only a top-level group counts: a group inside a subprojects
+		// block names that submodule, not this project.
+		depth := 0
+		for _, line := range strings.Split(raw, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "//") {
+				continue
+			}
+			code := stripQuotedSpans(trimmed)
+			if depth == 0 {
+				if m := gradleGroupRe.FindStringSubmatch(line); m != nil {
+					group = m[1]
+					break
+				}
+			}
+			depth += strings.Count(code, "{") - strings.Count(code, "}")
+			if depth < 0 {
+				depth = 0
+			}
+		}
+		if group != "" {
+			break
+		}
+	}
+	if name == "" || group == "" {
+		return nil
+	}
+	return []string{group + "." + name}
+}
+
+// stripQuotedSpans removes single- and double-quoted spans so brace
+// counting never sees a brace inside a string.
+func stripQuotedSpans(line string) string {
+	var b strings.Builder
+	var q byte
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		if q != 0 {
+			if c == '\\' {
+				i++
+				continue
+			}
+			if c == q {
+				q = 0
+			}
+			continue
+		}
+		if c == '\'' || c == '"' {
+			q = c
+			continue
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+// pubspecName reads a dart project's pubspec name.
+func pubspecName(root string) string {
+	raw, err := readManifest(filepath.Join(root, "pubspec.yaml"))
+	if err != nil {
+		return ""
+	}
+	m := pubspecNameRe.FindStringSubmatch(raw)
+	if m == nil {
+		return ""
+	}
+	return m[1]
 }
 
 // enabledLanguages returns the enabled extension names for a project:
@@ -385,11 +559,20 @@ type importEdge struct {
 // per-language import extractors. Each returns specifiers; the caller
 // matches them against project identities.
 var (
-	tsImportRe  = regexp.MustCompile(`(?:\bfrom|\bimport\s*\(?\s*|\brequire\s*\(\s*)\s*['"]([^'"]+)['"]`)
-	pyImportRe  = regexp.MustCompile(`(?:^|\n)\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+(?:[ \t]*,[ \t]*[\w.]+)*))`)
-	rsImportRe  = regexp.MustCompile(`(?:^|\n)\s*(?:pub\s+)?use\s+([\w:]+)`)
-	rsCrateRe   = regexp.MustCompile(`extern\s+crate\s+([\w]+)`)
-	phpImportRe = regexp.MustCompile(`(?:^|\n)\s*use\s+(?:(?:function|const)\s+)?\\?([\w\\]+)`)
+	tsImportRe       = regexp.MustCompile(`(?:\bfrom|\bimport\s*\(?\s*|\brequire\s*\(\s*)\s*['"]([^'"]+)['"]`)
+	pyImportRe       = regexp.MustCompile(`(?:^|\n)\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+(?:[ \t]*,[ \t]*[\w.]+)*))`)
+	rsImportRe       = regexp.MustCompile(`(?:^|\n)\s*(?:pub\s+)?use\s+([\w:]+)`)
+	cIncludeRe       = regexp.MustCompile(`^\s*#\s*include\s*(?:<([^>]+)>|"([^"]+)")`)
+	javaImportRe     = regexp.MustCompile(`^\s*import\s+(?:static\s+)?([\w.]+)\s*;`)
+	kotlinImportRe   = regexp.MustCompile(`^\s*import\s+([\w.]+)(?:\s+as\s+\w+)?\s*(?://.*)?$`)
+	dartImportRe     = regexp.MustCompile(`^\s*(?:export\s+)?import\s+(?:"([^"]+)"|'([^']+)')`)
+	pomGroupIdRe     = regexp.MustCompile(`<groupId>([^<]+)</groupId>`)
+	pomArtifactIdRe  = regexp.MustCompile(`<artifactId>([^<]+)</artifactId>`)
+	gradleRootNameRe = regexp.MustCompile(`rootProject\.name\s*=\s*["']([^"']+)['"]`)
+	gradleGroupRe    = regexp.MustCompile(`^\s*group\s*(?:=\s*)?["']([^"']+)['"]`)
+	pubspecNameRe    = regexp.MustCompile(`(?m)^name:\s*(\S+)`)
+	rsCrateRe        = regexp.MustCompile(`extern\s+crate\s+([\w]+)`)
+	phpImportRe      = regexp.MustCompile(`(?:^|\n)\s*use\s+(?:(?:function|const)\s+)?\\?([\w\\]+)`)
 )
 
 // importLang binds one extension family to its extractor and matcher.
@@ -410,6 +593,78 @@ var importLangs = map[string]*importLang{
 		match: func(spec, name string) bool { return spec == name || strings.HasPrefix(spec, name+"::") }},
 	"php": {exts: setOf(".php"), extract: extractPhpImports,
 		match: func(spec, name string) bool { return spec == name || strings.HasPrefix(spec, name+"\\") }},
+	"java": {exts: setOf(".java"), extract: extractJavaImports,
+		match: func(spec, name string) bool { return spec == name || strings.HasPrefix(spec, name+".") }},
+	"kotlin": {exts: setOf(".kt", ".kts"), extract: extractKotlinImports,
+		match: func(spec, name string) bool { return spec == name || strings.HasPrefix(spec, name+".") }},
+	"dart": {exts: setOf(".dart"), extract: extractDartImports,
+		match: func(spec, name string) bool {
+			return spec == name || dartNamespace(spec) == name || strings.HasPrefix(dartNamespace(spec), name+"/")
+		}},
+}
+
+// dartNamespace strips the package: scheme so a pubspec name matches
+// its imports; dart: URIs name the SDK and never a project.
+func dartNamespace(spec string) string {
+	return strings.TrimPrefix(spec, "package:")
+}
+
+// extractJavaImports reads java import statements, static forms
+// included; on-demand wildcard imports (a.b.*) yield no edge because
+// they name no single project.
+func extractJavaImports(data []byte) []string {
+	var out []string
+	for _, line := range strings.Split(stripBlockComments(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "//") {
+			continue
+		}
+		for _, m := range javaImportRe.FindAllStringSubmatch(line, -1) {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
+// extractKotlinImports reads kotlin import statements; kotlin needs
+// its own shape because it carries no trailing semicolon, and an alias
+// keeps the imported name, not the alias. A trailing line comment is
+// allowed.
+func extractKotlinImports(data []byte) []string {
+	var out []string
+	for _, line := range strings.Split(stripBlockComments(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "//") {
+			continue
+		}
+		for _, m := range kotlinImportRe.FindAllStringSubmatch(line, -1) {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
+// extractDartImports reads import and export URIs. Relative URIs carry
+// no package identity and yield nothing; only dart: and package: forms
+// count.
+func extractDartImports(data []byte) []string {
+	var out []string
+	for _, line := range strings.Split(stripBlockComments(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "//") {
+			continue
+		}
+		for _, m := range dartImportRe.FindAllStringSubmatch(line, -1) {
+			uri := m[1]
+			if m[2] != "" {
+				uri = m[2]
+			}
+			if strings.HasPrefix(uri, "dart:") || strings.HasPrefix(uri, "package:") {
+				out = append(out, uri)
+			}
+		}
+	}
+	return out
 }
 
 func setOf(exts ...string) map[string]bool {

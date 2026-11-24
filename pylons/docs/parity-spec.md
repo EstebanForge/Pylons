@@ -3,7 +3,7 @@ title: "The parity spec"
 type: reference
 status: active
 created: 2026-11-20
-updated: 2026-11-21
+updated: 2026-11-24
 owners:
   - Pylons
 sources: []
@@ -36,7 +36,8 @@ parity:
     # Built-in binding: keyed by language id.
     go:
       use: builtin:go
-    # External binding for a language with no built-in profile.
+    # Rebind a built-in language to your own plugin. Rebinding kotlin
+    # needs --allow-external-extensions at check time.
     kotlin:
       use: external:kotlin
       options:
@@ -46,7 +47,7 @@ parity:
       use: external:wp-php
 ```
 
-`use: builtin:<language>` selects an in-process profile shipped with the CLI (go, rust, typescript, javascript, python, php, csharp, ruby are the planned built-in set). `use: external:<name>` selects the enabled extension `<name>`, run as the `pylon-ext-<name>` binary; it needs `--allow-external-extensions` at check time. Rebinding a language overrides its built-in with no implicit precedence. Two profiles claiming the same file extension is a config error. A declared machine with no matching binding yields the PARITY_NOT_EVALUATED advisory; an `on_unevaluated:` knob (default advisory) can make it block. With no `parity:` section at all, an enabled builtin extension acts as an implicit builtin binding.
+`use: builtin:<language>` selects an in-process profile shipped with the CLI (go, rust, typescript, javascript, python, php, csharp, ruby, c, cpp, java, kotlin, dart, and sql are the built-in set). `use: external:<name>` selects the enabled extension `<name>`, run as the `pylon-ext-<name>` binary; it needs `--allow-external-extensions` at check time. Rebinding a language overrides its built-in with no implicit precedence. Two profiles claiming the same file extension is a config error; one profile re-listing an extension its language already owns is not. A declared machine with no matching binding yields the PARITY_NOT_EVALUATED advisory; an `on_unevaluated:` knob (default advisory) can make it block. With no `parity:` section at all, an enabled builtin extension acts as an implicit builtin binding.
 
 ## Example: machine declaration
 
@@ -109,3 +110,4 @@ The convention a user's ledger declares alongside machine declarations: one clos
 - `initial:` and `terminal:` are mandatory fields on every machine entry. Machine ids are unique across the repo.
 - Configuration lives in the user's ledger. This ledger registers no live project and carries no machine declarations.
 - The `states:`/`states_symbol:` set checks and the `machines:` transition checks both run under `lint --parity`. Transition extraction ships for go, php, rust, and typescript built-in profiles; other languages need an external plugin binding. The typescript canonical shape is the nested switch reducer: the outer `switch` reads the state, inner switches read the event, and every transition is a string-literal return under a `// pylon:machine <id>` directive. State-level or non-literal returns are absorbs, not triples; default arms and throw guards are ignored; single-line case bodies, casts (`as State`, `satisfies`), member access (`State.A`), `as const`, a `case` opening a block, depth beyond two switch levels, escaped quotes kept verbatim, and any other reducer logic fail closed. See [EXTENSIONS.md](../EXTENSIONS.md) for what is enabled today.
+- States set-check extraction ships in-process for go, rust, php, typescript, c, cpp, java, kotlin, dart, and sql. The canonical shape is one member per line inside a named enum. C enumerators and C++ `enum class` take an optional backing type. Java constants take optional constructor arguments and end at the constant-list semicolon. Dart takes plain enums and enhanced enums whose members carry no constructor arguments. Postgres takes `CREATE TYPE ... AS ENUM` with comma-separated quoted values; `ALTER TYPE ... ADD VALUE` folds in. Fail closed: java and dart members with bodies, kotlin entries with bodies or nested call arguments or the member-list semicolon form, C anonymous typedef enums, an empty member parse, a bare sql name answered by two schema-qualified declarations, an sql value list with a missing comma or no values, and MySQL column `ENUM(...)` (a column option, not a named set). A braceless reference or a function signature or parameter list mentioning the type is skipped. Kotlin primary-constructor enums parse. Other `ALTER TYPE` verbs are not extracted. javascript, python, csharp, and ruby carry built-in bindings but no in-process states extractor yet. On the implicit extensions path, cpp claims the shared `.h` header over c when a project enables both; a project enabling only c keeps `.h`. An explicit parity spec claiming `.h` from both is a config error, like `.js` for typescript and javascript.

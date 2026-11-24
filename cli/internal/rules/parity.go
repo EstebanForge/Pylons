@@ -310,20 +310,27 @@ func scanRoutePaths(root string, paths []string) map[string]bool {
 }
 
 var (
-	goConstStartRe = regexp.MustCompile(`(?m)^\s*const\s*\(`)
-	goConstLineRe  = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?::?\s*([A-Za-z_][\w.]*))?\s*(?:=\s*(?:(iota)|"((?:[^"\\]|\\.)*)"|` + "`" + `((?:[^` + "`" + `])*)` + "`" + `))?\s*$`)
-	declEnumRe     = regexp.MustCompile(`\benum\s+(\w+)`)
-	rustMemberRe   = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*[^,}\s]+)?\s*,?\s*$`)
-	phpMemberRe    = regexp.MustCompile(`^\s*case\s+([A-Za-z_]\w*)\s*(?:=\s*['"]((?:[^'\\]|\\.)*)['"]|=\s*(-?\d+))?\s*;`)
-	tsMemberRe     = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*'((?:[^'\\]|\\.)*)'|=\s*"((?:[^"\\]|\\.)*)"|=\s*(-?\d+))?\s*,?\s*$`)
+	goConstStartRe     = regexp.MustCompile(`(?m)^\s*const\s*\(`)
+	goConstLineRe      = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?::?\s*([A-Za-z_][\w.]*))?\s*(?:=\s*(?:(iota)|"((?:[^"\\]|\\.)*)"|` + "`" + `((?:[^` + "`" + `])*)` + "`" + `))?\s*$`)
+	declEnumRe         = regexp.MustCompile(`\benum\s+(\w+)`)
+	cEnumDeclRe        = regexp.MustCompile(`\benum\s+(?:class\s+|struct\s+)?(\w+)`)
+	kotlinEnumDeclRe   = regexp.MustCompile(`\benum\s+class\s+(\w+)(?:\s*:\s*[\w<>. ]+)?`)
+	rustMemberRe       = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*[^,}\s]+)?\s*,?\s*$`)
+	javaMemberRe       = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*,?\s*$`)
+	sqlEnumDeclRe      = regexp.MustCompile(`(?i)\bcreate\s+type\s+(\w+(?:\.\w+)?)\s+as\s+enum\s*\(`)
+	sqlAlterAddValueRe = regexp.MustCompile(`(?i)\balter\s+type\s+(\w+(?:\.\w+)?)\s+add\s+value\s+(?:if\s+not\s+exists\s+)?'((?:[^']|'')*)'`)
+	phpMemberRe        = regexp.MustCompile(`^\s*case\s+([A-Za-z_]\w*)\s*(?:=\s*['"]((?:[^'\\]|\\.)*)['"]|=\s*(-?\d+))?\s*;`)
+	tsMemberRe         = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*'((?:[^'\\]|\\.)*)'|=\s*"((?:[^"\\]|\\.)*)"|=\s*(-?\d+))?\s*,?\s*$`)
 )
 
 // builtinProfileOrder fixes the language claim precedence when one
 // file extension is claimed by several languages (typescript keeps its
-// legacy .js ownership over javascript). Explicit parity specs reject
-// such claims at load; the order only governs the implicit path.
+// legacy .js ownership over javascript, and cpp keeps the shared .h
+// header over c). Explicit parity specs reject such claims at load;
+// the order only governs the implicit path.
 var builtinProfileOrder = []string{
 	"go", "rust", "php", "typescript", "javascript", "python", "csharp", "ruby",
+	"cpp", "c", "java", "kotlin", "dart", "sql",
 }
 
 // builtinParityExtractors holds the in-process set-check extractors.
@@ -331,14 +338,20 @@ var builtinProfileOrder = []string{
 var builtinParityExtractors = map[string]func(source, enumName string) ([]parityCase, error){
 	"go": extractGoEnum,
 	"rust": func(source, enumName string) ([]parityCase, error) {
-		return extractBracedEnum("enum", source, enumName, rustMemberRe, false)
+		return extractBracedEnum(declEnumRe, "enum", source, enumName, rustMemberRe, false, false, nil)
 	},
 	"php": func(source, enumName string) ([]parityCase, error) {
-		return extractBracedEnum("enum", source, enumName, phpMemberRe, true)
+		return extractBracedEnum(declEnumRe, "enum", source, enumName, phpMemberRe, false, true, nil)
 	},
 	"typescript": func(source, enumName string) ([]parityCase, error) {
-		return extractBracedEnum("enum", source, enumName, tsMemberRe, false)
+		return extractBracedEnum(declEnumRe, "enum", source, enumName, tsMemberRe, false, false, nil)
 	},
+	"c":      extractCEnum,
+	"cpp":    extractCEnum,
+	"java":   extractJavaEnum,
+	"kotlin": extractKotlinEnum,
+	"dart":   extractDartEnum,
+	"sql":    extractSqlEnum,
 }
 
 // parityProfileFor resolves the binding for a file: the first language
@@ -455,15 +468,17 @@ func parseGoConstBlock(body, enumName string) ([]parityCase, error) {
 	return out, nil
 }
 
-// extractBracedEnum reads `enum Name { ... }` blocks for rust, php,
-// and typescript via manual brace matching over every enum occurrence,
-// so a later enum in the same file is reachable and serde attributes
-// with braces cannot truncate the body. Only comment, attribute, and
-// member lines parse; anything else fails closed.
-func extractBracedEnum(keyword, source, enumName string, memberRe *regexp.Regexp, hashComments bool) ([]parityCase, error) {
+// extractBracedEnum finds every declaration matching declRe whose name
+// group equals enumName, matches the body braces, and parses the
+// members one per line. stopAtSemicolon handles enum families whose
+// constant list ends at a semicolon with method bodies after it (java,
+// dart): everything before the first unquoted semicolon survives, and
+// the cut is comment-aware so a comment semicolon never eats members.
+// Anything else fails closed.
+func extractBracedEnum(declRe *regexp.Regexp, keyword, source, enumName string, memberRe *regexp.Regexp, stopAtSemicolon, hashComments bool, declGuard func(between string) bool) ([]parityCase, error) {
 	var found bool
 	var out []parityCase
-	for _, m := range declEnumRe.FindAllStringSubmatchIndex(source, -1) {
+	for _, m := range declRe.FindAllStringSubmatchIndex(source, -1) {
 		if source[m[2]:m[3]] != enumName {
 			continue
 		}
@@ -471,13 +486,31 @@ func extractBracedEnum(keyword, source, enumName string, memberRe *regexp.Regexp
 		if open < 0 {
 			continue
 		}
+		// A statement that ends with a semicolon before any brace is a
+		// braceless reference (a C field declaration, a C++ opaque
+		// forward declaration), not a definition. A language-specific
+		// guard can reject more shapes; parsing either against a later
+		// scope's braces poisons the real definition.
+		between := source[m[1] : m[1]+open]
+		if strings.IndexByte(between, ';') >= 0 {
+			continue
+		}
+		if declGuard != nil && declGuard(between) {
+			continue
+		}
 		body, ok := matchDelim(source[m[1]+open:], '{', '}', hashComments)
 		if !ok {
 			continue
 		}
+		if stopAtSemicolon {
+			body = cutAtSemicolon(body)
+		}
 		cases, err := parseBracedBlock(body, memberRe, keyword, hashComments)
 		if err != nil {
 			return nil, err
+		}
+		if len(cases) == 0 {
+			return nil, fmt.Errorf("enum %s parsed to zero members; the canonical shape is one member per line", enumName)
 		}
 		found = true
 		out = append(out, cases...)
@@ -486,6 +519,263 @@ func extractBracedEnum(keyword, source, enumName string, memberRe *regexp.Regexp
 		return nil, fmt.Errorf("no enum named %s found in the states_symbol file", enumName)
 	}
 	return out, nil
+}
+
+// cutAtSemicolon drops everything from the first unquoted semicolon
+// on: the members of a java or dart enum body all sit before it, and
+// the method bodies after it are not member lines. Comments are
+// stripped quote-aware first, so a semicolon inside a comment never
+// truncates the member list, and a comment marker inside a string
+// never eats members.
+func cutAtSemicolon(body string) string {
+	stripped := stripCCommentsQuoteAware(body)
+	var b strings.Builder
+	for _, line := range strings.Split(stripped, "\n") {
+		b.WriteString(stripLineComment(line))
+		b.WriteString("\n")
+	}
+	stripped = b.String()
+	var q byte
+	for i := 0; i < len(stripped); i++ {
+		c := stripped[i]
+		if q != 0 {
+			if c == '\\' {
+				i++
+			} else if c == q {
+				q = 0
+			}
+			continue
+		}
+		switch {
+		case c == '\'', c == '"':
+			q = c
+		case c == ';':
+			return stripped[:i]
+		}
+	}
+	return stripped
+}
+
+// stripCCommentsQuoteAware removes block comments that sit outside any
+// string or char literal, so a comment marker inside a literal
+// survives and a semicolon inside a comment cannot cut a member list.
+func stripCCommentsQuoteAware(text string) string {
+	var b strings.Builder
+	var q byte
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if q != 0 {
+			b.WriteByte(c)
+			if c == '\\' && i+1 < len(text) {
+				i++
+				if i < len(text) {
+					b.WriteByte(text[i])
+				}
+				continue
+			}
+			if c == q {
+				q = 0
+			}
+			continue
+		}
+		if c == '\'' || c == '"' {
+			q = c
+			b.WriteByte(c)
+			continue
+		}
+		if c == '/' && i+1 < len(text) && text[i+1] == '*' {
+			end := strings.Index(text[i+2:], "*/")
+			if end < 0 {
+				break
+			}
+			i += 2 + end + 1
+			continue
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+// extractCEnum reads plain C enumerators and C++ enum class/struct
+// declarations (including a backing-type clause) with the same
+// one-member-per-line canonical shape as rust. A parenthesis between
+// the declaration and the body brace is a function whose signature or
+// parameter list mentions the enum, never a definition. An anonymous
+// typedef enum has no name at the declaration, so it fails closed.
+func extractCEnum(source, enumName string) ([]parityCase, error) {
+	return extractBracedEnum(cEnumDeclRe, "enum", source, enumName, rustMemberRe, false, false, cDeclGuard)
+}
+
+// cDeclGuard rejects a match whose text to the body brace holds a
+// parenthesis: the enum name appears inside a signature or parameter
+// list, not as a definition. Kotlin keeps no guard, because a primary
+// constructor between the declaration and the body is its main form.
+func cDeclGuard(between string) bool {
+	return strings.ContainsAny(between, "()")
+}
+
+// extractJavaEnum reads an enum constant list with optional constructor
+// arguments, stopping at the constant-list semicolon.
+func extractJavaEnum(source, enumName string) ([]parityCase, error) {
+	return extractBracedEnum(declEnumRe, "enum", source, enumName, javaMemberRe, true, false, nil)
+}
+
+// extractKotlinEnum reads enum class entries, primary-constructor
+// enums included; entries with bodies or nested call arguments are
+// unreadable and fail closed.
+func extractKotlinEnum(source, enumName string) ([]parityCase, error) {
+	return extractBracedEnum(kotlinEnumDeclRe, "enum class", source, enumName, javaMemberRe, false, false, nil)
+}
+
+// extractDartEnum reads plain and enhanced enums; the enhanced form's
+// semicolon ends the members exactly like java's.
+func extractDartEnum(source, enumName string) ([]parityCase, error) {
+	return extractBracedEnum(declEnumRe, "enum", source, enumName, tsMemberRe, true, false, nil)
+}
+
+// extractSqlEnum reads Postgres CREATE TYPE ... AS ENUM statements.
+// The values are quoted strings and carry the case name verbatim
+// (doubled quotes unescape); the type name matches with or without a
+// schema prefix and case-insensitively, because unquoted SQL
+// identifiers fold. MySQL column ENUM(...) is a column option, not a
+// named set, so it has no extractor.
+func extractSqlEnum(source, enumName string) ([]parityCase, error) {
+	clean := stripSQLLineComments(source)
+	clean = stripCCommentsQuoteAware(clean)
+	matches := sqlEnumDeclRe.FindAllStringSubmatchIndex(clean, -1)
+	// A bare name that two schema-qualified declarations answer is
+	// ambiguous; unioning their values would read as parity on a set
+	// no single type defines.
+	ambiguous := 0
+	for _, m := range matches {
+		name := clean[m[2]:m[3]]
+		if strings.EqualFold(name, enumName) || strings.HasSuffix(strings.ToLower(name), "."+strings.ToLower(enumName)) {
+			ambiguous++
+		}
+	}
+	if ambiguous > 1 {
+		return nil, fmt.Errorf("enum %s is ambiguous: several schema-qualified declarations match the bare name", enumName)
+	}
+	var found bool
+	var out []parityCase
+	for _, m := range matches {
+		name := clean[m[2]:m[3]]
+		if !strings.EqualFold(name, enumName) && !strings.HasSuffix(strings.ToLower(name), "."+strings.ToLower(enumName)) {
+			continue
+		}
+		body, ok := matchDelim(clean[m[1]-1:], '(', ')', false)
+		if !ok {
+			continue
+		}
+		found = true
+		for _, seg := range splitSqlValues(body) {
+			seg = strings.TrimSpace(seg)
+			if seg == "" || seg == "(" || seg == ")" {
+				continue
+			}
+			if len(seg) < 2 || seg[0] != '\'' || seg[len(seg)-1] != '\'' || !sqlQuotedInterior(seg[1:len(seg)-1]) {
+				return nil, fmt.Errorf("unreadable sql enum value %q; the canonical shape is comma-separated quoted values", seg)
+			}
+			val := strings.ReplaceAll(seg[1:len(seg)-1], "''", "'")
+			out = append(out, parityCase{name: val, value: val, valued: true})
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("no enum named %s found in the states_symbol file", enumName)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("enum %s declares no values; the canonical shape is comma-separated quoted values", enumName)
+	}
+	// Postgres migrations extend an enum after creation; ADD VALUE is
+	// the only ALTER verb that changes the closed set, so it folds in.
+	for _, m := range sqlAlterAddValueRe.FindAllStringSubmatch(clean, -1) {
+		if !strings.EqualFold(m[1], enumName) && !strings.HasSuffix(strings.ToLower(m[1]), "."+strings.ToLower(enumName)) {
+			continue
+		}
+		val := strings.ReplaceAll(m[2], "''", "'")
+		out = append(out, parityCase{name: val, value: val, valued: true})
+	}
+	return out, nil
+}
+
+// stripSQLLineComments removes -- comments that sit outside any string
+// literal, one line at a time.
+func stripSQLLineComments(source string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(source, "\n") {
+		inSingle := false
+		cut := len(line)
+		for i := 0; i < len(line); i++ {
+			switch {
+			case inSingle && line[i] == '\'':
+				if i+1 < len(line) && line[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingle = false
+			case !inSingle && line[i] == '\'':
+				inSingle = true
+			case !inSingle && line[i] == '-' && i+1 < len(line) && line[i+1] == '-':
+				cut = i
+				i = len(line)
+			}
+		}
+		b.WriteString(line[:cut])
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// splitSqlValues splits an enum value list on commas that sit outside
+// single quotes, so one-line and one-per-line declarations both parse.
+func splitSqlValues(body string) []string {
+	var segs []string
+	var b strings.Builder
+	inQ := false
+	for i := 0; i < len(body); i++ {
+		c := body[i]
+		if inQ {
+			b.WriteByte(c)
+			if c == '\'' {
+				if i+1 < len(body) && body[i+1] == '\'' {
+					b.WriteByte('\'')
+					i++
+					continue
+				}
+				inQ = false
+			}
+			continue
+		}
+		if c == '\'' {
+			inQ = true
+			b.WriteByte(c)
+			continue
+		}
+		if c == ',' {
+			segs = append(segs, b.String())
+			b.Reset()
+			continue
+		}
+		b.WriteByte(c)
+	}
+	segs = append(segs, b.String())
+	return segs
+}
+
+// sqlQuotedInterior checks the text inside the outer quotes of one
+// value: every quote must be a doubled escape, so a missing comma
+// between two values fails closed instead of merging them.
+func sqlQuotedInterior(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\'' {
+			continue
+		}
+		if i+1 >= len(s) || s[i+1] != '\'' {
+			return false
+		}
+		i++
+	}
+	return true
 }
 
 func parseBracedBlock(body string, memberRe *regexp.Regexp, keyword string, hashComments bool) ([]parityCase, error) {

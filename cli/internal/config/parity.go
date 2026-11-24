@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -26,6 +27,12 @@ var BuiltinProfileExtensions = map[string][]string{
 	"python":     {".py"},
 	"csharp":     {".cs"},
 	"ruby":       {".rb"},
+	"c":          {".c", ".h"},
+	"cpp":        {".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".h"},
+	"java":       {".java"},
+	"kotlin":     {".kt", ".kts"},
+	"dart":       {".dart"},
+	"sql":        {".sql"},
 }
 
 // ParityProfile is one language binding: an in-process builtin or an
@@ -151,10 +158,12 @@ func parityProfileFromMap(path, lang string, m map[string]any) (ParityProfile, e
 // validateParityBindings checks use-reachability and extension
 // ownership for one effective binding set. An external profile must
 // name an enabled extension; two profiles claiming one file extension
-// is a config error.
+// is a config error. Keys are visited in sorted order so the conflict
+// message is deterministic.
 func validateParityBindings(path string, profiles map[string]ParityProfile, enabled func(string) bool) error {
 	owner := map[string]string{}
-	for lang, prof := range profiles {
+	for _, lang := range slices.Sorted(maps.Keys(profiles)) {
+		prof := profiles[lang]
 		use, rest, _ := strings.Cut(prof.Use, ":")
 		switch use {
 		case "builtin":
@@ -169,7 +178,14 @@ func validateParityBindings(path string, profiles map[string]ParityProfile, enab
 			}
 		}
 		exts := append([]string{}, BuiltinProfileExtensions[lang]...)
-		exts = append(exts, prof.Extensions...)
+		// A profile re-listing an extension its language already owns
+		// canonically stays one claim; the conflict error is for two
+		// different profiles fighting over the same extension.
+		for _, ext := range prof.Extensions {
+			if !slices.Contains(exts, ext) {
+				exts = append(exts, ext)
+			}
+		}
 		for _, ext := range exts {
 			if prev, dup := owner[ext]; dup {
 				return fmt.Errorf("%s: profiles %q and %q both claim the %s extension", path, prev, lang, ext)
