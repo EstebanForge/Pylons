@@ -6,11 +6,12 @@ package install
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -64,7 +65,10 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 		return res, fmt.Errorf("staged manifests/product.json is empty")
 	}
 	res.Version = newM.Version
-	for rel := range newM.Files {
+	// Error paths walk sorted keys: identical manifests must fail with
+	// the same message on every run.
+	stagedNames := slices.Sorted(maps.Keys(newM.Files))
+	for _, rel := range stagedNames {
 		if unsafeManifestPath(rel) {
 			return res, fmt.Errorf("staged manifest has unsafe path %q", rel)
 		}
@@ -75,7 +79,8 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 
 	// Fail closed before touching anything: every staged file must
 	// match the release manifest.
-	for rel, want := range newM.Files {
+	for _, rel := range stagedNames {
+		want := newM.Files[rel]
 		if st, err := os.Lstat(filepath.Join(stagedDir, filepath.FromSlash(rel))); err != nil || !st.Mode().IsRegular() {
 			return res, fmt.Errorf("staged file %s is missing or not a regular file", rel)
 		}
@@ -95,7 +100,7 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 			return res, fmt.Errorf("installed manifests/product.json is unreadable: %w", err)
 		}
 		oldM = parsed.Files
-		for rel := range oldM {
+		for _, rel := range slices.Sorted(maps.Keys(oldM)) {
 			if unsafeManifestPath(rel) {
 				return res, fmt.Errorf("installed manifest has unsafe path %q", rel)
 			}
@@ -110,17 +115,8 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 		return sha256Hex(data), true
 	}
 
-	names := make([]string, 0, len(newM.Files))
-	for name := range newM.Files {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	oldNames := make([]string, 0, len(oldM))
-	for name := range oldM {
-		oldNames = append(oldNames, name)
-	}
-	sort.Strings(oldNames)
+	names := stagedNames
+	oldNames := slices.Sorted(maps.Keys(oldM))
 
 	for _, rel := range names {
 		if rel == "manifests/product.json" {
@@ -132,11 +128,18 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 		}
 		if !exists || cur == oldM[rel] {
 			res.Replaced = append(res.Replaced, rel)
-		} else if force {
-			res.Replaced = append(res.Replaced, rel)
-		} else {
-			res.Drifted = append(res.Drifted, rel)
+			continue
 		}
+		if force {
+			res.Replaced = append(res.Replaced, rel)
+			continue
+		}
+		if newM.Files[rel] == oldM[rel] {
+			// The user edited this file and upstream did not change
+			// it: the edit is current, leave the file alone.
+			continue
+		}
+		res.Drifted = append(res.Drifted, rel)
 	}
 	for _, rel := range oldNames {
 		if _, still := newM.Files[rel]; still {
@@ -150,9 +153,13 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 		}
 	}
 
-	res.BinaryPath = "bin/pylon"
-	if _, err := os.Stat(filepath.Join(stagedDir, "bin", "pylon")); err == nil {
-		res.BinaryNew = true
+	binName := "pylon"
+	if runtime.GOOS == "windows" {
+		binName = "pylon.exe"
+	}
+	res.BinaryPath = "bin/" + binName
+	stagedBin := filepath.Join(stagedDir, "bin", binName)
+	if _, err := os.Stat(stagedBin); err == nil {
 		// A hostile release cannot swap an unpinned or unverified binary:
 		// the manifest must pin this platform's hash before anything is
 		// applied.
@@ -161,12 +168,17 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 		if !ok {
 			return res, fmt.Errorf("staged release does not pin a binary for %s", platform)
 		}
-		bin, err := os.ReadFile(filepath.Join(stagedDir, "bin", "pylon"))
+		bin, err := os.ReadFile(stagedBin)
 		if err != nil {
 			return res, err
 		}
 		if sha256Hex(bin) != pin {
 			return res, fmt.Errorf("staged binary does not match the pinned %s hash", platform)
+		}
+		// An identical binary is not an update: report it only when
+		// the installed bytes differ or the binary is missing.
+		if cur, ok := diskHash(res.BinaryPath); !ok || cur != pin {
+			res.BinaryNew = true
 		}
 	}
 
@@ -265,11 +277,15 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 	// The binary goes last: everything else must be in place before
 	// the tool that will run the next update is swapped.
 	if res.BinaryNew {
-		bin, err := os.ReadFile(filepath.Join(stagedDir, "bin", "pylon"))
+		binName := "pylon"
+		if runtime.GOOS == "windows" {
+			binName = "pylon.exe"
+		}
+		bin, err := os.ReadFile(filepath.Join(stagedDir, "bin", binName))
 		if err != nil {
 			return res, err
 		}
-		dst := filepath.Join(kbRoot, "bin", "pylon")
+		dst := filepath.Join(kbRoot, "bin", binName)
 		if cur, err := os.ReadFile(dst); err == nil && sha256Hex(cur) == sha256Hex(bin) {
 			return res, nil
 		}

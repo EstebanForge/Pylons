@@ -50,7 +50,7 @@ func CheckFor(kbRoot, planArg string, targets []string) ([]report.Finding, error
 			return nil
 		}
 		if d.IsDir() {
-			if isRootSkippedDir(kbRoot, p) || strings.HasPrefix(d.Name(), "_") {
+			if isRootSkippedDir(kbRoot, p) || strings.HasPrefix(d.Name(), "_") || isNestedLedgerDir(kbRoot, p) {
 				return filepath.SkipDir
 			}
 			return nil

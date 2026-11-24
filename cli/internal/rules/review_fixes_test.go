@@ -1055,7 +1055,7 @@ func TestSliceContextJSONEmpty(t *testing.T) {
 	if strings.Contains(string(data), "null") {
 		t.Fatalf("empty slices must marshal as [], got %s", data)
 	}
-	if _, err := SliceContext(kb, "pylons/ROADMAP.md", false); err == nil {
+	if _, err := SliceContext(kb, "docs/ROADMAP.md", false); err == nil {
 		t.Fatal("a non-plan doc must error in SliceContext")
 	}
 }

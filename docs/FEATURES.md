@@ -3,7 +3,7 @@ title: "Pylons: Feature Guide"
 type: meta
 status: active
 created: 2026-11-20
-updated: 2026-11-24
+updated: 2026-11-25
 tags: [features, workflow, agents, developer-guide]
 ---
 
@@ -13,7 +13,7 @@ This file is the feature guide for the Pylons ledger and its `pylon` CLI. It dou
 
 Two reading paths. If you manage people or products, read sections 1 and 2, then skim the feature cards in section 3. If you write code here, or an agent writes it for you, the whole file applies, and section 5 is the command reference you keep open.
 
-Sources of truth: [`../README.md`](../README.md) (overview), [`../AGENTS.md`](../AGENTS.md) (rules and CLI manual), [`MANIFESTO.md`](MANIFESTO.md) (design philosophy), [`USAGE.md`](USAGE.md) (daily workflow), [`ROADMAP.md`](ROADMAP.md) (future work). Fix drift in the source files first, then mirror here.
+Sources of truth: [`../README.md`](../README.md) (overview), [`../pylons/AGENTS.md`](../pylons/AGENTS.md) (ledger rules and CLI manual), [`MANIFESTO.md`](MANIFESTO.md) (design philosophy), [`USAGE.md`](USAGE.md) (daily workflow), [`ROADMAP.md`](ROADMAP.md) (future work). Fix drift in the source files first, then mirror here.
 
 ## 1. The problem we built Pylons for
 
@@ -354,7 +354,7 @@ The cards above cover the systems with commands and grades. The rest of the ledg
 | `skills/` | Reusable team skills for agent environments. | Agents |
 | `protocols/` | Shipped agent protocols the CLI renders (`pylon protocol`, `pylon reflect`). | Agents and their operators |
 | `extensions/` | External `pylon-ext-<name>` plugins; `_examples/` holds a runnable parity plugin. | Developers enabling code extraction |
-| `pylons/` | Documentation about Pylons itself: manifesto, feature guide, roadmap, changelog, CLI manual. Start at [`pylons/INDEX.md`](pylons/INDEX.md). | Everyone |
+| `pylons-docs/` | Reference pages that travel with the ledger: the adoption guide, the parity language spec, and the `pylons.yaml` schema. | Everyone |
 | `manifests/` | Compiled JSON artifacts the CLI emits and CI checks. | Tooling |
 
 ### 3.6 Structural code search
@@ -400,7 +400,7 @@ Humans review and approve every change. Agents do the heavy lifting. Pylons leav
 
 ## 5. Reference
 
-Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a built checkout, `pylons/bin/pylon` from an installed ledger). Exit code 3 means no `manifests/pylons.yaml` was found; every command's and flag's contract is in the [`USAGE.md`](USAGE.md) dictionary.
+Run commands through the `pylon` binary in the ledger root (`pylons/bin/pylon` from the project root, `./bin/pylon` from inside the ledger). Exit code 3 means no `manifests/pylons.yaml` was found; every command's and flag's contract is in the [`USAGE.md`](USAGE.md) dictionary.
 
 ### 5.1 Command and flag dictionary
 

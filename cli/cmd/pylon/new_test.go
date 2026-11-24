@@ -27,7 +27,7 @@ func newSandboxKB(t *testing.T) string {
 	if err := os.MkdirAll(templates, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	repoTemplates := "../../../templates"
+	repoTemplates := "../../../pylons/templates"
 	entries, err := os.ReadDir(repoTemplates)
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +235,7 @@ func TestNewDecisionNumberRefusesExhausted(t *testing.T) {
 // The type table must cover every shipped template, so a new template
 // can never ship without pylon new knowing it.
 func TestNewCoversEveryTemplate(t *testing.T) {
-	entries, err := os.ReadDir("../../../templates")
+	entries, err := os.ReadDir("../../../pylons/templates")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestNewCoversEveryTemplate(t *testing.T) {
 		known[strings.TrimSuffix(e.Name(), ".md")] = true
 	}
 	for _, docType := range newDocTypes {
-		if _, err := os.Stat(filepath.Join("../../../templates", docType.template+".md")); err != nil {
+		if _, err := os.Stat(filepath.Join("../../../pylons/templates", docType.template+".md")); err != nil {
 			t.Errorf("table entry %s has no template: %v", docType.typ, err)
 		}
 		delete(known, docType.template)

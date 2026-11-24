@@ -6,6 +6,7 @@ package rules
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -141,5 +142,59 @@ Done.
 	_ = Lint(kb, LintOptions{Fix: true})
 	if _, err := os.Stat(filepath.Join(kb, "plans/archive/shipped-item.md")); err != nil {
 		t.Fatalf("expected shipped plan moved to plans/archive/: %v", err)
+	}
+}
+
+func TestPlanProposalsAreReviewed(t *testing.T) {
+	// plans/proposals/ holds proposed plans; the same structural rules
+	// that govern proposals/ must reach them.
+	kb := t.TempDir()
+	proj := t.TempDir()
+	mustWrite(t, filepath.Join(proj, "auth/login.go"), "package auth\n")
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), "version: 1\nprojects:\n  svc:\n    path: "+proj+"\n")
+
+	mustWrite(t, filepath.Join(kb, "plans/proposals/feature-x.md"), `---
+title: "Feature X"
+type: plan
+status: proposed
+components: [svc]
+---
+
+# Feature X
+
+## Problem
+
+Missing sections.
+`)
+	pf := ReviewPlan(kb, "plans/proposals/feature-x.md")
+	if len(pf) < 2 {
+		t.Fatalf("expected missing section findings, got %+v", pf)
+	}
+}
+
+func TestLintReviewsPlanProposals(t *testing.T) {
+	kb := t.TempDir()
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), "version: 1\n")
+	mustWrite(t, filepath.Join(kb, "plans/proposals/feature-x.md"), `---
+title: "Feature X"
+type: plan
+status: proposed
+---
+
+# Feature X
+
+## Problem
+
+Missing sections.
+`)
+	res := Lint(kb, LintOptions{HasCode: false})
+	found := false
+	for _, f := range res {
+		if strings.HasPrefix(f.RuleID, "PYLON02") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("lint must review plans/proposals/ docs, got %+v", res)
 	}
 }

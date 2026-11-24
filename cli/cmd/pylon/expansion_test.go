@@ -155,7 +155,7 @@ func runPylon(t *testing.T, dir string, args ...string) (int, string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bin := filepath.Join(pwd, "..", "..", "..", "bin", "pylon")
+	bin := filepath.Join(pwd, "..", "..", "..", "pylons", "bin", "pylon")
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer

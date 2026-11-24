@@ -43,7 +43,7 @@ A pylon is organized by rate of change. Slow-moving knowledge sits apart from fa
 | Protocols | `protocols/` | CLI-consumed protocol templates (`pylon protocol`, `pylon reflect`). |
 | Extensions | `extensions/` | Drop-in `pylon-ext-<name>` plugins for language or domain contract checks. |
 | Manifests | `manifests/` | Machine-generated indexes (`rules.json`, `packages.json`). |
-| Pylons | `pylons/` | Documentation about Pylons itself. |
+| Pylons | `pylons/` | The ledger itself: every zone above, the machine manifests, templates, and the reference pages that travel with it. |
 
 ## Contracts, the core unit
 
@@ -55,7 +55,7 @@ Contracts are typed. Pylons ships 7 language-agnostic core kinds (`file`, `glob`
 
 ## The checker
 
-The `pylon` binary lives in `cli/` and runs deterministically with 0 model calls. Every check is schema validation, pattern or symbol matching, git inspection, or exact set intersections.
+The `pylon` binary builds from `cli/` and runs deterministically with 0 model calls. In this repository the engine, the release scripts, and the manual sit beside the dogfood ledger in `pylons/`. Every check is schema validation, pattern or symbol matching, git inspection, or exact set intersections.
 
 `check` is the collision detector: point it at the files you are about to touch, and it names every active plan editing or destabilizing that ground, plus protected globs. `lint` walks the whole library for drift: broken links, orphaned documents, schema violations, stale dates, unresolved contracts, and style. `context` hands an agent or human only the slice that applies to the files at hand. `brief`, `map`, and `search` orient sessions and rank matching documents with BM25. `contract`, `staleness`, `review`, `review-brief`, `protocol`, `reflect`, `manifest`, and `explain` verify plans, post-mortems, review packets, and rule specs.
 
@@ -71,13 +71,13 @@ Every session starts by reading the map (`pylon brief`, `pylon map`) instead of 
 
 ## Examples
 
-`_examples/` ships a miniature ledger (one machine, one plan, one quirk, and the Go code they check) plus a runnable parity plugin. Lint it, break it, and watch the checker catch the drift:
+`examples/ledger` is a miniature ledger (one machine, one plan, one quirk, and the Go code they check) plus a runnable parity plugin. Lint it, break it, and watch the checker catch the drift:
 
-    ./bin/pylon lint --pylons _examples/ledger --parity
+    pylons/bin/pylon lint --pylons examples/ledger --parity
 
 ## Quick start
 
-1. Install a pylon into your project: a plain-text map of your platform, a deterministic checker that fails when the map drifts from the code, and gate hooks that enforce it, tracked in its own git repository (downloads the `pylon` binary, unpacks the pylon into `pylons/`):
+1. Install a pylon into your project: a plain-text map of your platform, a deterministic checker that fails when the map drifts from the code, and gate hooks that enforce it, tracked in its own git repository (downloads the `pylon` binary, unpacks the ledger into `pylons/`, and asks for the folder name first (default `pylons`)):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | bash
@@ -86,10 +86,10 @@ curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/in
 2. Register tracked repositories and extensions in `pylons/manifests/pylons.yaml`.
 3. Run `pylons/bin/pylon brief` at session start, `pylons/bin/pylon check <paths...>` before edits, and `pylons/bin/pylon lint` before commits.
 
-Prefer to build from source, or want the pylon to live inside this repository instead of a fresh install? See [pylons/INSTALL.md](pylons/INSTALL.md).
+Prefer to build from source, or want the pylon to live inside this repository instead of a fresh install? See [docs/INSTALL.md](docs/INSTALL.md).
 
-See [pylons/INDEX.md](pylons/INDEX.md) for installation, usage, drop-in extensions, and design philosophy. Planned work lives in the [roadmap](pylons/ROADMAP.md); shipped work lands in the [changelog](pylons/CHANGELOG.md).
+See [docs/INDEX.md](docs/INDEX.md) for installation, usage, drop-in extensions, and design philosophy. Planned work lives in the [roadmap](docs/ROADMAP.md); shipped work lands in the [changelog](docs/CHANGELOG.md).
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache License 2.0. See [pylons/LICENSE](pylons/LICENSE) and [pylons/NOTICE](pylons/NOTICE).

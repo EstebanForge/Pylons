@@ -1,7 +1,7 @@
-# Build artifact: cd cli && go build -o ../bin/pylon ./cmd/pylon
-/bin/*
-!/bin/AGENTS.md
-!/bin/THIRD_PARTY_NOTICES
+# Build artifact: cd cli && go build -o ../pylons/bin/pylon ./cmd/pylon
+pylons/bin/*
+!pylons/bin/AGENTS.md
+!pylons/bin/THIRD_PARTY_NOTICES
 
 # Go test leftovers
 /cli/*.test

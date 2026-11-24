@@ -65,8 +65,8 @@ Usage:
   pylon self-update --from <staged-release-dir> [--dry-run] [--force] [--pylons <path>]
   pylon explain <rule_id>
   pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]
-  pylon install         [--pylons <path>]
-  pylon init [dir]       [--pylons <path>]
+  pylon install         [--force] [--pylons <path>]
+  pylon init [dir]
   pylon new <type> <name> [--title <t>] [--number] [--pylons <path>]
 
 Exit codes:
@@ -333,11 +333,15 @@ func run(args []string) int {
 	}
 	// Only findings-producing commands can render SARIF.
 	switch cmd {
-	case "map", "search", "brief", "extensions", "protocol", "manifest", "install", "init", "review-brief":
+	case "map", "search", "brief", "extensions", "protocol", "manifest", "install", "init", "review-brief", "harvest":
 		if format == report.FormatSARIF {
 			fmt.Fprintf(os.Stderr, "pylon: format sarif is not supported for %s\n", cmd)
 			return 2
 		}
+	}
+	if cmd == "review" && len(rest) > 0 && (rest[0] == "utility" || rest[0] == "retro") && format == report.FormatSARIF {
+		fmt.Fprintf(os.Stderr, "pylon: format sarif is not supported for review %s\n", rest[0])
+		return 2
 	}
 
 	if cmd == "explain" {
@@ -742,7 +746,7 @@ func run(args []string) int {
 
 	case "manifest":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "pylon: manifest requires 'rules' or 'packages'")
+			fmt.Fprintln(os.Stderr, "pylon: manifest requires 'rules', 'packages', or 'product'")
 			return 2
 		}
 		switch rest[0] {
@@ -888,11 +892,91 @@ func renderFindings(findings []report.Finding, format report.Format, ci bool) in
 	return 0
 }
 
-var scaffoldDirs = []string{"packages", "packages/archive", "proposals", "plans/archive", "decisions/proposals", "decisions/archive", "conventions", "conventions/proposals", "conventions/archive", "quirks/archive", "domain/entities", "domain/archive", "investigations/archive", "references/archive", "tickets/archive", "prompts", "skills", "templates", "manifests", "protocols", "extensions"}
+var scaffoldDirs = []string{"packages", "packages/archive", "proposals", "plans/archive", "decisions/proposals", "decisions/archive", "plans/proposals", "conventions", "conventions/proposals", "conventions/archive", "quirks/archive", "domain/entities", "domain/archive", "investigations/archive", "references/archive", "tickets/archive", "prompts", "skills", "templates", "manifests", "protocols", "extensions"}
+
+// productLayerForInit names the ledger beside the binary, the copy
+// source for the product surface a fresh ledger needs. Tests stub it.
+var productLayerForInit = func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return rootFromBinary(exe)
+}
+
+// initProductSurface copies the product layer's machine-facing surface
+// (templates, protocols, reference pages, examples, machine manifests)
+// into a fresh ledger. Never-overwrite: existing files win.
+func initProductSurface(dest, src string) error {
+	for _, sub := range []string{"templates", "protocols", "pylons-docs", filepath.Join("extensions", "_examples")} {
+		from := filepath.Join(src, filepath.FromSlash(sub))
+		entries, err := os.ReadDir(from)
+		if err != nil {
+			continue // the source may predate this surface
+		}
+		if len(entries) == 0 {
+			continue
+		}
+		to := filepath.Join(dest, filepath.FromSlash(sub))
+		if err := os.MkdirAll(to, 0o755); err != nil {
+			return err
+		}
+		for _, e := range entries {
+			name := e.Name()
+			if strings.HasPrefix(name, "._") || name == ".DS_Store" || e.IsDir() {
+				continue
+			}
+			srcPath := filepath.Join(from, name)
+			dst := filepath.Join(to, name)
+			// Lstat, not Stat: a dangling symlink at the destination
+			// must not be followed into an overwrite.
+			if _, err := os.Lstat(dst); err == nil {
+				continue
+			}
+			info, err := os.Lstat(srcPath)
+			if err != nil {
+				return err
+			}
+			mode := info.Mode()
+			if !mode.IsRegular() {
+				continue
+			}
+			data, err := os.ReadFile(srcPath)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(dst, data, mode.Perm()); err != nil {
+				return err
+			}
+		}
+	}
+	for _, rel := range []string{
+		"manifests/vocabulary.json", "manifests/parity.json", "manifests/rules.json",
+		"manifests/extensions.example.json", "manifests/packages.example.json",
+		"manifests/pylons.example.yaml",
+	} {
+		data, err := os.ReadFile(filepath.Join(src, filepath.FromSlash(rel)))
+		if err != nil {
+			continue
+		}
+		dst := filepath.Join(dest, filepath.FromSlash(rel))
+		// Lstat, not Stat: a dangling symlink at the destination
+		// must not be followed into an overwrite.
+		if _, err := os.Lstat(dst); err == nil {
+			continue
+		}
+		if err := os.WriteFile(dst, data, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func cmdInit(dir string) int {
 	cfgPath := filepath.Join(dir, "manifests", "pylons.yaml")
-	if _, err := os.Stat(cfgPath); err == nil {
+	// Lstat, not Stat: a dangling symlink here must read as existing
+	// so init refuses instead of writing through the link.
+	if _, err := os.Lstat(cfgPath); err == nil {
 		fmt.Printf("pylon init: %s already exists (run pylon install to wire gate hooks)\n", cfgPath)
 		return 0
 	}
@@ -906,8 +990,14 @@ func cmdInit(dir string) int {
 		fmt.Fprintf(os.Stderr, "pylon init: %v\n", err)
 		return 1
 	}
+	if src := productLayerForInit(); src != "" && src != dir {
+		if err := initProductSurface(dir, src); err != nil {
+			fmt.Fprintf(os.Stderr, "pylon init: %v\n", err)
+			return 1
+		}
+	}
 	seedFiles := map[string]string{
-		"AGENTS.md": "# Guidelines\n\nA pylon: the plain-text map of this platform. See `manifests/vocabulary.json` and `pylons/docs/`.\n\nWhen a quirk or convention guardrail from `pylon context` shapes your work, close the record with one citation comment: `<!-- pylon:referenced-doc: quirks/<file>.md -->`.\n",
+		"AGENTS.md": "# Guidelines\n\nA pylon: the plain-text map of this platform. See `manifests/vocabulary.json`; the full manual lives in the Pylons source repository under docs/.\n\nWhen a quirk or convention guardrail from `pylon context` shapes your work, close the record with one citation comment: `<!-- pylon:referenced-doc: quirks/<file>.md -->`.\n",
 	}
 	for _, dir := range scaffoldDirs {
 		zone, _, _ := strings.Cut(dir, "/")
@@ -921,7 +1011,7 @@ func cmdInit(dir string) int {
 	seedFiles["conventions/AGENTS.md"] = "---\ntitle: \"Conventions\"\ntype: reference\nstatus: active\n---\n\n# Conventions\n"
 	for rel, body := range seedFiles {
 		dst := filepath.Join(dir, filepath.FromSlash(rel))
-		if _, err := os.Stat(dst); os.IsNotExist(err) {
+		if _, err := os.Lstat(dst); os.IsNotExist(err) {
 			if err := os.WriteFile(dst, []byte(body), 0o644); err != nil {
 				fmt.Fprintf(os.Stderr, "pylon init: %v\n", err)
 				return 1
@@ -929,7 +1019,7 @@ func cmdInit(dir string) int {
 		}
 	}
 	giPath := filepath.Join(dir, ".gitignore")
-	if _, err := os.Stat(giPath); os.IsNotExist(err) {
+	if _, err := os.Lstat(giPath); os.IsNotExist(err) {
 		if err := os.WriteFile(giPath, []byte("._*\n.DS_Store\n/bin/\n"), 0o644); err != nil {
 			fmt.Fprintf(os.Stderr, "pylon init: %v\n", err)
 			return 1
@@ -969,7 +1059,7 @@ func cmdInstall(kbRoot string, force bool) int {
 	// that cannot run are the confusing half-success the old order
 	// produced (hooks written, then exit 1).
 	if !install.BinaryPresent(kbRoot) {
-		fmt.Fprintf(os.Stderr, "pylon install: bin/pylon missing or not executable; build it: cd cli && go build -o ../bin/pylon ./cmd/pylon\n")
+		fmt.Fprintf(os.Stderr, "pylon install: bin/pylon missing or not executable; build it: cd cli && go build -o ../pylons/bin/pylon ./cmd/pylon\n")
 		return 1
 	}
 	res, err := install.EnsureHooks(kbRoot, force)
@@ -1043,7 +1133,7 @@ func cmdSelfUpdate(kbRoot, from string, force, dryRun bool) int {
 		fmt.Printf("  kept     %s (you edited it; the new release dropped it)\n", rel)
 	}
 	if res.BinaryNew {
-		fmt.Printf("  binary   bin/pylon updated\n")
+		fmt.Printf("  binary   %s updated\n", res.BinaryPath)
 	}
 	if res.BackupDir != "" {
 		fmt.Printf("  backups  %s/\n", res.BackupDir)
@@ -1191,9 +1281,14 @@ func cmdExtensions(kbRoot, sub string, format report.Format) int {
 	}
 }
 
+// findPylonsRoot resolves the ledger in three steps: an explicit
+// --pylons path, a cwd walk upward, and finally the binary's own home.
+// The installed pylon always lives inside its ledger (pylons/bin/pylon),
+// so the binary home names the ledger even when the caller runs from
+// the parent project root. When none match there is no ledger.
 func findPylonsRoot(explicit string) string {
 	if explicit != "" {
-		if _, err := os.Stat(filepath.Join(explicit, "manifests", "pylons.yaml")); err == nil {
+		if info, serr := os.Stat(filepath.Join(explicit, "manifests", "pylons.yaml")); serr == nil && info.Mode().IsRegular() {
 			return explicit
 		}
 		return ""
@@ -1203,15 +1298,30 @@ func findPylonsRoot(explicit string) string {
 		return ""
 	}
 	for {
-		if _, err := os.Stat(filepath.Join(cur, "manifests", "pylons.yaml")); err == nil {
+		if info, serr := os.Stat(filepath.Join(cur, "manifests", "pylons.yaml")); serr == nil && info.Mode().IsRegular() {
 			return cur
 		}
 		parent := filepath.Dir(cur)
 		if parent == cur {
-			return ""
+			break
 		}
 		cur = parent
 	}
+	if exe, exeErr := os.Executable(); exeErr == nil && exe != "" {
+		return rootFromBinary(exe)
+	}
+	return ""
+}
+
+// rootFromBinary maps a pylon binary path to the ledger it lives in:
+// the parent of the binary's bin/ directory, and only when that
+// directory carries a ledger manifest.
+func rootFromBinary(binPath string) string {
+	ledger := filepath.Dir(filepath.Dir(binPath))
+	if info, serr := os.Stat(filepath.Join(ledger, "manifests", "pylons.yaml")); serr == nil && info.Mode().IsRegular() {
+		return ledger
+	}
+	return ""
 }
 
 type docEntry struct {
@@ -1243,14 +1353,22 @@ func scanDocs(kbRoot string, includeArchive bool) []docEntry {
 				relDir = filepath.ToSlash(relDir)
 				if !strings.Contains(relDir, "/") {
 					switch relDir {
-					// pylons/ is the product manual: shipped to every ledger, never ledger content.
-					case ".git", "cli", "bin", "templates", "manifests", "protocols", "extensions", "pylons":
+					case ".git", "cli", "bin", "templates", "manifests", "protocols", "extensions", "pylons-docs":
 						return filepath.SkipDir
 					}
 				}
 			}
 			if d.Name() == ".git" || (!includeArchive && d.Name() == "archive") || strings.HasPrefix(d.Name(), "_") {
 				return filepath.SkipDir
+			}
+			// A child directory holding its own ledger manifest is
+			// a separate ledger: this one never walks into it, or a
+			// nested ledger's docs would count twice. The ledger
+			// root itself holds the manifest and must still walk.
+			if relErr == nil && relDir != "." {
+				if info, err := os.Stat(filepath.Join(p, "manifests", "pylons.yaml")); err == nil && info.Mode().IsRegular() {
+					return filepath.SkipDir
+				}
 			}
 			return nil
 		}

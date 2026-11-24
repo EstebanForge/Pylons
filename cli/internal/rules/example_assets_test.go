@@ -25,7 +25,7 @@ func isParityFinding(r string) bool {
 }
 
 func TestExampleLedgerLintsClean(t *testing.T) {
-	findings := Lint(filepath.Join("..", "..", "..", "_examples", "ledger"), LintOptions{Parity: true, HasCode: true})
+	findings := Lint(filepath.Join("..", "..", "..", "examples", "ledger"), LintOptions{Parity: true, HasCode: true})
 	for _, f := range findings {
 		if f.Grade == report.GradeForced {
 			t.Errorf("example ledger carries FORCED %s: %s", f.RuleID, f.Message)
@@ -37,7 +37,7 @@ func TestExampleLedgerLintsClean(t *testing.T) {
 }
 
 func TestExampleLedgerMutationBlocks(t *testing.T) {
-	src := filepath.Join("..", "..", "..", "_examples", "ledger")
+	src := filepath.Join("..", "..", "..", "examples", "ledger")
 	dst := filepath.Join(t.TempDir(), "ledger")
 	if err := copyTree(src, dst); err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestExampleLedgerMutationBlocks(t *testing.T) {
 
 func TestExampleParityPluginExtracts(t *testing.T) {
 	kb, root := t.TempDir(), t.TempDir()
-	plugin, err := os.ReadFile(filepath.Join("..", "..", "..", "extensions", "_examples", "pylon-ext-parity"))
+	plugin, err := os.ReadFile(filepath.Join("..", "..", "..", "pylons", "extensions", "_examples", "pylon-ext-parity"))
 	if err != nil {
 		t.Fatalf("read shipped example plugin: %v", err)
 	}

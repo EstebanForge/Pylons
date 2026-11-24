@@ -1,65 +1,39 @@
 # Pylons
 
-Pylons stores shared architectural context, domain knowledge, and decisions. Keep documentation accurate or delete it. Source Code is Truth.
+This folder is the product's own manual. Everything here travels with every installed pylon: it documents the tool and the ledger model, not any one team's content. Team content lives in the zones beside this folder.
 
-## Path Schemes
+## What a pylon is
 
-Pylons documents reference files with URI schemes, never machine paths.
+A pylon is a plain-text ledger and map of a platform, and an enforcer of the rules the team lays down, checked against the code. Three jobs in one artifact:
 
-| Scheme | Names | Behavior |
-|---|---|---|
-| `repo://<alias>/<path>` | Any file inside a project registered in `manifests/pylons.yaml` | Resolved against the project's base branch (`ref:` in `manifests/pylons.yaml` or package frontmatter, else `main`). |
-| `repo://<alias>@<branch>/<path>` | In-flight code on a named branch | Naming only, never resolved against base branch. |
-| `pylon://<path>` | Any Pylons document | Resolved relative to the Pylons root. |
+- **The ledger.** Decisions, quirks, plans, and conventions live as Markdown files with structured frontmatter, versioned in git beside the code they describe. What was decided, what nearly broke, what is provisional.
+- **The map.** Package docs record what each project does, what depends on what, and which interfaces are safe to build on, with typed contracts (`kind` + `id`) the engine resolves against real code.
+- **The enforcer.** The `pylon` binary re-checks the claims on every commit. A symbol, route, or machine transition the map declares must exist in code, or the gate fails. The map cannot quietly rot into fiction.
 
-## Rules
+The engine is deterministic: zero model calls, closed vocabularies, stable rule IDs (`PYLON0xx`), and two grades only. `FORCED` stops work; `ADVISORY` informs. That contract is the product's spine; see `MANIFESTO.md`.
 
-1. **Check before coding.** Run `pylon check <paths...>`, add `--plan <plan>` when you work that plan, or scan `plans/` for overlapping contracts.
-2. **Use templates.** Scaffold new documents from `templates/`. Preserve frontmatter fields.
-3. **Define typed contracts.** Contract entries require `kind` and `id`. Built-in kinds: `file`, `glob`, `symbol`, `route`, `cli`, `event`, `schema`. Enabled extensions in `manifests/pylons.yaml` add language-specific kinds.
-4. **Keep decisions immutable.** Never edit accepted ADRs in place. Write a new ADR that supersedes the old decision.
-5. **Archive terminal documents.** Set `status: shipped` (with `artifact:`) or `status: abandoned` and move to `plans/archive/`.
-6. **Use Simplified Technical English (ASD-STE100).** Write direct technical English. Limit procedural sentences to 20 words and descriptive sentences to 25 words. Use active voice and present tense.
-7. **Use closed vocabularies.** Frontmatter `status:` accepts only the values listed in `manifests/vocabulary.json`.
-8. **Honor check grades.** `FORCED` (exit 1) stops work. `ADVISORY` (exit 0) informs and lets work proceed.
-9. **Underscore directories are not content.** Any directory whose name starts with `_` (for example `extensions/_examples/`) is example or scratch space; the CLI never lints, indexes, lists, or dispatches anything under it.
+## How to behave inside a pylon
 
-## CLI Commands
+- **Source code is truth.** When the map and the code disagree, the map is wrong until the code changes or the map is updated. Never "fix" a failure by weakening a check you do not own.
+- **Frontmatter is typed data.** Each zone declares required keys and a closed `status:` set (`manifests/vocabulary.json`). The engine parses it strictly and tells you the line when you break it.
+- **Generated manifests are not hand-edited.** `manifests/rules.json` and `manifests/packages.json` are rewritten by the tool and by the gate hooks. Edit the documents, regenerate via the hooks or `pylon manifest`.
+- **Underscore directories are not content.** Anything under a `_`-prefixed directory is scratch or examples; the CLI never lints, indexes, or dispatches it.
+- **URI schemes, never machine paths.** Reference code with `repo://<alias>/<path>` and documents with `pylon://<path>`.
+- **Write ASD-STE100.** Short, direct sentences: 20 words for procedures, 25 for descriptions. The linter enforces it.
+- **Create documents with the command, not by hand.** `pylon new <type> <name>` places the file in the right zone, stamps the dates, and fills the template; `pylon new decision <slug> --number` also assigns the next decision number.
 
-- `pylon lint [--changed] [--doc-only] [--fix] [--parity] [--update-baseline] [--ci] [--format=human|json|sarif]` - judge the ledger, or the staged docs, against every rule.
-- `pylon contract <plan> [--ci] [--format=human|json|sarif]` - resolve one plan's typed contracts against real code.
-- `pylon check <paths...> [--plan <plan>] [--stop-block] [--format=human|json|sarif]` - ground-check specific paths before editing them. `--plan` holds that active plan as yours.
-- `pylon brief [--format=human|json]` - one-line orientation: root, projects, extensions, doc count.
-- `pylon context <paths...> [--plan <plan>] [--preamble] [--format=human|json]` - load the docs and contracts that surround given paths.
-- `pylon context --diff-since <ref> [--manifest]` - list surfaces whose code moved since a ref but whose docs did not.
-- `pylon context --graph <package> [--depth N]` - compare a package's actual import graph against its declared `depends_on`.
-- `pylon staleness [--package <pkg>] [--fix]` - find documents past their zone's age gate.
-- `pylon review plan <path>` - judge one plan's structure and contract entries.
-- `pylon review postmortem [path] [--check-sources]` - judge quirk postmortems and verify their cited sources.
-- `pylon review staleness [--package <pkg>] [--fix]` - the staleness pass as a review lens.
-- `pylon review ratchet [--update]` - block when advisory counts rise above the recorded baseline.
-- `pylon review rework [--window <period>] [--package <pkg>]` - measure fix and refactor churn over feat-changed paths.
-- `pylon review merge-danger --body <file|-> [--base <ref>]` - validate a PR body's declared merge door against the derived blast radius.
-- `pylon review release-surface --pinned-releases <dir> [--base <ref>]` - compare pinned release surfaces against HEAD.
-- `pylon review gate-surface [--base <ref>]` - flag edits to the gates themselves.
-- `pylon review annotations --from <file|-> [--path-prefix <p>]` - convert findings into GitHub check annotations for CI.
-- `pylon harvest pr --diff <patch|-> [--metadata <json>] [--record <file>]` - extract symbol and quirk candidates from a merged PR's diff.
-- `pylon review retro --findings <file|-> [--window <period>] [--min <n>] [--shape <s>]` - turn repeated review findings into one promotion candidate.
-- `pylon sync [--detached]` - fetch origin in the background and fast-forward when the tree is clean.
-- `pylon review-brief <plan> [--stdout] [--base <ref>] [--validate <file> | --validate-resolutions <file>]` - generate a reviewer packet for a plan.
-- `pylon protocol [list|<name>] [--template <path>]` - render an agent protocol (`reflect` is the hygiene pass; `agent` is the session loop).
-- `pylon reflect [--template <path>]` - run the hygiene reflection protocol.
-- `pylon extensions [list|schema]` - list enabled language extensions and their contract kinds.
-- `pylon map [--type <t>] [--package <p>] [--tag <t>] [--status <s>] [--folder <dir>] [--query <q>] [--limit <n>] [--all]` - find documents by zone, status, or query.
-- `pylon search <query> [--limit <n>] [--all]` - full-text query over the indexed ledger.
-- `pylon gate pre-commit|pre-push` - the commit and push gates, callable directly; the shipped hooks exec these.
-- `pylon manifest [rules|packages|product] [--check]` - write or verify the generated manifest schemas.
-- `pylon self-update --from <dir> [--dry-run] [--force]` - apply a staged release, protecting user edits.
-- `pylon explain <rule_id>` - print one rule's semantics and fix hint.
-- `pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]` - structural code-similarity search over indexed projects.
-- `pylon install` - wire the gate hooks into this ledger's git repository.
-- `pylon init [dir]` - scaffold a fresh pylon.
-- `pylon new <type> <name> [--title <t>] [--number]` - create a typed document from the ledger's own template.
+## What lives in this folder
 
+- `INDEX.md` - the reading order for all of it.
+- `USAGE.md` - daily workflow and the canonical command and flag dictionary (single source; FEATURES points here).
+- `FEATURES.md` - what each zone and command fixes, with proof notes.
+- `INSTALL.md` - installing, updating, wiring gates.
+- `EXTENSIONS.md` - language extensions and external plugins.
+- `MANIFESTO.md` - design philosophy and the determinism stance.
+- `docs/` - end-user reference schemas: `pylons-yaml.md`, `parity-spec.md`, `adopting.md`. Engine-facing reference pages (machine contract, closed vocabulary, extension protocol) live in `cli/docs/` of the Pylons source repository.
+- `CHANGELOG.md` - what shipped, when.
+- `ROADMAP.md` - what is planned, source-free.
 
-Read the contents of @AGENTS.project.md
+## Working on this folder
+
+Keep these docs aligned with `../README.md`, `../AGENTS.md`, and `../cli/`. A claim here that the binary contradicts is a defect, not a wording problem. The authoritative agent loop for working in any pylon is `../protocols/agent.md`.

@@ -108,7 +108,7 @@ func TestGatePreCommitAutoStagesManifests(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "plans", "proposals"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "plans", "proposals", "feature-p.md"), []byte("---\ntitle: p\ntype: plan\nstatus: proposed\ncreated: 2026-11-01\nupdated: 2026-11-20\nowners: [o]\nticket: [T-1]\nlinks: []\ndescription: d\ntags: [p]\n---\n\n# P\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "plans", "proposals", "feature-p.md"), []byte("---\ntitle: p\ntype: plan\nstatus: proposed\ncreated: 2026-11-01\nupdated: 2026-11-20\nowners: [o]\nticket: [T-1]\nlinks: []\ndescription: d\ntags: [p]\n---\n\n# P\n\n## Problem\n\np\n\n## External contract (code-checked)\n\nNone.\n\n## Design\n\nd\n\n## Milestones\n\nm\n\n## Open questions\n\nNone.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	g := exec.Command("git", "-C", dir, "add", "-Af", ".")

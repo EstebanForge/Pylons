@@ -53,6 +53,12 @@ func scanLifecycleRules(kbRoot string, docs []corpusDoc, cfg config.Config, hasC
 						out = append(out, errFinding("PYLON011", d.rel, 1, "archive move target already exists: plans/archive/"+base))
 					}
 				}
+				// Plan proposals (plans/proposals/, status proposed)
+				// get the same structural review as proposals/ docs;
+				// leaving them out was a silent review bypass.
+				if d.meta.Status == "proposed" {
+					out = append(out, ReviewPlan(kbRoot, d.rel)...)
+				}
 			}
 		case "proposals":
 			if !planFilenameRe.MatchString(base) {

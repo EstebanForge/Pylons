@@ -260,7 +260,7 @@ func utilityCitations(kbRoot string) (map[string]utilityCite, error) {
 			return nil
 		}
 		if d.IsDir() {
-			if utilitySkipDir(kbRoot, p, d.Name()) {
+			if utilitySkipDir(kbRoot, p, d.Name()) || isNestedLedgerDir(kbRoot, p) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -314,7 +314,7 @@ func utilitySkipDir(kbRoot, p, name string) bool {
 		return false
 	}
 	switch name {
-	case "templates", "protocols", "pylons", "cli", "bin", "manifests",
+	case "templates", "protocols", "pylons-docs", "cli", "bin", "manifests",
 		"scripts", "extensions", ".github", "dist":
 		return true
 	}

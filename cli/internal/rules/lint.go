@@ -38,6 +38,19 @@ var (
 )
 
 // isRootSkippedDir skips non-KB top-level directories without skipping nested folders of the same name.
+// isNestedLedgerDir reports whether dirPath (a child of the ledger
+// being walked) holds its own ledger manifest, making it a separate
+// ledger: parent-ledger walks never enter it. The ledger root itself
+// holds the manifest and is never a nested ledger.
+func isNestedLedgerDir(kbRoot, dirPath string) bool {
+	rel, err := filepath.Rel(kbRoot, dirPath)
+	if err != nil || filepath.ToSlash(rel) == "." {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(dirPath, "manifests", "pylons.yaml"))
+	return err == nil && info.Mode().IsRegular()
+}
+
 func isRootSkippedDir(kbRoot, dirPath string) bool {
 	rel, err := filepath.Rel(kbRoot, dirPath)
 	if err != nil {
@@ -48,7 +61,7 @@ func isRootSkippedDir(kbRoot, dirPath string) bool {
 		return filepath.Base(dirPath) == ".git"
 	}
 	switch rel {
-	case ".git", ".github", "cli", "bin", "templates", "manifests", "protocols", "extensions":
+	case ".git", ".github", "cli", "bin", "templates", "manifests", "protocols", "extensions", "pylons-docs":
 		return true
 	default:
 		return false
@@ -83,7 +96,7 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 			return nil
 		}
 		if d.IsDir() {
-			if isRootSkippedDir(kbRoot, p) || strings.HasPrefix(d.Name(), "_") {
+			if isRootSkippedDir(kbRoot, p) || strings.HasPrefix(d.Name(), "_") || isNestedLedgerDir(kbRoot, p) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -119,8 +132,8 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 		if changedSet != nil && !changedSet[rel] {
 			return nil
 		}
-		// Root docs and pylons/prompts/skills skip strict frontmatter/STE scans.
-		if !strings.Contains(rel, "/") || strings.HasPrefix(rel, "pylons/") || strings.HasPrefix(rel, "prompts/") || strings.HasPrefix(rel, "skills/") {
+		// Root-level docs and prompts/skills skip strict frontmatter/STE scans.
+		if !strings.Contains(rel, "/") || strings.HasPrefix(rel, "prompts/") || strings.HasPrefix(rel, "skills/") {
 			return nil
 		}
 

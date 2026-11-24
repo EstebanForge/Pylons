@@ -3,7 +3,7 @@ title: "Installing and Setting Up Pylons"
 type: meta
 status: active
 created: 2026-11-19
-updated: 2026-11-23
+updated: 2026-11-25
 ---
 
 # Installing and Setting Up Pylons
@@ -39,18 +39,18 @@ To install manually instead, download `pylons-vX.Y.Z-<os>-<arch>.tar.gz` and `py
 
 ## 3. Build the `pylon` CLI from Source
 
-Build the binary into `bin/pylon` or install it onto your `PATH`:
+Build the binary into `pylons/bin/pylon` or install it onto your `PATH`:
 
 ```bash
-cd pylons/cli
+cd cli
 go test ./...
-go build -o ../bin/pylon ./cmd/pylon
+go build -o ../pylons/bin/pylon ./cmd/pylon
 ```
 
 To install globally on your `PATH`:
 
 ```bash
-cd pylons/cli
+cd cli
 go install ./cmd/pylon
 ```
 

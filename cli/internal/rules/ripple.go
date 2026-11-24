@@ -87,7 +87,7 @@ func rippleIndex(kbRoot string) (rippleDecls, []rippleGlob) {
 	var globs []rippleGlob
 	_ = filepath.WalkDir(kbRoot, func(p string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
-			if d != nil && d.IsDir() && (isRootSkippedDir(kbRoot, p) || strings.HasPrefix(d.Name(), "_")) {
+			if d != nil && d.IsDir() && (isRootSkippedDir(kbRoot, p) || strings.HasPrefix(d.Name(), "_") || isNestedLedgerDir(kbRoot, p)) {
 				return filepath.SkipDir
 			}
 			return nil

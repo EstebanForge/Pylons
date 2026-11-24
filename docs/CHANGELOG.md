@@ -3,12 +3,16 @@ title: "Pylons Changelog"
 type: meta
 status: active
 created: 2026-01-26
-updated: 2026-11-24
+updated: 2026-11-25
 ---
 
 # Pylons Changelog
 
 Notable changes to the Pylons format and `pylon` CLI.
+
+## 2026-11-25
+
+- The repository now separates engine from ledger: the whole ledger payload (zones, machine manifests, templates, protocols, extensions, reference pages, license files) lives in `pylons/`, the engine source stays in `cli/` beside `scripts/` and the manual in `docs/`. A release archives `pylons/` verbatim, so what `install.sh` places in a fresh ledger is exactly what the folder holds, and the product manifest is generated ledger-relative. New files inside `pylons/` (including `pylons-docs/`) ship to installed ledgers on update; the manual and the example ledger stay in the source repository. Ledger discovery resolves in three steps: an explicit `--pylons`, a walk up from the working directory, then the binary's own home, so `pylons/bin/pylon brief` works from the parent project root. The installer asks for the ledger folder name (default `pylons`) when run interactively, creates the ledger with its own remote-less git repository, refuses to touch an existing repository inside the target, and updates an existing pylon in place without touching user files. Gate hooks stay an installed-ledger feature: a ledger that is not the repository root cannot wire them, so a nested dev ledger runs `pylon lint --pylons pylons` instead.
 
 ## 2026-11-24
 

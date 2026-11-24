@@ -21,7 +21,7 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 
 ## Command reference
 
-Ledger commands accept `--pylons <path>` to point at an explicit ledger; `gate`, `aroma`, and `explain` do not. Findings commands accept `--format human|json|sarif`; session commands accept `human` and `json`, and `--json` is the json alias. `pylon --version` prints the CLI version. Exit codes: 0 success or advisory-only, 1 blocking finding, 2 usage or setup error, 3 no ledger root; lint-family commands report unreadable input as findings (exit 1), command-style commands as setup errors (exit 2).
+Ledger commands accept `--pylons <path>` to point at an explicit ledger; `aroma` does not. Findings commands accept `--format human|json|sarif`; session commands accept `human` and `json`, and `--json` is the json alias. `pylon --version` prints the CLI version. Exit codes: 0 success or advisory-only, 1 blocking finding, 2 usage or setup error, 3 no ledger root; lint-family commands report unreadable input as findings (exit 1), command-style commands as setup errors (exit 2).
 
 | Command | Purpose |
 |---|---|

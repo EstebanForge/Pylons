@@ -73,10 +73,11 @@ func gatePreCommit(kbRoot string) int {
 	}
 
 	for _, f := range stagedFiles(kbRoot) {
-		if f == "proposals/README.md" || f == "proposals/AGENTS.md" {
+		if f == "proposals/README.md" || f == "proposals/AGENTS.md" ||
+			f == "plans/proposals/README.md" || f == "plans/proposals/AGENTS.md" {
 			continue
 		}
-		if strings.HasPrefix(f, "proposals/") && strings.HasSuffix(f, ".md") {
+		if (strings.HasPrefix(f, "proposals/") || strings.HasPrefix(f, "plans/proposals/")) && strings.HasSuffix(f, ".md") {
 			findings := rules.ReviewPlan(kbRoot, f)
 			if report.HasBlocking(findings) {
 				renderHuman(findings)

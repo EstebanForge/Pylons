@@ -1,6 +1,6 @@
 # Pylons Roadmap
 
-**Rule for agents and maintainers:** this file lists unshipped work only. When an item here ships, delete it from this file in the same change and record it at the top of `pylon://pylons/CHANGELOG.md`. Do not mark items done in place; shipped work lives in the changelog, not here.
+**Rule for agents and maintainers:** this file lists unshipped work only. When an item here ships, delete it from this file in the same change and record it at the top of `docs/CHANGELOG.md` in the source repository. Do not mark items done in place; shipped work lives in the changelog, not here.
 
 Features carry no order. Pull any feature forward when demand asks; list position implies no sequence.
 

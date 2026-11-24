@@ -178,7 +178,7 @@ func TestEngineReadKeysKnownOnEveryType(t *testing.T) {
 }
 
 func TestTemplateKeysCoverTheirTemplates(t *testing.T) {
-	entries, err := os.ReadDir("../../../templates")
+	entries, err := os.ReadDir("../../../pylons/templates")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestTemplateKeysCoverTheirTemplates(t *testing.T) {
 		if e.IsDir() || e.Name() == "AGENTS.md" || !strings.HasSuffix(e.Name(), ".md") {
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join("../../../templates", e.Name()))
+		raw, err := os.ReadFile(filepath.Join("../../../pylons/templates", e.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}

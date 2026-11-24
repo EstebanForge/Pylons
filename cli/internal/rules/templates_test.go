@@ -13,7 +13,7 @@ import (
 // typo here breaks every future copy. AGENTS.md is the folder how-to and
 // carries no frontmatter.
 func TestTemplateFrontmatterParses(t *testing.T) {
-	dir := filepath.Join(repoRoot(t), "templates")
+	dir := filepath.Join(repoRoot(t), "pylons", "templates")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Skipf("templates/ not reachable from this checkout: %v", err)

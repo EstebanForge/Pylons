@@ -169,7 +169,7 @@ func expandQueryTerms(kbRoot string, cfg config.Config, docs []docEntry, fields 
 			}
 		}
 	}
-	for pkg := range owningPkgs {
+	for _, pkg := range slices.Sorted(maps.Keys(owningPkgs)) {
 		report, err := rules.DependencyGraph(kbRoot, pkg, 1)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "pylon: dependency graph for %s unavailable: %v\n", pkg, err)

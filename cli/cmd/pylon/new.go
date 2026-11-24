@@ -6,9 +6,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -213,9 +215,6 @@ func fillNewFrontMatter(template string, spec *newDocType, title string) (string
 		dup := seen[key]
 		switch key {
 		case "title":
-			if dup {
-				return "", newMissingKeyError
-			}
 			line = "title: \"" + strings.NewReplacer("\\", "\\\\", "\"", "\\\"").Replace(title) + "\""
 		case "type":
 			line = "type: " + spec.typ
@@ -235,8 +234,8 @@ func fillNewFrontMatter(template string, spec *newDocType, title string) (string
 		b.WriteString(line)
 		b.WriteString("\n")
 	}
-	for key, ok := range seen {
-		if !ok {
+	for _, key := range slices.Sorted(maps.Keys(seen)) {
+		if !seen[key] {
 			return "", fmt.Errorf("%w: %s", newMissingKeyError, key)
 		}
 	}

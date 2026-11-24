@@ -36,7 +36,7 @@ Run this protocol periodically (weekly or monthly) to keep Pylons (`{{.Root}}`) 
 | `references/` | Phase 3 | Code, hooks, 3rd-party docs | `superseded` / `retired` move to `references/archive/` |
 | `quirks/`, `domain/` | Phase 4 | Code, tests, `review postmortem` | Retired / superseded docs move to `<zone>/archive/` |
 | `skills/`, `prompts/`, `templates/` | Phase 4 | Frontmatter, paths, `manifests/vocabulary.json` | Promote mature prompts to `skills/` |
-| `pylons/`, `manifests/` | Phase 5 | `manifest rules`, `manifest packages` | Refresh indexes and record pass in `pylons/` |
+| `manifests/` | Phase 5 | `manifest rules`, `manifest packages` | Refresh the machine manifests after zone edits |
 
 ## Working Ledger
 
@@ -106,9 +106,9 @@ Track counts and paths across phases:
 
 ---
 
-## Phase 4: Quirks, Flows, Domain, Skills, and Consolidation
+## Phase 4: Quirks, Domain, Skills, and Consolidation
 
-1. **Quirks, Flows, and Domain**:
+1. **Quirks and Domain**:
    - Run `{{.Bin}} review postmortem --check-sources`. Verify `sources:` and `contracts:` exist in code; move retired or obsolete quirks to `quirks/archive/`.
    - Verify `domain/**/*.md` matches current code (`entities/` status: `proposed` -> `accepted` when shipped); move superseded or retired docs to `<zone>/archive/`.
    - Run `{{.Bin}} check` and `{{.Bin}} context` on hot paths to confirm no stale `FORCED` warnings remain.

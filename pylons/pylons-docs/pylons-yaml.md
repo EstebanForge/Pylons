@@ -69,8 +69,8 @@ projects:
 
 - The engine locates the ledger by this file: a missing one makes every command exit 3. An existing file with zero projects is the empty ledger, and it runs.
 - An unparsable file produces a fail-closed finding. Commands that only inform print a warning and continue.
-- One alias can register one project; alias names are stable identifiers, so renaming one breaks every `repo://` URI that names it.
-- The extension system is configured here too. See [EXTENSIONS.md](../EXTENSIONS.md) for the language list and plugin installation.
+- One alias can register one project. Alias names are stable identifiers. Renaming one breaks every `repo://` URI that names it.
+- The extension system is configured here too. The source repository's manual (docs/EXTENSIONS.md) lists the language set and plugin installation.
 - The `parity:` section configures the parity spec in this same manifest family. See [parity-spec.md](parity-spec.md) for the closed schema, and `manifests/parity.json` for its JSON schema.
 ## How this schema moves
 

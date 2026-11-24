@@ -57,7 +57,8 @@ type ParityConfig struct {
 // errors.
 func parityFromMap(path string, m map[string]any) (*ParityConfig, error) {
 	spec := &ParityConfig{}
-	for key, val := range m {
+	for _, key := range slices.Sorted(maps.Keys(m)) {
+		val := m[key]
 		switch key {
 		case "version":
 			n, ok := val.(int)
@@ -71,7 +72,8 @@ func parityFromMap(path string, m map[string]any) (*ParityConfig, error) {
 				return nil, fmt.Errorf("%s.profiles must be a map of language bindings", path)
 			}
 			profs := make(map[string]ParityProfile, len(raw))
-			for lang, pv := range raw {
+			for _, lang := range slices.Sorted(maps.Keys(raw)) {
+				pv := raw[lang]
 				if !extensionNameRe.MatchString(lang) {
 					return nil, fmt.Errorf("%s.profiles: invalid language id %q", path, lang)
 				}
@@ -101,7 +103,8 @@ func parityFromMap(path string, m map[string]any) (*ParityConfig, error) {
 
 func parityProfileFromMap(path, lang string, m map[string]any) (ParityProfile, error) {
 	prof := ParityProfile{}
-	for key, val := range m {
+	for _, key := range slices.Sorted(maps.Keys(m)) {
+		val := m[key]
 		switch key {
 		case "use":
 			s, ok := val.(string)
@@ -206,7 +209,7 @@ func validateParitySpecs(c *Config) error {
 			return err
 		}
 	}
-	for alias := range c.Projects {
+	for _, alias := range slices.Sorted(maps.Keys(c.Projects)) {
 		proj := c.Projects[alias]
 		if proj.Parity == nil {
 			continue

@@ -6,6 +6,7 @@ package rules
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/estebanforge/pylons/cli/internal/report"
@@ -250,6 +251,48 @@ protected:
 	for i := range findings {
 		if findings[i].RuleID == "PYLON029" {
 			t.Fatalf("a foreign alias must not fire a components-scoped glob: %+v", findings[i])
+		}
+	}
+}
+
+// The product manual no longer lives inside a ledger, so a ledger-side
+// pylons folder holds user documents and gets the strict scans any
+// zone content gets.
+func TestLintScansLedgerPylonsFolderStrictly(t *testing.T) {
+	kb := t.TempDir()
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), "version: 1\nextensions: []\nprojects: {}\n")
+	mustWrite(t, filepath.Join(kb, "pylons/bad.md"), `---
+title: "Bad"
+type: plan
+status: bogus
+---
+
+# Bad
+`)
+	findings := Lint(kb, LintOptions{HasCode: true})
+	strict := false
+	for _, f := range findings {
+		if strings.Contains(filepath.ToSlash(f.File), "pylons/") {
+			strict = true
+		}
+	}
+	if !strict {
+		t.Fatalf("a ledger pylons-folder doc skipped the strict scan: %+v", findings)
+	}
+}
+
+func TestLintSkipsNestedLedgers(t *testing.T) {
+	kb := t.TempDir()
+	mustWrite(t, filepath.Join(kb, "manifests/pylons.yaml"), "version: 1\n")
+	mustWrite(t, filepath.Join(kb, "decisions/D-root.md"), "---\ntitle: Root\ntype: decision\nstatus: accepted\n---\n\n# Root\n")
+	// A nested ledger inside this one is not this ledger's content.
+	mustWrite(t, filepath.Join(kb, "nested/manifests/pylons.yaml"), "version: 1\n")
+	mustWrite(t, filepath.Join(kb, "nested/decisions/D-nested.md"), "---\ntitle: Nested\ntype: decision\nstatus: accepted\n---\n\n# Nested\n")
+
+	res := Lint(kb, LintOptions{HasCode: false})
+	for _, f := range res {
+		if strings.Contains(f.File, "nested/") {
+			t.Fatalf("lint walked into a nested ledger: %+v", f)
 		}
 	}
 }

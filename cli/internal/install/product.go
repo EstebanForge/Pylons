@@ -47,7 +47,7 @@ var docZones = []string{
 }
 
 var productKeepers = []string{
-	"packages/archive", "plans/archive",
+	"packages/archive", "plans/archive", "plans/proposals",
 	"decisions/proposals", "decisions/archive",
 	"conventions/proposals", "conventions/archive",
 	"quirks/archive",
@@ -58,9 +58,9 @@ var productKeepers = []string{
 
 // productTrees ship whole directories: every regular file inside, so
 // a new file inside a tree enters the next release without an edit
-// here. protocols/ is tracked for the same reason: a new protocol doc
-// must reach installed ledgers on update, not only on fresh installs.
-var productTrees = []string{"pylons", "templates", "protocols", "extensions/_examples", "_examples"}
+// here. The product manual and the example ledger stay out: both live
+// in the source repository only and never travel into a ledger.
+var productTrees = []string{"templates", "protocols", "extensions/_examples", "pylons-docs"}
 
 // requiredTreeFiles must exist inside a product tree even though the
 // tree walk alone would pass with them gone. They are the shipped

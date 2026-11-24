@@ -14,7 +14,7 @@ func TestDemoExtensionsModern2025Syntax(t *testing.T) {
 	// Reference plugins live in extensions/_examples/, which the CLI
 	// never dispatches from. Copy them to a private extDir for this
 	// test.
-	examples := filepath.Clean(filepath.Join("..", "..", "..", "extensions", "_examples"))
+	examples := filepath.Clean(filepath.Join("..", "..", "..", "pylons", "extensions", "_examples"))
 	entries, err := os.ReadDir(examples)
 	if err != nil {
 		t.Fatalf("missing demo extensions dir %s: %v", examples, err)

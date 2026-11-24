@@ -6,7 +6,15 @@
 #   curl -fsSL https://raw.githubusercontent.com/EstebanForge/Pylons/main/scripts/install.sh | bash
 #   curl -fsSL ... | bash -s -- my-kb                  # custom directory
 #   curl -fsSL ... | PYLONS_VERSION=0.2.0 bash        # pinned version
+#   PYLONS_BASE_URL=https://mirror.example/dl         # asset mirror (optional)
+#   PYLONS_BASE_URL=file:///path/to/assets            # offline bundle (air-gapped install)
 #   curl -fsSL ... | bash -s -- --bin-only .          # binary only, into an existing directory
+#
+# Run from a file (bash install.sh) the installer asks for the ledger
+# folder name, default pylons. A piped install takes the default or
+# the positional argument without a prompt. A fresh install creates
+# the ledger with its own remote-less git repository; an install over
+# an existing pylon updates it in place and never touches user files.
 #
 # --bin-only places bin/pylon (with its license files) into an
 # existing directory and nothing else: no scaffolding, no git, no
@@ -24,10 +32,22 @@ main() {
 		BIN_ONLY=1
 		shift
 	fi
-	DEST="${1:-pylons}"
-
+	if [ -z "${1:-}" ] && [ "$BIN_ONLY" != 1 ] && [ -t 0 ]; then
+		# Ask for the ledger folder name. A piped install (curl | bash)
+		# has the script on stdin, so -t 0 is false there and the
+		# default applies without a prompt.
+		printf 'pylons-install: ledger folder name [pylons]: '
+		IFS= read -r answer || answer=""
+		DEST="${answer:-pylons}"
+	else
+		DEST="${1:-pylons}"
+	fi
 	log() { printf 'pylons-install: %s\n' "$*"; }
 	die() { printf 'pylons-install: %s\n' "$*" >&2; exit 1; }
+
+	case "$DEST" in
+		*/*|*'>'*) die "ledger folder name must be a plain folder name, got '$DEST'" ;;
+	esac
 
 	# --- tools, up front ------------------------------------------------
 	command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 ||
@@ -36,11 +56,20 @@ main() {
 		command -v openssl >/dev/null 2>&1 || die "need sha256sum, shasum, or openssl"
 
 	fetch() { # fetch <url> <outfile>
-		if command -v curl >/dev/null 2>&1; then
-			curl -fsSL --proto '=https' --tlsv1.2 "$1" -o "$2"
-		else
-			wget -qO "$2" --secure-protocol=TLSv1_2 "$1"
-		fi
+		case "$1" in
+			file://*)
+				# A local mirror (file://) serves air-gapped installs
+				# and offline bundles; no network transport runs.
+				cp "${1#file://}" "$2"
+				;;
+			*)
+				if command -v curl >/dev/null 2>&1; then
+					curl -fsSL --proto '=https' --tlsv1.2 "$1" -o "$2"
+				else
+					wget -qO "$2" --secure-protocol=TLSv1_2 "$1"
+				fi
+				;;
+		esac
 	}
 	sum() { # sum <file> -> sha256 hex
 		if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
@@ -64,6 +93,9 @@ main() {
 	# --- resolve version ------------------------------------------------
 	case "$VERSION" in
 		latest)
+			case "${PYLONS_BASE_URL:-}" in
+				file://*) die "PYLONS_BASE_URL=file:// needs an explicit PYLONS_VERSION" ;;
+			esac
 			latest_url="https://github.com/$REPO/releases/latest"
 			if command -v curl >/dev/null 2>&1; then
 				# Ask for the redirect itself; do not follow it.
@@ -79,7 +111,11 @@ main() {
 	# it. Bare semver everywhere: the tag, the URLs, the asset names.
 	[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]] ||
 		die "invalid version '$VERSION'"
-	base="https://github.com/$REPO/releases/download/$VERSION"
+	base="${PYLONS_BASE_URL:-https://github.com/$REPO/releases/download}"
+	case "$base" in
+		file://*) ;; # a bundle already contains the version directory
+		*) base="$base/$VERSION" ;;
+	esac
 
 	# --- download + verify, before touching the target ------------------
 	bin_asset="pylons-$VERSION-$os-$arch.tar.gz"
@@ -143,15 +179,22 @@ main() {
 		log "done"
 		return 0
 	fi
+	# An existing repository inside the target is never touched: a
+	# folder holding a repo but no pylons.yaml is someone's work, not
+	# a fresh install.
+	[ -e "$DEST/.git" ] && die "$DEST already holds a git repository and does not look like a pylon (no manifests/pylons.yaml); refusing to touch it"
 	[ -e "$DEST" ] && die "$DEST already exists and does not look like a pylon (no manifests/pylons.yaml); remove it or pass another directory"
 	# Rename the whole stage dir: no pre-created target to conflict with,
 	# and a failure above this line leaves nothing on disk.
 	mv "$work/stage" "$DEST"
 
 	# --- git + gates ----------------------------------------------------
+	# The ledger tracks its own work: a fresh, remote-less repository
+	# inside the ledger folder, never a remote and never a reuse of an
+	# existing repo.
 	if command -v git >/dev/null 2>&1; then
 		if (cd "$DEST" && git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; }); then
-			log "initialized git repository in $DEST"
+			log "initialized a fresh git repository in $DEST (no remote)"
 			if (cd "$DEST" && ./bin/pylon install --pylons .); then
 				log "gate hooks wired"
 			else
@@ -176,4 +219,8 @@ main() {
 	log "  1. cd $q and register your code repositories in manifests/pylons.yaml"
 	log "  2. ./bin/pylon --help"
 }
-main "$@"
+# Sourced callers (tests, mirrors) may pre-define the fetch surface;
+# a direct run keeps the https-only transport.
+if [ -z "${PYLONS_SOURCED:-}" ]; then
+	main "$@"
+fi

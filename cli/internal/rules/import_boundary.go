@@ -845,7 +845,7 @@ func resolveSpecifier(spec, self string, match func(spec, name string) bool, nam
 		if !match(spec, name) {
 			continue
 		}
-		if len(name) > len(best) {
+		if len(name) > len(best) || (len(name) == len(best) && name < best) {
 			best = name
 			bestAliases = aliases
 		}

@@ -5,6 +5,7 @@ package config
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -115,7 +116,8 @@ func Load(root string) (Config, error) {
 			return cfg, err
 		}
 	}
-	for alias, proj := range cfg.Projects {
+	for _, alias := range slices.Sorted(maps.Keys(cfg.Projects)) {
+		proj := cfg.Projects[alias]
 		projRaw, ok := generic["projects"].(map[string]any)
 		if !ok {
 			continue
@@ -185,7 +187,8 @@ func Load(root string) (Config, error) {
 			return cfg, errors.New("invalid extension name: " + ext)
 		}
 	}
-	for alias, proj := range cfg.Projects {
+	for _, alias := range slices.Sorted(maps.Keys(cfg.Projects)) {
+		proj := cfg.Projects[alias]
 		for _, ext := range proj.Extensions {
 			if !extensionNameRe.MatchString(ext) {
 				return cfg, errors.New("invalid extension name for project " + alias + ": " + ext)

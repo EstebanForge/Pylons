@@ -30,11 +30,11 @@ origin_sha="$(git rev-parse origin/main)"
 # Gates: format, vet, tests, lint, junk. AppleDouble stubs inside a
 # tarball are a known hazard on this tree. bsdtar must not embed them.
 [ -z "$(gofmt -l cli)" ] || { echo "gofmt needed:"; gofmt -l cli; exit 1; }
-# Build first: the cmd-level tests exec bin/pylon, so vet and test gate
-# the same binary the release ships.
-go build -C cli -o ../bin/pylon ./cmd/pylon
+# Build first: the cmd-level tests exec the release binary, so vet and
+# test gate the same binary the release ships.
+go build -C cli -o ../pylons/bin/pylon ./cmd/pylon
 (cd cli && go vet ./... && go test ./... -count=1)
-./bin/pylon lint >/dev/null
+./pylons/bin/pylon lint --pylons pylons >/dev/null
 junk="$(find . -name '._*' -not -path './.git/*' -print | head -n1)"
 [ -z "$junk" ] || { echo "AppleDouble junk present: $junk; sweep before releasing" >&2; exit 1; }
 export COPYFILE_DISABLE=1
@@ -61,7 +61,7 @@ for pair in $targets; do
 	fi
 	pins+=("$os-$arch=$PWD/dist/$name/$exe")
 	cp LICENSE NOTICE "dist/$name/"
-	cp bin/THIRD_PARTY_NOTICES "dist/$name/bin/"
+	cp pylons/bin/THIRD_PARTY_NOTICES "dist/$name/bin/"
 	tar -czf "dist/pylons-$tag-$os-$arch.tar.gz" -C "dist/$name" bin LICENSE NOTICE
 done
 
@@ -82,24 +82,29 @@ if [ -n "$host" ]; then
 	echo "== smoke ok ($host)"
 fi
 
-# Skeleton from tracked content only; git archive cannot pick up
-# junk. Tooling dirs stay out: hooks ship inside the binary, cli/ and
-# scripts/ are not part of an installed pylon.
+# Skeleton from tracked content only: the pylons/ tree IS the ledger
+# payload, archived verbatim so what install.sh places in a fresh
+# ledger is exactly what this folder holds. cli/, scripts/, the
+# manual, and the example ledger stay out: none of them is ledger
+# content.
 #
 # The product manifest is generated, not tracked: it lists exactly
 # what self-update may replace, so the updater can three-way every
-# product file against user edits.
+# product file against user edits. It is generated ledger-relative
+# (--pylons pylons) so installed ledgers can hash-compare directly.
 product_manifest="$(mktemp)"
 pin_args=()
 for p in "${pins[@]}"; do pin_args+=("--binary" "$p"); done
-./bin/pylon manifest product --release-version "$tag" --pylons . "${pin_args[@]}" > "$product_manifest" \
+./pylons/bin/pylon manifest product --release-version "$tag" --pylons pylons "${pin_args[@]}" > "$product_manifest" \
 	|| { echo "product manifest build failed; sweep before releasing" >&2; rm -f "$product_manifest"; exit 1; }
 for pair in $targets; do rm -rf "dist/pylon-${pair%/*}-${pair#*/}"; done
 
 stage="$(mktemp -d)"
-git archive --format=tar HEAD \
-	. ':(exclude)cli' ':(exclude).githooks' ':(exclude).github' ':(exclude)scripts' ':(exclude)dist' \
-	| tar -x -C "$stage"
+# strip-components drops the pylons/ prefix: the tarball root is the
+# ledger itself, so install.sh's mv stage DEST lands the ledger at the
+# target directory.
+git archive --format=tar HEAD pylons \
+	| tar -x --strip-components=1 -C "$stage"
 cp "$product_manifest" "$stage/manifests/product.json"
 COPYFILE_DISABLE=1 tar -cz -C "$stage" -f "dist/pylons-kb-$tag.tar.gz" .
 rm -rf "$stage" "$product_manifest"

@@ -121,7 +121,9 @@ func rbError(format report.Format, msg string, code int) int {
 func validateReviewBrief(path string, requireResolutions bool, format report.Format) int {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return rbError(format, fmt.Sprintf("cannot read review brief %s: %v", path, err), 1)
+		// Unreadable input is a setup error (exit 2), per the
+		// command-style exit-code taxonomy.
+		return rbError(format, fmt.Sprintf("cannot read review brief %s: %v", path, err), 2)
 	}
 	content := string(raw)
 	var problems []string

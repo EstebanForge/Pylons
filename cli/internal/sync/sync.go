@@ -134,7 +134,10 @@ func Run(kbRoot string) (Result, error) {
 		}
 		branch, err := resolve.GitRun(kbRoot, nil, "symbolic-ref", "--short", "HEAD")
 		if err != nil {
-			return res, fmt.Errorf("resolve current branch: %w", err)
+			// Detached HEAD: no branch to fast-forward; report it
+			// as divergence instead of erroring.
+			res.Diverged = true
+			return res, nil
 		}
 		if strings.TrimSpace(string(branch)) != "main" {
 			res.Diverged = true

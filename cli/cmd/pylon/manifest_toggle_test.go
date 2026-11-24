@@ -25,7 +25,7 @@ func TestManifestToggleDisablesGeneration(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(kb, "manifests", "pylons.yaml"), []byte("version: 1\ngenerate: []\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "bin", "pylon"))
+	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "pylons", "bin", "pylon"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestManifestDefaultStillWrites(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(kb, "manifests", "pylons.yaml"), []byte("version: 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "bin", "pylon"))
+	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "pylons", "bin", "pylon"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestUpdateBaselineFlagPath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(kb, "plans", "bad.md"), []byte("no frontmatter\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "bin", "pylon"))
+	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "pylons", "bin", "pylon"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestSelfUpdateFlagPath(t *testing.T) {
 	}
 	seedManifest(t, staged, "1.1.0")
 
-	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "bin", "pylon"))
+	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "pylons", "bin", "pylon"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,14 +160,14 @@ func seedProductTree(t *testing.T, root string) {
 		"manifests/rules.json", "manifests/vocabulary.json", "manifests/parity.json",
 		"manifests/extensions.example.json", "manifests/packages.example.json",
 		"manifests/pylons.example.yaml", "protocols/agent.md", "protocols/reflect.md",
-		"pylons/MANIFESTO.md", "templates/plan.md", "extensions/_examples/pylon-ext-js",
-		"_examples/ledger/README.md",
+		"templates/plan.md", "extensions/_examples/pylon-ext-js",
+		"pylons-docs/adopting.md",
 		"packages/AGENTS.md", "proposals/AGENTS.md", "plans/AGENTS.md",
 		"decisions/AGENTS.md", "conventions/AGENTS.md", "quirks/AGENTS.md",
 		"domain/AGENTS.md", "investigations/AGENTS.md",
 		"references/AGENTS.md", "tickets/AGENTS.md",
 		"prompts/AGENTS.md", "skills/AGENTS.md",
-		"packages/archive/.gitkeep", "plans/archive/.gitkeep",
+		"packages/archive/.gitkeep", "plans/archive/.gitkeep", "plans/proposals/.gitkeep",
 		"decisions/proposals/.gitkeep", "decisions/archive/.gitkeep",
 		"conventions/proposals/.gitkeep", "conventions/archive/.gitkeep",
 		"quirks/archive/.gitkeep",
@@ -188,7 +188,7 @@ func seedManifest(t *testing.T, root, version string) {
 	t.Helper()
 	// Reuse the engine through the CLI so the manifest matches
 	// exactly what a release would ship.
-	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "bin", "pylon"))
+	bin, err := filepath.Abs(filepath.Join("..", "..", "..", "pylons", "bin", "pylon"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,11 +277,11 @@ func TestLintBaselineBannerNeverPollutesJSON(t *testing.T) {
 	gitRun("add", "-Af", ".")
 	gitRun("commit", "-qm", "kb")
 	// Absorb the advisory so the baseline actually suppresses something.
-	cmd := exec.Command("../../../bin/pylon", "lint", "--update-baseline", "--pylons", dir)
+	cmd := exec.Command("../../../pylons/bin/pylon", "lint", "--update-baseline", "--pylons", dir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("update-baseline: %v\n%s", err, out)
 	}
-	out, err := exec.Command("../../../bin/pylon", "lint", "--format=json", "--pylons", dir).Output()
+	out, err := exec.Command("../../../pylons/bin/pylon", "lint", "--format=json", "--pylons", dir).Output()
 	if err != nil {
 		t.Fatalf("lint with a suppressing baseline must exit 0: %v\n%s", err, out)
 	}
@@ -310,7 +310,7 @@ func TestLintRejectsStrayPositionals(t *testing.T) {
 func TestManifestProductPinsPlatformBinaries(t *testing.T) {
 	pwd, _ := os.Getwd()
 	repo := filepath.Dir(filepath.Dir(filepath.Dir(pwd)))
-	bin := filepath.Join(repo, "bin", "pylon")
+	bin := filepath.Join(repo, "pylons", "bin", "pylon")
 	code, out, stderr := runPylon(t, repo, "manifest", "product",
 		"--release-version", "9.9.9", "--binary", "darwin-arm64="+bin, "--binary", "linux-amd64="+bin)
 	if code != 0 {
@@ -327,7 +327,7 @@ func TestManifestProductPinsPlatformBinaries(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("an identical duplicate pin must be accepted, got %d", code)
 	}
-	other := filepath.Join(repo, "LICENSE")
+	other := filepath.Join(repo, "pylons", "LICENSE")
 	code, _, stderr = runPylon(t, repo, "manifest", "product",
 		"--release-version", "9.9.9", "--binary", "linux-amd64="+bin, "--binary", "linux-amd64="+other)
 	if code != 1 || !strings.Contains(stderr, "different hash") {

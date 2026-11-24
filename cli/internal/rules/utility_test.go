@@ -484,7 +484,7 @@ func TestUtilityScanExcludesProductTrees(t *testing.T) {
 	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
 	root := utilityFixture(t, false)
 	marker := "<!-- pylon:referenced-doc: quirks/trap.md -->\n"
-	for _, dir := range []string{"templates", "protocols", "pylons", "_scratch"} {
+	for _, dir := range []string{"templates", "protocols", "pylons-docs", "_scratch"} {
 		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -504,6 +504,27 @@ func TestUtilityScanExcludesProductTrees(t *testing.T) {
 	}
 	if len(rep.Scored) != 1 || rep.Scored[0].Citations != 1 {
 		t.Fatalf("product-tree markers counted as citations: %+v", rep.Scored)
+	}
+}
+
+// The manual no longer lives inside a ledger, so a ledger-side pylons
+// folder is user content and its citation markers count.
+func TestUtilityScansLedgerPylonsFolder(t *testing.T) {
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	root := utilityFixture(t, false)
+	marker := "<!-- pylon:referenced-doc: quirks/trap.md -->\n"
+	if err := os.MkdirAll(filepath.Join(root, "pylons/notes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "pylons", "notes", "team.md"), []byte(marker), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := ReviewUtility(UtilityOptions{KBRoot: root, Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Scored) != 1 || rep.Scored[0].Citations != 1 {
+		t.Fatalf("ledger pylons-folder marker not counted: %+v", rep.Scored)
 	}
 }
 

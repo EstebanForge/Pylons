@@ -6,6 +6,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -72,5 +73,35 @@ func TestLoadMissingConfigReturnsDefault(t *testing.T) {
 	}
 	if cfg.Version != 1 || len(cfg.Projects) != 0 {
 		t.Fatalf("unexpected default config: %+v", cfg)
+	}
+}
+
+func TestConfigProjectErrorsAreDeterministic(t *testing.T) {
+	// Identical input must always report the same project first, not
+	// whichever key Go's map iteration hands over.
+	root := t.TempDir()
+	yaml := strings.Join([]string{
+		"projects:",
+		"  zeta:",
+		"    path: ./z",
+		"    extensions: [BAD NAME]",
+		"  alpha:",
+		"    path: ./a",
+		"    extensions: [bad name]",
+	}, "\n")
+	if err := os.MkdirAll(filepath.Join(root, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "manifests", "pylons.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 12; i++ {
+		_, err := Load(root)
+		if err == nil {
+			t.Fatal("invalid extensions must error")
+		}
+		if !strings.Contains(err.Error(), "alpha") {
+			t.Fatalf("run %d: error %q does not name the alphabetically first project", i, err)
+		}
 	}
 }

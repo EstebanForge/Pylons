@@ -16,14 +16,12 @@ func repoRoot(t *testing.T) string {
 		t.Fatal(err)
 	}
 	for {
-		if _, err := os.Stat(filepath.Join(dir, "manifests", "pylons.yaml")); err == nil {
-			if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil {
-				return dir
-			}
+		if _, err := os.Stat(filepath.Join(dir, "pylons", "manifests", "pylons.yaml")); err == nil {
+			return dir
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			t.Fatal("no ledger root above the working directory")
+			t.Fatal("no pylons ledger above the working directory")
 		}
 		dir = parent
 	}

@@ -18,7 +18,7 @@ import (
 // compiles in. When they drift, docs lie; this test is the drift
 // alarm.
 func TestVocabularyMirrorMatchesEngine(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(repoRoot(t), "manifests", "vocabulary.json"))
+	data, err := os.ReadFile(filepath.Join(repoRoot(t), "pylons", "manifests", "vocabulary.json"))
 	if err != nil {
 		t.Fatalf("read vocabulary.json: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestVocabularyMirrorMatchesEngine(t *testing.T) {
 }
 
 func TestParityMirrorMatchesEngine(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(repoRoot(t), "manifests", "parity.json"))
+	data, err := os.ReadFile(filepath.Join(repoRoot(t), "pylons", "manifests", "parity.json"))
 	if err != nil {
 		t.Fatalf("read parity.json: %v", err)
 	}
@@ -73,7 +73,7 @@ func contains(list []string, want string) bool {
 func TestFrontmatterKeysMirrorMatchesEngine(t *testing.T) {
 	// vocabulary.json carries the per-type frontmatter key registry;
 	// it must mirror resolve.TemplateKeys or the advisory lies.
-	data, err := os.ReadFile(filepath.Join(repoRoot(t), "manifests", "vocabulary.json"))
+	data, err := os.ReadFile(filepath.Join(repoRoot(t), "pylons", "manifests", "vocabulary.json"))
 	if err != nil {
 		t.Fatalf("read vocabulary.json: %v", err)
 	}

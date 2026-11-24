@@ -321,6 +321,20 @@ func TestAromaHelpAfterSubcommand(t *testing.T) {
 func TestAromaDispatchHolesExit2(t *testing.T) {
 	// Flags before the subcommand skip the early route; the shared parser
 	// then reports an unknown command. Documented, not silently different.
+	// chdir gives ledger discovery a root: the parser error needs a
+	// resolved ledger to reach.
+	ledger, err := filepath.Abs(filepath.Join("..", "..", "..", "pylons"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(ledger); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(old) })
 	if code := run([]string{"--", "aroma"}); code != 2 {
 		t.Fatalf("exit = %d, want 2", code)
 	}
@@ -419,6 +433,14 @@ func TestCaptureFlagPath(t *testing.T) {
 	if code := run([]string{"init", dir}); code != 0 {
 		t.Fatalf("init returned %d, want 0", code)
 	}
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(old) })
 	if code := run([]string{"context", "--diff-since", "--pylons", dir}); code != 2 {
 		t.Fatalf("--diff-since without a value must exit 2, got %d", code)
 	}
