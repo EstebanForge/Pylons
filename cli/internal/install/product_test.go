@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -71,6 +72,42 @@ func writeProductTree(t *testing.T, root string) {
 // The product layer is the exact allowlist the engine ships; a file
 // outside it must never enter a product manifest, because the
 // updater replaces everything the manifest lists.
+// Tree-tracked product directories follow their contents: a new file
+// inside a shipped tree enters the manifest without an exact-file
+// edit. protocols/ is the case that motivated this: a third protocol
+// doc must ship on the next release, not wait for a code change.
+func TestProductTreesTrackProtocols(t *testing.T) {
+	root := t.TempDir()
+	writeProductTree(t, root)
+	write(t, filepath.Join(root, "protocols", "third.md"), "third protocol\n")
+	m, err := BuildProductManifest(root, "1.0.0")
+	if err != nil {
+		t.Fatalf("BuildProductManifest: %v", err)
+	}
+	for _, want := range []string{"protocols/agent.md", "protocols/reflect.md", "protocols/third.md", "protocols/AGENTS.md"} {
+		if _, ok := m.Files[want]; !ok {
+			t.Errorf("product manifest missing %s: the protocols tree must track new files", want)
+		}
+	}
+}
+
+// TestRequiredTreeFilesGuard pins the release guard the reviewer's
+// repro found: the tree walk alone ships a protocols/ hole, so the
+// two protocol docs must fail the build when absent.
+func TestRequiredTreeFilesGuard(t *testing.T) {
+	root := t.TempDir()
+	writeProductTree(t, root)
+	for _, rel := range []string{"protocols/agent.md", "protocols/reflect.md"} {
+		if err := os.Remove(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := BuildProductManifest(root, "1.0.0")
+	if err == nil || !strings.Contains(err.Error(), "protocols/agent.md") {
+		t.Fatalf("missing protocol docs must fail the build naming the file, got %v", err)
+	}
+}
+
 func TestProductManifestIsTheAllowlist(t *testing.T) {
 	root := t.TempDir()
 	writeProductTree(t, root)

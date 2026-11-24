@@ -25,7 +25,7 @@ The engine is deterministic: zero model calls, closed vocabularies, stable rule 
 ## What lives in this folder
 
 - `INDEX.md` - the reading order for all of it.
-- `USAGE.md` - daily workflow and the full command dictionary.
+- `USAGE.md` - daily workflow and the canonical command and flag dictionary (single source; FEATURES points here).
 - `FEATURES.md` - what each zone and command fixes, with proof notes.
 - `INSTALL.md` - installing, updating, wiring gates.
 - `EXTENSIONS.md` - language extensions and external plugins.

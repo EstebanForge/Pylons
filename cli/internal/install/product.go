@@ -30,15 +30,12 @@ var productExactFiles = []string{
 	"bin/AGENTS.md",
 	"bin/THIRD_PARTY_NOTICES",
 	"extensions/AGENTS.md",
-	"protocols/AGENTS.md",
 	"manifests/rules.json",
 	"manifests/vocabulary.json",
 	"manifests/parity.json",
 	"manifests/extensions.example.json",
 	"manifests/packages.example.json",
 	"manifests/pylons.example.yaml",
-	"protocols/agent.md",
-	"protocols/reflect.md",
 }
 
 // docZones is every top-level zone that ships an AGENTS.md entry
@@ -59,8 +56,19 @@ var productKeepers = []string{
 	"references/archive", "tickets/archive",
 }
 
-// productTrees ship whole directories: every regular file inside.
-var productTrees = []string{"pylons", "templates", "extensions/_examples", "_examples"}
+// productTrees ship whole directories: every regular file inside, so
+// a new file inside a tree enters the next release without an edit
+// here. protocols/ is tracked for the same reason: a new protocol doc
+// must reach installed ledgers on update, not only on fresh installs.
+var productTrees = []string{"pylons", "templates", "protocols", "extensions/_examples", "_examples"}
+
+// requiredTreeFiles must exist inside a product tree even though the
+// tree walk alone would pass with them gone. They are the shipped
+// contract of the tree; the rest of the tree is free to grow.
+var requiredTreeFiles = []string{
+	"protocols/agent.md",
+	"protocols/reflect.md",
+}
 
 // ProductManifest is the release-time record of the product layer:
 // one sha256 per file, consumed by self-update for three-way drift.
@@ -154,6 +162,11 @@ func BuildProductManifest(root, version string) (ProductManifest, error) {
 		}
 		if count == 0 {
 			return m, fmt.Errorf("product tree %s is empty", tree)
+		}
+	}
+	for _, rel := range requiredTreeFiles {
+		if _, ok := m.Files[rel]; !ok {
+			return m, fmt.Errorf("product layer missing %s", rel)
 		}
 	}
 	return m, nil

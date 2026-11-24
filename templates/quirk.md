@@ -8,7 +8,7 @@ owners:
   - Pylons
 package: ""
 description: ""
-sources: []
+sources: []  # repo://<alias>/<path> or repo://<alias>@<branch>/<path>; a branch pin fires only on that branch (a branch name cannot contain a slash)
 contracts: []
 guard: ""
 guardrail: ""

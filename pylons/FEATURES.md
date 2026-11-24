@@ -170,7 +170,7 @@ An agent with the wrong context ships the wrong thing fast. These features feed 
 
 - **What**: The minimal relevant architectural slice for the files about to change: matching contracts, active collisions, quirk guardrails, conventions, and anti-patterns.
 - **The pain**: Stuffing whole repository directories into a context window burns tokens, slows generation, and degrades attention. The model drowns instead of reading.
-- **How it works**: Given target paths, it emits only what applies to those paths, cutting prompt tokens sharply while putting exact constraints at the point of work. Quirks whose `repo://` sources cover a target (exact path, or the source path as a directory ancestor) surface as quirk guardrails in the human output; targets need project attribution (`repo://` URIs or absolute paths inside tracked projects), the same rule the collision walk applies. `--preamble` prepends a cache-friendly architecture preamble for session boots.
+- **How it works**: Given target paths, it emits only what applies to those paths, cutting prompt tokens sharply while putting exact constraints at the point of work. Quirks whose `repo://` sources cover a target (exact path, or the source path as a directory ancestor) surface as quirk guardrails in the human output; targets need project attribution (`repo://` URIs or absolute paths inside tracked projects), the same rule the collision walk applies. A source pinned to one branch (`repo://alias@branch/path`) fires only while the ledger's checked-out branch matches it; a branch name cannot contain a slash, and a detached HEAD or a missing repository keeps a pinned source silent. Guardrails, `--slice`, and the ripple advisory all honor the pin. `--preamble` prepends a cache-friendly architecture preamble for session boots.
 - **For agents**: This is the difference between an agent that guesses and an agent that reads the rules for exactly the code it is about to touch.
 
 #### Stop blocks and protected paths (`pylon check`)
@@ -398,135 +398,14 @@ The audit behind the drift findings found one dominant failure mode: thorough pl
 
 Humans review and approve every change. Agents do the heavy lifting. Pylons leaves the coding to both; its job is keeping that code aligned with the architecture already agreed on.
 
-## 5. Reference: command dictionary
+## 5. Reference
 
-Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a built checkout, `pylons/bin/pylon` from an installed ledger). Exit code 3 means no `manifests/pylons.yaml` was found; every other command's contract is in the table.
+Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a built checkout, `pylons/bin/pylon` from an installed ledger). Exit code 3 means no `manifests/pylons.yaml` was found; every command's and flag's contract is in the [`USAGE.md`](USAGE.md) dictionary.
 
-### 5.1 Complete command dictionary
+### 5.1 Command and flag dictionary
 
-| Command | Purpose | When to run | Exit code 1 on |
-|---|---|---|---|
-| `brief [--pylons <path>]` | Non-blocking session summary: root, projects, extensions, corpus size. | Session boot | Never (exit 3 without a ledger root) |
-| `check <paths...>` | Intersects target paths with `contract.editing`, `contract.unstable`, and `protected:` globs. Evaluates `wrong_if` falsifiers. | Before editing code | Any `FORCED` collision or protected path |
-| `check --stop-block` | Renders `FORCED` check findings as structured agent stop blocks. | Agent session gate before writing code | Any `FORCED` collision |
-| `check --plan <plan> <paths...>` | Holds one accepted or in-progress plan as the plan of the caller: its `contract.editing` and `contract.unstable` sets do not stop it. Every other plan and every `protected:` glob still reports. | After you take a plan, before you edit | Any `FORCED` collision or protected path. Exit 2 when the named plan is missing or not active |
-| `context <paths...>` | Emits token-efficient architectural context: contracts, collisions, quirk guardrails, conventions. | Before file edits | Clean output |
-| `context --slice <plan>` | Prints only one plan's contracts with resolution state, linked quirks, and linked domain terms. | Starting a slice task | Missing plan exits 2 |
-| `context --preamble` | Emits `context` plus the cache-friendly architecture preamble. | Agent prompt boot | Clean output |
-| `map` | Projects corpus front matter as filterable one-line discovery records ranked by BM25 plus deterministic fusion signals. | Discovering docs before reading them | Usage errors exit 2 |
-| `search <query>` | Full-text BM25 search across non-archived documents, reranked by status, recency, rule ids, and project proximity; file and package tokens expand to owning packages and graph neighbors. | Finding docs by content | Usage errors exit 2 |
-| `aroma search\|recommend` | Structural code similarity over featurized parse trees: methods resembling the query, then the code its results share. Query from `--lines path:a-b`, `--snippet <file|->`, or `--diff <file|->` (one query per method the lines touch); corpus is registered projects by default, else `--corpus`. Zero model calls. | Exploring unfamiliar code, orienting on a diff | Never; usage, unreadable corpus, or an empty corpus exit 2 |
-| `review release-surface` | Pinned-release diff: block when a pinned deployment consumes a symbol, route, or cli surface removed or changed against its pinned tag; lockfiles under `--pinned-releases <dir>`, `--base <ref>` overrides pinning. | Release review, version-bump CI | Removed or changed consumed surfaces, unknown pin aliases, missing tags |
-| `review gate-surface` | Guard the guard: block when a diff touches suppression or closed-set manifests, the shipped hooks, the declared-schema templates, or a widened gate knob in `pylons.yaml`. | PR review, CI | Any changed gate surface; under `--ci` an unreadable base fails the run |
-| `review merge-danger` | Validates the merge-danger line in a PR body against the closed door vocabulary, derives the minimum door from each project's own diff, and refuses a declared downgrade. | Pre-merge gate | Missing, invalid, unpaired, or downgraded door; unreadable diffs advise |
-| `context --graph <package>` | Dependency view: actual import edges across registered projects, declared `depends_on`, undeclared and unused divergences; `--depth N` walks transitively. Import extraction runs for languages with both an extractor and a package identity (go, typescript/javascript, python, rust, php, java, kotlin, dart); C and C++ have no package identity and produce no edges. | Ownership checks, agent orientation | Never; a package no doc declares exits 2 |
-| `context --diff-since <ref>` | Session capture: surfaces the diff touched whose docs did not move in the same range (committed or not); `--manifest` emits the JSON document, warnings name unreadable projects. | Session close, doc-drift checks | Never; usage errors exit 2 |
-| `lint` | Validates frontmatter (strict decode), lifecycle statuses, links, the dependency graph, machine declarations, secret shapes, and STE-100 prose. Applies the FORCED baseline. | Before commit / PR | Frontmatter, links, lifecycle, secret, and parity errors |
-| `lint --fix` | Auto-relocates misplaced docs and heals single-depth broken links. | Fixing lint errors | Unfixable errors |
-| `lint --changed` | Pre-commit fast path: validates staged git files only. | Git pre-commit gate | Errors in staged files |
-| `lint --doc-only` | Judges the ledger documents only and skips every project-side check. | Doc-only edits, CI without repo checkouts | Document-side errors |
-| `lint --parity` | Declared-vs-code parity on top of the standard pass: domain `states:` against the enum at `states_symbol` (backing values when every case carries one, else case names); `machines:` transition triples against the marked code map (go map literal, php const array, rust match arms, the typescript switch reducer, or an external plugin); route exposes against project source mentions (advisory). Opt-in flag. | Typed-contract and machine drift | Mismatch, unreachable, dead, duplicate, and unparseable errors; an unbound language, transport failure, or missing half stays advisory (or errors via `on_unevaluated:`) and never reads as parity |
-| `machines:` declarations | One entry per lifecycle on a domain entity: id, states, triples, initial and terminal sets, `persisted_key:` write scan, `verified_by:` proof pointers. Doc-only graph checks run without `--parity`. | Lifecycle drift, bypassed state writes | Declaration errors block; write scan is advisory |
-| `lint --ci` | Strict mode: exits 1 on any finding, including advisories. | CI pipelines | Any finding |
-| `contract <plan>` | Resolves a plan's `contract.stable` definitions against tracked repositories. | Pre-release verification | Unresolved contracts |
-| `staleness [--package <pkg>]` | Flags package documents older than the age limit. | Release preparation | Stale documentation |
-| `staleness --fix` | Syncs verified dates in extracted frontmatter only. | Release preparation | Stale documentation |
-| `review plan <path>` | Validates plan or proposal structure and STE-100 compliance. | Proposal drafting | Invalid schema |
-| `review postmortem [path]` | Validates quirk structure (Symptom, Cause, Resolution) and guard types. | Post-mortem authoring | Missing required sections |
-| `review postmortem --check-sources` | Confirms every file in a quirk's `sources:` array exists in the mapped repos. | Post-mortem validation | Missing source files |
-| `review staleness [--package <pkg>] [--fix]` | The staleness pass as a review lens: same engine, review grouping for release work. | Release review | Stale documentation |
-| `review ratchet [--update]` | Counts advisories per package and zone against the committed `manifests/ratchet.json` baseline. Rising counts block. | CI or pre-push | Advisory count above baseline |
-| `review rework [--window] [--package]` | Counts `fix:` and `refactor:` commits touching paths a `feat:` commit changed, per registered project. Report-only. | Retro and planning | Never (skips unreadable projects) |
-| `review annotations --from <file|->` | Converts lint findings (SARIF or JSON) into GitHub Check annotations plus a summary comment body; blocking errors only, capped at 50 with the total kept, hostile text sanitized. | CI PR feedback (the workflow posts; the engine emits) | Never; unparsable input exits 2 |
-| `harvest pr --diff <patch|-> [--metadata <json>]` | Turn a merged PR diff into a candidate patch: exported-symbol `exposes:` proposals anchored to the claiming package doc, scaffolded quirk post-mortems for `Footgun:` markers in commit or review bodies, warnings for unattributed and vendored paths. | Capture at merge time | Report-only; never exits on findings |
-| `review retro --findings <file|->` | Count review-finding signatures inside a window and open exactly one promotion candidate per repeated signature: a convention stub in `conventions/proposals/`, a `wrong_if` falsifier entry for the named contract, or a lint-rule proposal. Structured records accumulate on lens, rule, contract, and path; free-text findings accumulate on a normalized-text slug, so differently-worded markers never merge. | Closing the loop on repeated review comments | Report-only; malformed records fail closed |
-| `review utility [--prune] [--promote]` | Knowledge utility: scores documents from citation markers (`pylon:referenced-doc`) and injection telemetry recorded at human `context` delivery, decayed on a 30-day half-life with day granularity. `--prune` archives uncited quirks delivered on 2+ distinct days past the weighted floor (mass 3.0); `--promote` writes one convention proposal per document cited 3+ times from 2+ files. Ghost paths (deleted documents) never score. | Knowledge hygiene, context ranking | Never; malformed telemetry exits 2 |
-| `review-brief <plan>` | Assembles a self-contained review packet for fresh-context reviewers. | Peer review | Plan errors |
-| `review-brief --validate <file>` | Stage-1 validation: verifies review completeness and empty evaluations. | Review submission | Incomplete reviews |
-| `review-brief --validate-resolutions <f>` | Stage-2 validation: verifies every finding was resolved before merge. | Pre-merge verification | Unresolved findings |
-| `manifest [packages\|rules]` | Compiles machine-readable JSON manifests. | Tooling build | Schema failure |
-| `manifest product --release-version <v> --binary <os-arch>=<file>...` | Writes the release product manifest (the managed-file allowlist `self-update` verifies against, plus one pinned hash per platform binary) to stdout. | Release build | Missing product layer; unparsable or duplicate pin |
-| `self-update --from <dir>` | Applies a staged release: verifies staged hashes fail-closed, three-ways product files (drift returns `.pylons-new` copies), writes the new product manifest, and swaps the binary last. | Upgrading an installed pylon | Drifted product files, no `--from` |
-| `sync [--detached]` | Detached freshness: records a timestamp, spawns a background `git fetch origin main`, and fast-forwards `main` on a later clean run. | Long-lived checkouts | Diverged or dirty trees are never merged; a fetch failure surfaces in `pylon brief` |
-| `gate <pre-commit\|pre-push>` | The engine-side gate stage the shipped hooks exec: manifest freshness, lint, and staged review loops on commit; manifest checks, corpus lint, and quirk-source validation on push. | Hook shims and CI | Missing binary exits 1 unless `PYLON_HOOKS_OPTIONAL=1` |
-| `manifest --check` | Verifies the committed manifests match the compiled catalogs without writing. | CI verification | Catalog drift |
-| `protocol [list\|<name>]` | Lists or renders shipped CLI protocols (`pylon reflect`, `pylon protocol agent`). | Session rituals | Unknown protocol |
-| `reflect [--template <path>]` | Renders the session retro protocol for the closing record. | Session close | Unknown template |
-| `new <type> <name>` | Creates a typed document from the ledger's own template with zone placement, default status, and today's dates filled. | Authoring | Unknown type, dirty name, existing file |
-| `new decision <slug> --number` | Assigns the next four-digit number under the configured prefix (default D), scanning decisions/ recursively, so the proposal carries its accepted-side name from birth. | Authoring | Numbering exhausted |
-| `extensions [list\|schema]` | Lists built-in language extensions and the custom-extension schema. | Enabling code extraction | Unknown extension |
-| `explain <rule_id>` | Prints rule name, severity, auto-fixability, description, and fix hint. | Fixing lint failures | Unknown rule ID |
-| `install [--pylons <path>] [--force]` | Writes `.githooks/`, enables `core.hooksPath`, repairs mode bits. Idempotent. | One-time ledger wiring | Nested pylon, hook conflict, missing binary |
-| `init [dir]` | Scaffolds a fresh ledger: zones, templates, manifest, gitignore. Wires hooks inside a git repo. | Starting a new pylon | Existing manifest is left untouched and the command exits 0 |
-| `--version` | Prints the CLI version. | Release checks | Never |
-
-### 5.2 Flags dictionary
-
-| Flag | Purpose and effect | Applicable commands |
-|---|---|---|
-| `--format <format>` | Sets output format: `human` (default), `json`, or `sarif` (findings commands only). | `check`, `lint`, `contract`, `staleness`, `review *`; `brief`, `context`, `map`, `search`, `extensions` accept `human` and `json` |
-| `--json` | Alias for `--format json`. | `check`, `lint`, `contract`, `staleness`, `review *`, `brief`, `context`, `map`, `search`, `extensions`, `review-brief` |
-| `--ci` | Strict mode: exits with code 1 on any finding, including advisories. | `lint`, `contract` |
-| `--fix` | Applies supported fixes (file moves, frontmatter date sync). | `lint`, `staleness` |
-| `--changed` | Fast pre-commit mode: inspects only staged git files. | `lint` |
-| `--doc-only` | Judges ledger documents only and skips project-side checks. | `lint` |
-| `--parity` | Runs the declared-vs-code parity pass on top of the standard lint. See `lint --parity` in 5.1. | `lint` |
-| `--allow-external-extensions` | Permits external `pylon-ext-<name>` plugins for this run; the default refuses them, and `PYLON_ALLOW_EXTERNAL_EXTENSIONS=1` is the environment equivalent. | `lint`, `contract` |
-| `--stop-block` | Formats `FORCED` collision findings as agent stop blocks. | `check` |
-| `--plan <plan>` | Holds one active plan as the caller's own: its `editing` and `unstable` sets do not stop it, and every other plan still reports. A missing or inactive plan exits 2. | `check`, `context` |
-| `--preamble` | Prepends the cache-friendly architecture preamble. | `context` |
-| `--template <path>` | Renders from a custom template file instead of the shipped page. | `protocol`, `reflect` |
-| `--detached` | Fetches `origin main` in the background and fast-forwards on a later clean run. | `sync` |
-| `--check-sources` | Verifies that all paths declared in quirk `sources:` exist. | `review postmortem` |
-| `--check` | Verifies the committed manifests match the compiled catalogs without writing. | `manifest` |
-| `--package <pkg>` | Scopes execution to a single package. | `staleness`, `review staleness`, `review rework`, `map` |
-| `--update` | Rewrites the advisory baseline from a fresh lint run. | `review ratchet` |
-| `--update-baseline` | Rewrites `manifests/baseline.json` from the current FORCED findings. | `lint` |
-| `--window <period>` | History window: `90d`, `12w`, `1y`, or bare days. | `review rework`, `review retro` |
-| `--pylons <path>` | Explicit path to the ledger, bypassing auto-discovery. | All ledger commands |
-| `--stdout` | Prints the generated review brief to stdout instead of writing a file. | `review-brief` |
-| `--validate <file>` | Validates that a returned review packet contains required evaluations. | `review-brief` |
-| `--validate-resolutions <f>` | Validates that all findings in a review packet are resolved. | `review-brief` |
-| `--base <ref>` | Base git ref for diff comparisons. | `review-brief`, `review merge-danger`, `review gate-surface`, `review release-surface`, `harvest pr` |
-| `--diff <patch|->` | Harvest input: the PR diff, or `-` for stdin. | Diff paths resolve against the caller directory, then the ledger root. |
-| `--findings <file|->` | Review-retro input: the JSONL findings file, or `-` for stdin. | Malformed records fail closed |
-| `--metadata <json>` | PR metadata for harvest: commits and review bodies scanned for `Footgun:` markers. | Malformed JSON fails closed |
-| `--record <file>` | Harvest appends each `Footgun:` marker as a JSONL finding for `review retro`. | Append-only file |
-| `--force` | Overwrites a conflicting `core.hooksPath` and drifted hook files. | `install`, `self-update` |
-| `--title <t>` | Sets the display title on the new document. | `new` |
-| `--number` | Assigns the next four-digit decision number. | `new decision` |
-| `--type <types>` | Filters documents by comma-separated type list. | `map` |
-| `--tag <tags>` | Filters documents by comma-separated tag list. | `map` |
-| `--folder <dir>` | Filters documents by folder path. | `map` |
-| `--query <q>` | Free-text relevance filter. | `map` |
-| `--status <st>` | Filters documents by status. | `map` |
-| `--limit <n>` | Caps result count. | `map`, `search` |
-| `--all` | Includes archive subtrees and non-corpus directories in results. | `map`, `search` |
-| `--corpus <dir>` | Adds a corpus root for indexing; repeatable. Default is the ledger's registered projects, else the working directory. | `aroma` |
-| `--lines <path>:a-b` | Builds the query from file lines; comma-separated ranges and repeats allowed. | `aroma` |
-| `--snippet <file\|->` | Builds one query from a snippet file or stdin. | `aroma` |
-| `--diff <file\|->` | One query per unified-diff hunk, from the added lines of the checked-out files. | `aroma` |
-| `--min <float>` | Results must be more similar than this. Search defaults 0.71, recommend 0.65. | `aroma` |
-| `--min-support <n>` | Fewest methods behind a recommendation. 2 by default; 1 reproduces the paper's behavior. | `aroma` |
-| `--min-query-size <n>` | Drops queries with fewer features. Default 0. | `aroma` |
-| `--shape <s>` | Force a promotion shape: `convention`, `falsifier`, or `lint-rule`. | Unanimous record shape wins otherwise |
-| `--min <n>` | Repeat threshold for review retro (default 2); the aroma `--min <float>` is a separate flag. | Lower values widen candidates |
-| `--include-tests` | Keeps `_test.go` files in the corpus. | `aroma` |
-| `--lang <id>` | Picks the language front end for stdin snippets. Only `go` ships today. | `aroma` |
-| `--graph <package>` | Names the package the dependency view starts from. | `context --graph` |
-| `--depth N` | Walk depth for the graph; 1 covers the package's own components. | `context --graph` |
-| `--from <file\|->` | The lint findings document (SARIF or JSON); `-` reads stdin. | `review annotations` |
-| `--from <dir>` | The staged release directory to apply. | `self-update` |
-| `--dry-run` | Prints the update plan without writing. | `self-update` |
-| `--release-version <v>` | Versions the product manifest written to stdout. | `manifest product` |
-| `--binary <os-arch>=<file>` | Pins a platform binary hash into the product manifest; repeatable, identical content is idempotent, a conflicting hash is an error. | `manifest product` |
-| `--body <file\|->` | The PR body to validate; `-` reads stdin. | `review merge-danger` |
-| `--path-prefix <p>` | Prefix for annotation paths when the KB lives in a repo subdirectory. | `review annotations` |
-| `--pinned-releases <dir>` | Deployment directory holding `<alias> <version>` lockfiles; the pinned version resolves to a release tag. | `review release-surface` |
-| `--diff-since <ref>` | Compares history since the ref against declared surfaces. | `context` |
-| `--manifest` | Emits the session-capture manifest as JSON. | `context --diff-since` |
-
-### 5.3 Exit codes
+The complete command and flag dictionary lives in [`USAGE.md`](USAGE.md): one dense row per command and flag, purpose and options inline. This guide keeps the feature cards above and the exit codes below; the dictionary is maintained in one place so a new command or flag edits a single table.
+### 5.2 Exit codes
 
 | Code | Meaning | Action required |
 |---|---|---|
