@@ -60,7 +60,7 @@ for pair in $targets; do
 		exe="bin/pylon.exe"
 	fi
 	pins+=("$os-$arch=$PWD/dist/$name/$exe")
-	cp LICENSE NOTICE "dist/$name/"
+	cp pylons/LICENSE pylons/NOTICE "dist/$name/"
 	cp pylons/bin/THIRD_PARTY_NOTICES "dist/$name/bin/"
 	tar -czf "dist/pylons-$tag-$os-$arch.tar.gz" -C "dist/$name" bin LICENSE NOTICE
 done
