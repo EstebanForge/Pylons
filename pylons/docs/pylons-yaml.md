@@ -3,7 +3,7 @@ title: "The pylons.yaml manifest"
 type: reference
 status: active
 created: 2026-11-20
-updated: 2026-11-20
+updated: 2026-11-23
 owners:
   - Pylons
 sources: []
@@ -76,4 +76,4 @@ projects:
 
 Adding a key or a value is free and needs no version bump. Removing a key, renaming a key, or changing a value's meaning bumps `version` and lands in the changelog. No migration layer ships.
 
-The per-type frontmatter key registry lives in `manifests/vocabulary.json` under `frontmatter_keys` and mirrors the engine. See [machine-contract.md](machine-contract.md) for the full contract: what machines read, the closed prose exceptions, and strict frontmatter decoding.
+The per-type frontmatter key registry lives in `manifests/vocabulary.json` under `frontmatter_keys` and mirrors the engine. The full contract (what machines read, the closed prose exceptions, and strict frontmatter decoding) lives in `cli/docs/machine-contract.md` of the Pylons source repository.

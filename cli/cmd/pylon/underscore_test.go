@@ -48,6 +48,49 @@ func TestScanDocsSkipsUnderscoreDirs(t *testing.T) {
 	}
 }
 
+// scanDocs backs brief, map, and search: the shipped product manual is not ledger content.
+func TestScanDocsSkipsProductManual(t *testing.T) {
+	kb := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kb, "plans/proposals"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(kb, "pylons/docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kb, "plans/proposals/real.md"),
+		[]byte("---\ntitle: \"Real\"\ntype: plan\nstatus: proposed\nupdated: 2026-11-21\ntags: []\n---\n\n# Real plan\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kb, "pylons/USAGE.md"),
+		[]byte("---\ntitle: \"Manual\"\ntype: meta\nstatus: active\nupdated: 2026-11-21\ntags: []\n---\n\n# Manual\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kb, "pylons/docs/schema.md"),
+		[]byte("---\ntitle: \"Schema\"\ntype: meta\nstatus: active\nupdated: 2026-11-21\ntags: []\n---\n\n# Schema\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	docs := scanDocs(kb, true)
+	var paths []string
+	for _, d := range docs {
+		paths = append(paths, filepath.ToSlash(d.Path))
+	}
+	for _, p := range paths {
+		if strings.HasPrefix(p, "pylons/") {
+			t.Fatalf("product manual doc surfaced in scanDocs: %s", p)
+		}
+	}
+	found := false
+	for _, p := range paths {
+		if p == "plans/proposals/real.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("real doc missing from scanDocs: %v", paths)
+	}
+}
+
 // The aroma corpus walk skips underscore dirs the same way it skips testdata.
 func TestAromaWalkSkipsUnderscoreDirs(t *testing.T) {
 	dir := t.TempDir()

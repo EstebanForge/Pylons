@@ -30,7 +30,7 @@ The engine is deterministic: zero model calls, closed vocabularies, stable rule 
 - `INSTALL.md` - installing, updating, wiring gates.
 - `EXTENSIONS.md` - language extensions and external plugins.
 - `MANIFESTO.md` - design philosophy and the determinism stance.
-- `docs/` - reference schemas: `pylons-yaml.md`, `machine-contract.md`, `parity-spec.md`, `extension-protocol.md`, `vocabulary.md`, `adopting.md`.
+- `docs/` - end-user reference schemas: `pylons-yaml.md`, `parity-spec.md`, `adopting.md`. Engine-facing reference pages (machine contract, closed vocabulary, extension protocol) live in `cli/docs/` of the Pylons source repository.
 - `CHANGELOG.md` - what shipped, when.
 - `ROADMAP.md` - what is planned, source-free.
 

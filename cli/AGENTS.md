@@ -10,6 +10,7 @@ Go module (`github.com/estebanforge/pylons/cli`) for the `pylon` command-line to
 - `internal/rules/`: `PYLON*` rule catalog (`manifests/rules.json`), linter passes, collision `check`, `contract`, `staleness`, `review`, and package manifest builder.
 - `internal/report/`: `human`, `json`, `sarif`, and `--stop-block` renderers.
 - `internal/protocols/`: Protocol loader and `text/template` renderer (reads `../protocols/*.md`, falls back to `templates/*.md`).
+- `docs/`: engine-facing reference pages (`machine-contract.md`, `vocabulary.md`, `extension-protocol.md`). Not shipped to ledgers; `pylons/docs/` carries the end-user equivalents.
 - `templates/`: Compiled-in default `.md` protocol templates (`//go:embed *.md`).
 
 ## Build and Test

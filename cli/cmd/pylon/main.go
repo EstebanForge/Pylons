@@ -1217,7 +1217,8 @@ func scanDocs(kbRoot string, includeArchive bool) []docEntry {
 				relDir = filepath.ToSlash(relDir)
 				if !strings.Contains(relDir, "/") {
 					switch relDir {
-					case ".git", "cli", "bin", "templates", "manifests", "protocols", "extensions":
+					// pylons/ is the product manual: shipped to every ledger, never ledger content.
+					case ".git", "cli", "bin", "templates", "manifests", "protocols", "extensions", "pylons":
 						return filepath.SkipDir
 					}
 				}
