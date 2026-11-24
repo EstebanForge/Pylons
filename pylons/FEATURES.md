@@ -3,7 +3,7 @@ title: "Pylons: Feature Guide"
 type: meta
 status: active
 created: 2026-11-20
-updated: 2026-11-23
+updated: 2026-11-24
 tags: [features, workflow, agents, developer-guide]
 ---
 

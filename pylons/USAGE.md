@@ -3,7 +3,7 @@ title: "Using Pylons and the pylon CLI"
 type: meta
 status: active
 created: 2026-11-19
-updated: 2026-11-23
+updated: 2026-11-24
 ---
 
 # Using Pylons and the `pylon` CLI
