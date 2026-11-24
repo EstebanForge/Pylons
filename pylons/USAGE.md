@@ -21,6 +21,8 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 
 ## Command reference
 
+Ledger commands accept `--pylons <path>` to point at an explicit ledger; `gate`, `aroma`, and `explain` do not. Findings commands accept `--format human|json|sarif`; session commands accept `human` and `json`, and `--json` is the json alias. `pylon --version` prints the CLI version.
+
 | Command | Purpose |
 |---|---|
 | `pylon brief` | Non-blocking session summary (always exits 0). |
@@ -28,15 +30,17 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 | `pylon check --plan <plan> <paths...>` | Same check with one accepted or in-progress plan held as yours: its `editing` and `unstable` sets do not stop you. A name that is not an active plan exits 2. |
 | `pylon context <paths...>` | Emit architectural slice for target files (`--preamble` adds workspace header). |
 | `pylon context --slice <plan>` | Print only one plan's contracts with resolution state, linked quirks, and linked domain terms (`--json` supported). |
+| `pylon context --graph <package> [--depth N]` | Dependency view: actual import edges across registered projects against declared `depends_on`, naming undeclared and unused divergences; `--depth` walks transitively. |
 | `pylon context --diff-since <ref> [--manifest]` | Report declared surfaces the diff touched whose docs did not move in the same range; uncommitted edits count on both sides, warnings name unreadable projects, `--manifest` emits the JSON document. Report-only. Glob contract ids are out of scope. |
-| `pylon lint` | Validate frontmatter, folder lifecycle, links, STE-100, and contracts (`--changed`, `--parity` (declared-vs-code parity: domain `states:` against the enum at `states_symbol`; `machines:` transition triples against the marked code map via the go, php, rust, and typescript profiles or external plugins; route exposes against project source, advisory) plus `--doc-only`, `--fix`, `--ci`). Findings render a remediation line from the rule catalog. macOS AppleDouble `._*` docs are skipped when `.gitignore` covers them; otherwise they fail with a fix hint. With `--ci`, any finding at all escalates to exit 1. |
-| `pylon contract <plan>` | Validate 1 plan's `contract.stable` entries against tracked projects. |
+| `pylon lint` | Validate frontmatter, folder lifecycle, links, STE-100, and contracts (`--changed`, `--parity` (declared-vs-code parity: domain `states:` against the enum at `states_symbol`; `machines:` transition triples against the marked code map via the go, php, rust, and typescript profiles or external plugins; route exposes against project source, advisory) plus `--doc-only`, `--fix`, `--ci`, and `--allow-external-extensions` (permits external plugins for this run; the default refuses them, and `PYLON_ALLOW_EXTERNAL_EXTENSIONS=1` is the environment equivalent). Findings render a remediation line from the rule catalog. macOS AppleDouble `._*` docs are skipped when `.gitignore` covers them; otherwise they fail with a fix hint. With `--ci`, any finding at all escalates to exit 1. |
+| `pylon contract <plan>` | Validate 1 plan's `contract.stable` entries against tracked projects (`--allow-external-extensions` permits external plugins). |
 | `pylon map` | Filterable corpus overview ranked by BM25 plus fusion signals (`--type`, `--package`, `--tag`, `--status`, `--folder`, `--query`, `--limit`, `--all`). |
 | `pylon search <query>` | Full-text BM25 search across non-archived docs, fused with status, recency, rule id, and project signals; file and package query tokens expand to owning packages and graph neighbors (`--limit`, `--all`). |
 | `pylon aroma search\|recommend` | Structural code similarity: methods resembling changed lines, a snippet, or a diff, plus the code they share (`--lines`, `--snippet`, `--diff`, `--min`, `--json`). Corpus is registered projects by default, else `--corpus`. Advisory; never gates. |
 | `pylon staleness` | Flag `packages/*.md` older than 90 days (`--package`, `--fix`). |
 | `pylon review plan <path>` | Check proposal/plan structure and STE-100 compliance. |
 | `pylon review postmortem [path]` | Check quirk sections and `sources:` existence (`--check-sources`). |
+| `pylon review staleness [--package <pkg>] [--fix]` | The staleness pass as a review lens: same engine, review grouping for release work. |
 | `pylon review ratchet` | Compare advisory counts per package/zone against `manifests/ratchet.json`; rising counts block (`--update` re-baselines after review). |
 | `pylon review rework` | Count `fix:`/`refactor:` commits touching paths a `feat:` commit changed, per registered project, report-only (`--window`, `--package`). |
 | `pylon lint --update-baseline` | Rewrite `manifests/baseline.json` from the current FORCED findings. When the baseline exists, matched findings stop blocking while new ones still fail; entries that no longer match are reported so the file only shrinks. |
@@ -49,9 +53,11 @@ Pylons organizes knowledge by rate of change and verifies every claim against tr
 | `pylon gate pre-commit\|pre-push` | Run one gate stage in-process; the shipped hook shims call exactly this. Exists so external hook templates can chain the engine with one stable line. |
 | `pylon review gate-surface` | Block when a diff touches a surface the checker itself relies on: suppression and closed-set manifests, the shipped hooks, the declared-schema templates, or a widened gate knob in `pylons.yaml` (`--base <ref>`, default `origin/main`; under `--ci` an unreadable base fails the run). |
 | `pylon sync --detached` | Start a detached background fetch when the last one is over an hour old, then fast-forward onto `origin/main` on a clean tree; never blocks. |
-| `pylon review-brief <plan>` | Generate `.pylon-review-brief.md` or validate review packets (`--validate`, `--validate-resolutions`). |
-| `pylon protocol [list|<name>]` | List or render CLI protocols (`pylon reflect` is the hygiene pass; `pylon protocol agent` is the session loop). |
-| `pylon manifest [rules|packages|product]` | Generate or `--check` `manifests/rules.json` and `manifests/packages.json` (a `generate:` list in pylons.yaml disables either; a disabled manifest never regenerates and is never stale). `product` renders `manifests/product.json`, the release-time hash list of the product layer plus one pinned hash per platform binary (pass `--binary <os-arch>=<file>` per cross build). |
+| `pylon review-brief <plan>` | Generate `.pylon-review-brief.md` (`--stdout` prints it instead) or validate review packets (`--base <ref>`, `--validate`, `--validate-resolutions`). |
+| `pylon protocol [list|<name>]` | List or render CLI protocols (`--template <path>` renders a custom template; `pylon reflect` is the hygiene pass; `pylon protocol agent` is the session loop). |
+| `pylon reflect [--template <path>]` | Render the session retro protocol for the closing record. |
+| `pylon extensions [list|schema]` | List built-in language extensions or print the external plugin schema (`--json` supported). |
+| `pylon manifest [rules|packages|product]` | Generate or `--check` `manifests/rules.json` and `manifests/packages.json` (a `generate:` list in pylons.yaml disables either; a disabled manifest never regenerates and is never stale). `product` renders `manifests/product.json`, the release-time hash list of the product layer plus one pinned hash per platform binary (pass `--release-version <v>` to version it and one `--binary <os-arch>=<file>` per cross build). |
 | `pylon explain <rule_id>` | Print rule description and fix hint for any `PYLON*` rule. |
 | `pylon install` | Write `.githooks/` and enable `core.hooksPath`; idempotent. Refuses a pylon below the repository root, refuses to replace another tool's `core.hooksPath` unless `--force`, and reports hooks that drifted from the shipped assets. |
 | `pylon init [dir]` | Scaffold a new pylon; wires gate hooks when run inside a git repository. |

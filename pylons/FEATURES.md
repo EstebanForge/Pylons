@@ -118,6 +118,14 @@ Every incident has 2 costs: the outage and the relearning. The features in this 
 - **How it works**: The investigation document lives beside the work, before and during the fix (`YYYY-MM-DD-<slug>.md`, `PYLON030`). Audit records (`type: audit`) share the zone with their own rules: findings-table row statuses (`PYLON018`) and reaudit dates (`PYLON026`). Investigations stay contract-free. Terminal records of both shapes move to `investigations/archive/`. Findings with recurring traps promote into `quirks/` with a verified guard.
 - **Guard**: `pylon lint` enforces the lifecycle statuses and folder placement.
 
+#### Capture and promotion (`pylon harvest pr`, `pylon review retro`)
+
+- **What**: A merge-time capture pass and a retro pass that turn repeated review findings into ledger candidates.
+- **The pain**: The lesson lives in the merged PR and dies in the review thread, so the same comment returns on the next PR.
+- **How it works**: `harvest pr` reads a merged diff: exported symbols become `exposes:` proposals for the claiming package, `Footgun:` markers become quirk stubs, and `--record` appends each marker as a JSONL finding. `review retro` counts finding signatures in a window and opens exactly one promotion candidate per repeated signature: a convention stub, a `wrong_if` falsifier entry, or a lint-rule proposal.
+- **For agents**: The loop needs no session memory: the record accumulates in files, and a human accepts or drops each candidate.
+- **Guard**: Report-only commands. Malformed records fail closed.
+
 #### Decision records (`decisions/`)
 
 - **What**: Architecture decision records. Once accepted, a decision is immutable; a change of direction means a new record that supersedes the old one.
@@ -143,6 +151,13 @@ An agent with the wrong context ships the wrong thing fast. These features feed 
 - **The pain**: Engineers and agents start work blind. Nobody knows whether the clone they are about to trust is registered, configured, or stale.
 - **How it works**: One command at boot. It never blocks: it reports what it sees and exits 0, and a missing or broken configuration surfaces on stderr instead of failing your session. When the last `pylon sync --detached` background fetch failed, brief prints `FETCH-FAILED <time>` so the failure is never silent.
 - **For agents**: The counts tell an agent the ledger is wired before it plans against it. Deeper state lives one command away in `map` and `check`.
+
+#### Detached freshness (`pylon sync`)
+
+- **What**: A background fetch that never blocks the session, with the fast-forward on a later clean run.
+- **The pain**: A long-lived checkout drifts behind origin, and the checks run against a stale map.
+- **How it works**: `sync --detached` records a timestamp, fetches `origin main` in the background, and fast-forwards `main` only when the tree is clean on a later run. A failed fetch surfaces in `pylon brief` as `FETCH-FAILED <time>`.
+- **Guard**: Diverged or dirty trees are never merged.
 
 #### Point-of-work context (`pylon context`)
 
@@ -180,6 +195,13 @@ An agent with the wrong context ships the wrong thing fast. These features feed 
 - **The pain**: The merge decision is where production breakage gets decided, and nothing forced the classification. Reviewers skimmed past irreversible changes.
 - **How it works**: The closed door vocabulary has two doors: `one-way` (migrations, backfills, irreversible writes, production contract changes) and `two-way` (easy revert). The gate validates the line and derives the minimum door from each project's own diff, so the pylon can live outside the code it judges: a `schema` contract change forces `one-way`, and a derived `one-way` may never be downgraded. A `one-way` door pairs with a breaking commit subject or a `#major` token in the diff, or a `Data migration:` note at a line start in the body. A diff the gate cannot read (shallow clone, missing base) surfaces an advisory instead of passing silently. CI runs `pylon review merge-danger --body <file|-> [--base <ref>]` before merge.
 - **Guard**: Convention `conv.merge-danger-line` (`PYLON047`); blocking findings exit 1.
+
+#### Session protocols (`pylon protocol`, `pylon reflect`)
+
+- **What**: Protocol pages shipped with the binary and rendered on demand: the agent session loop and the closing retro.
+- **The pain**: Every team re-writes its agent rituals in chat, and each session follows a different loop.
+- **How it works**: `pylon protocol [list|<name>]` renders a shipped protocol (`agent` is the session loop); `pylon reflect` renders the hygiene record for session close. `--template <path>` renders a custom template.
+- **For agents**: One stable loop, shipped with the ledger, rendered at session start and close.
 
 ### 3.4 Proof, not promises
 
@@ -257,6 +279,12 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 - **How it works**: `manifest` compiles validated JSON artifacts (`packages.json`, `rules.json`) from the source documents. `manifest --check` proves the committed JSON matches the compiled catalogs, so CI catches drift.
 - **Guard**: The pre-push gate runs the check on every push.
 
+#### Machine parity (`lint --parity`)
+
+- **The pain**: A machine documented in the ledger drifts from the enum and match arms in code, and no test names the drift.
+- **How it works**: The parity pass compares declarations against marked code: domain `states:` against the enum at `states_symbol`, `machines:` transition triples against the marked code map, and route `exposes:` against source mentions. An unbound language, a transport failure, or a missing half stays advisory and never reads as parity.
+- **Guard**: Declaration errors block without the flag (doc-only graph checks). Code mismatches block under it. External `pylon-ext-<name>` plugins serve languages the binary does not ship.
+
 #### Review packets (`pylon review-brief`)
 
 - **The pain**: A fresh reviewer (human or agent) must reassemble context from PRs, tickets, and plans, and reviewers with partial context approve partial work.
@@ -282,6 +310,18 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 - **How it works**: One command diffs the merge against a hardcoded surface list: gate manifests, `.githooks/`, `templates/`, and added gate knobs in `pylons.yaml`. Each touched surface is a `FORCED` finding the baseline cannot absorb.
 - **Guard**: `pylon review gate-surface --base <ref>`; `PYLON062` blocks, `PYLON063` advises on an unreadable base.
 
+#### Pinned-release surface (`pylon review release-surface`)
+
+- **The pain**: A deployment pinned to an old tag breaks when a consumed symbol or route changes, and the break lands at upgrade time.
+- **How it works**: Lockfiles under `--pinned-releases <dir>` name each deployment's version. The command diffs HEAD against each pinned tag and blocks when a pinned deployment consumes a removed or changed surface.
+- **Guard**: Unknown pin aliases and missing tags exit 1. `--base <ref>` overrides pinning for local checks.
+
+#### CI annotations (`pylon review annotations`)
+
+- **The pain**: Lint output inside a CI log is unreadable, so findings must land on the pull request itself.
+- **How it works**: The command converts lint findings (SARIF or JSON) into GitHub Check annotations plus a summary body: blocking errors only, capped at 50, hostile text sanitized. The workflow posts them; the engine only emits.
+- **Guard**: Never exits on findings; unparsable input exits 2. `--path-prefix` fixes annotation paths when the ledger lives in a repo subdirectory.
+
 #### Strict frontmatter
 
 - **The pain**: A typo in frontmatter used to fail silently and disable checks the author believed were active.
@@ -296,7 +336,7 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 
 ### 3.5 The rest of the ledger
 
-The cards above cover the systems with commands and grades. The rest of the ledger is reference material: zones with no CLI of their own, still part of what developers and agents read. One line each, so this guide stays honest about the whole map.
+The cards above cover the systems with commands and grades. The rest of the ledger is reference material: zones without a card of their own above, still part of what developers and agents read. One line each, so this guide stays honest about the whole map.
 
 | Zone | Holds | Who reads it |
 |---|---|---|
@@ -305,6 +345,8 @@ The cards above cover the systems with commands and grades. The rest of the ledg
 | `references/` | Third-party API docs and external hooks the platform relies on. | Developers and agents extending integrations |
 | `prompts/` | Shared raw agent prompts, reusable across the platform. | Agents and their operators |
 | `skills/` | Reusable team skills for agent environments. | Agents |
+| `protocols/` | Shipped agent protocols the CLI renders (`pylon protocol`, `pylon reflect`). | Agents and their operators |
+| `extensions/` | External `pylon-ext-<name>` plugins; `_examples/` holds a runnable parity plugin. | Developers enabling code extraction |
 | `pylons/` | Documentation about Pylons itself: manifesto, feature guide, roadmap, changelog, CLI manual. Start at [`pylons/INDEX.md`](pylons/INDEX.md). | Everyone |
 | `manifests/` | Compiled JSON artifacts the CLI emits and CI checks. | Tooling |
 
@@ -375,6 +417,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `lint` | Validates frontmatter (strict decode), lifecycle statuses, links, the dependency graph, machine declarations, secret shapes, and STE-100 prose. Applies the FORCED baseline. | Before commit / PR | Frontmatter, links, lifecycle, secret, and parity errors |
 | `lint --fix` | Auto-relocates misplaced docs and heals single-depth broken links. | Fixing lint errors | Unfixable errors |
 | `lint --changed` | Pre-commit fast path: validates staged git files only. | Git pre-commit gate | Errors in staged files |
+| `lint --doc-only` | Judges the ledger documents only and skips every project-side check. | Doc-only edits, CI without repo checkouts | Document-side errors |
 | `lint --parity` | Declared-vs-code parity on top of the standard pass: domain `states:` against the enum at `states_symbol` (backing values when every case carries one, else case names); `machines:` transition triples against the marked code map (go map literal, php const array, rust match arms, the typescript switch reducer, or an external plugin); route exposes against project source mentions (advisory). Opt-in flag. | Typed-contract and machine drift | Mismatch, unreachable, dead, duplicate, and unparseable errors; an unbound language, transport failure, or missing half stays advisory (or errors via `on_unevaluated:`) and never reads as parity |
 | `machines:` declarations | One entry per lifecycle on a domain entity: id, states, triples, initial and terminal sets, `persisted_key:` write scan, `verified_by:` proof pointers. Doc-only graph checks run without `--parity`. | Lifecycle drift, bypassed state writes | Declaration errors block; write scan is advisory |
 | `lint --ci` | Strict mode: exits 1 on any finding, including advisories. | CI pipelines | Any finding |
@@ -384,6 +427,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `review plan <path>` | Validates plan or proposal structure and STE-100 compliance. | Proposal drafting | Invalid schema |
 | `review postmortem [path]` | Validates quirk structure (Symptom, Cause, Resolution) and guard types. | Post-mortem authoring | Missing required sections |
 | `review postmortem --check-sources` | Confirms every file in a quirk's `sources:` array exists in the mapped repos. | Post-mortem validation | Missing source files |
+| `review staleness [--package <pkg>] [--fix]` | The staleness pass as a review lens: same engine, review grouping for release work. | Release review | Stale documentation |
 | `review ratchet [--update]` | Counts advisories per package and zone against the committed `manifests/ratchet.json` baseline. Rising counts block. | CI or pre-push | Advisory count above baseline |
 | `review rework [--window] [--package]` | Counts `fix:` and `refactor:` commits touching paths a `feat:` commit changed, per registered project. Report-only. | Retro and planning | Never (skips unreadable projects) |
 | `review annotations --from <file|->` | Converts lint findings (SARIF or JSON) into GitHub Check annotations plus a summary comment body; blocking errors only, capped at 50 with the total kept, hostile text sanitized. | CI PR feedback (the workflow posts; the engine emits) | Never; unparsable input exits 2 |
@@ -412,19 +456,25 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 
 | Flag | Purpose and effect | Applicable commands |
 |---|---|---|
-| `--format <format>` | Sets output format: `human` (default), `json`, or `sarif` (findings commands only). | `check`, `lint`, `contract`, `review *`, `staleness` |
-| `--json` | Alias for `--format json`. | `check`, `lint`, `contract`, `review *`, `brief`, `context`, `map` |
+| `--format <format>` | Sets output format: `human` (default), `json`, or `sarif` (findings commands only). | `check`, `lint`, `contract`, `staleness`, `review *`; `brief`, `context`, `map`, `search`, `extensions` accept `human` and `json` |
+| `--json` | Alias for `--format json`. | `check`, `lint`, `contract`, `staleness`, `review *`, `brief`, `context`, `map`, `search`, `extensions`, `review-brief` |
 | `--ci` | Strict mode: exits with code 1 on any finding, including advisories. | `lint`, `contract` |
 | `--fix` | Applies supported fixes (file moves, frontmatter date sync). | `lint`, `staleness` |
 | `--changed` | Fast pre-commit mode: inspects only staged git files. | `lint` |
+| `--doc-only` | Judges ledger documents only and skips project-side checks. | `lint` |
+| `--parity` | Runs the declared-vs-code parity pass on top of the standard lint. See `lint --parity` in 5.1. | `lint` |
+| `--allow-external-extensions` | Permits external `pylon-ext-<name>` plugins for this run; the default refuses them, and `PYLON_ALLOW_EXTERNAL_EXTENSIONS=1` is the environment equivalent. | `lint`, `contract` |
 | `--stop-block` | Formats `FORCED` collision findings as agent stop blocks. | `check` |
+| `--plan <plan>` | Holds one active plan as the caller's own: its `editing` and `unstable` sets do not stop it, and every other plan still reports. A missing or inactive plan exits 2. | `check`, `context` |
 | `--preamble` | Prepends the cache-friendly architecture preamble. | `context` |
+| `--template <path>` | Renders from a custom template file instead of the shipped page. | `protocol`, `reflect` |
+| `--detached` | Fetches `origin main` in the background and fast-forwards on a later clean run. | `sync` |
 | `--check-sources` | Verifies that all paths declared in quirk `sources:` exist. | `review postmortem` |
 | `--check` | Verifies the committed manifests match the compiled catalogs without writing. | `manifest` |
 | `--package <pkg>` | Scopes execution to a single package. | `staleness`, `review staleness`, `review rework`, `map` |
 | `--update` | Rewrites the advisory baseline from a fresh lint run. | `review ratchet` |
 | `--update-baseline` | Rewrites `manifests/baseline.json` from the current FORCED findings. | `lint` |
-| `--window <period>` | History window for rework counting: `90d`, `12w`, `1y`, or bare days. | `review rework` |
+| `--window <period>` | History window: `90d`, `12w`, `1y`, or bare days. | `review rework`, `review retro` |
 | `--pylons <path>` | Explicit path to the ledger, bypassing auto-discovery. | All ledger commands |
 | `--stdout` | Prints the generated review brief to stdout instead of writing a file. | `review-brief` |
 | `--validate <file>` | Validates that a returned review packet contains required evaluations. | `review-brief` |
@@ -435,6 +485,8 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `--metadata <json>` | PR metadata for harvest: commits and review bodies scanned for `Footgun:` markers. | Malformed JSON fails closed |
 | `--record <file>` | Harvest appends each `Footgun:` marker as a JSONL finding for `review retro`. | Append-only file |
 | `--force` | Overwrites a conflicting `core.hooksPath` and drifted hook files. | `install`, `self-update` |
+| `--title <t>` | Sets the display title on the new document. | `new` |
+| `--number` | Assigns the next four-digit decision number. | `new decision` |
 | `--type <types>` | Filters documents by comma-separated type list. | `map` |
 | `--tag <tags>` | Filters documents by comma-separated tag list. | `map` |
 | `--folder <dir>` | Filters documents by folder path. | `map` |
