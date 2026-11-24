@@ -239,76 +239,80 @@ func projectIdentities(kbRoot string, cfg config.Config) []projectIdentity {
 	return out
 }
 
-// pomIdentity reads a maven project's own coordinates: only tags that
-// are direct children of <project> count, so an inherited parent block
-// and dependency coordinates never stand in for the project's own.
-// XML comments are skipped: a commented-out coordinate is not an
-// identity. Only the qualified group.artifact name is an identity; the
-// bare artifact name is not, because artifact words are too generic to
-// match import namespaces across languages.
+// pomIdentity reads a maven project's own coordinates by walking the
+// tag stream, so one-line and multi-line poms parse alike: only tags
+// that are direct children of <project> count, an inherited parent
+// block and dependency coordinates never stand in, and XML comments
+// are not identities. Only the qualified group.artifact name is an
+// identity; the bare artifact name is not, because artifact words are
+// too generic to match import namespaces across languages.
 func pomIdentity(root string) []string {
 	raw, err := readManifest(filepath.Join(root, "pom.xml"))
 	if err != nil {
 		return nil
 	}
+	raw = xmlCommentRe.ReplaceAllString(raw, "")
+	const (
+		tokOpen      = 1
+		tokClose     = 2
+		tokSelfClose = 3
+	)
+	type pomTok struct {
+		pos   int
+		kind  int
+		group string
+		artif string
+	}
+	var toks []pomTok
+	for _, m := range xmlElementRe.FindAllStringSubmatchIndex(raw, -1) {
+		tag := raw[m[0]:m[1]]
+		// The two leaf captures are depth-neutral: their own open and
+		// close tags never count, so the capture token below sees the
+		// depth of the element that actually contains it.
+		if raw[m[2]:m[3]] == "groupId" || raw[m[2]:m[3]] == "artifactId" {
+			continue
+		}
+		kind := tokOpen
+		if strings.HasPrefix(tag, "</") {
+			kind = tokClose
+		} else if strings.HasSuffix(tag, "/>") {
+			kind = tokSelfClose
+		}
+		toks = append(toks, pomTok{pos: m[0], kind: kind})
+	}
+	for _, m := range pomGroupIdRe.FindAllStringSubmatchIndex(raw, -1) {
+		toks = append(toks, pomTok{pos: m[0], group: raw[m[2]:m[3]]})
+	}
+	for _, m := range pomArtifactIdRe.FindAllStringSubmatchIndex(raw, -1) {
+		toks = append(toks, pomTok{pos: m[0], artif: raw[m[2]:m[3]]})
+	}
+	slices.SortFunc(toks, func(a, b pomTok) int { return a.pos - b.pos })
 	var group, artifact string
 	depth := 0
-	inComment := false
-	for _, line := range strings.Split(raw, "\n") {
-		t := stripXMLComments(line, &inComment)
-		t = strings.TrimSpace(t)
-		if t == "" {
-			continue
-		}
-		opens := strings.Count(t, "<") - strings.Count(t, "</") - strings.Count(t, "<?") - strings.Count(t, "<!")
-		closes := strings.Count(t, "</")
-		selfClose := strings.HasSuffix(t, "/>")
-		if depth == 1 {
-			if group == "" {
-				if m := pomGroupIdRe.FindStringSubmatch(t); m != nil {
-					group = m[1]
+	for _, t := range toks {
+		switch {
+		case t.group != "" || t.artif != "":
+			if depth == 1 {
+				if t.group != "" && group == "" {
+					group = strings.TrimSpace(t.group)
+				}
+				if t.artif != "" && artifact == "" {
+					artifact = strings.TrimSpace(t.artif)
 				}
 			}
-			if artifact == "" {
-				if m := pomArtifactIdRe.FindStringSubmatch(t); m != nil {
-					artifact = m[1]
-				}
+		case t.kind == tokOpen:
+			depth++
+		case t.kind == tokClose:
+			depth--
+			if depth < 0 {
+				depth = 0
 			}
-		}
-		if selfClose {
-			continue
-		}
-		depth += opens - closes
-		if depth < 0 {
-			depth = 0
 		}
 	}
 	if artifact == "" || group == "" {
 		return nil
 	}
 	return []string{group + "." + artifact}
-}
-
-// stripXMLComments removes <!-- --> spans from one line, carrying an
-// unterminated comment across lines through inComment.
-func stripXMLComments(line string, inComment *bool) string {
-	var b strings.Builder
-	for i := 0; i < len(line); i++ {
-		if *inComment {
-			if i+2 < len(line) && line[i:i+3] == "-->" {
-				*inComment = false
-				i += 2
-			}
-			continue
-		}
-		if i+3 < len(line) && line[i:i+4] == "<!--" {
-			*inComment = true
-			i += 3
-			continue
-		}
-		b.WriteByte(line[i])
-	}
-	return b.String()
 }
 
 // gradleIdentity reads a gradle project's root name and group from the
@@ -564,8 +568,10 @@ var (
 	rsImportRe       = regexp.MustCompile(`(?:^|\n)\s*(?:pub\s+)?use\s+([\w:]+)`)
 	cIncludeRe       = regexp.MustCompile(`^\s*#\s*include\s*(?:<([^>]+)>|"([^"]+)")`)
 	javaImportRe     = regexp.MustCompile(`^\s*import\s+(?:static\s+)?([\w.]+)\s*;`)
-	kotlinImportRe   = regexp.MustCompile(`^\s*import\s+([\w.]+)(?:\s+as\s+\w+)?\s*(?://.*)?$`)
+	kotlinImportRe   = regexp.MustCompile(`^\s*import\s+([\w.]+)(?:\s+as\s+\w+)?\s*;?\s*(?://.*)?$`)
 	dartImportRe     = regexp.MustCompile(`^\s*(?:export\s+)?import\s+(?:"([^"]+)"|'([^']+)')`)
+	xmlCommentRe     = regexp.MustCompile(`(?s)<!--.*?-->`)
+	xmlElementRe     = regexp.MustCompile(`</?([A-Za-z_][\w.:-]*)[^>]*>`)
 	pomGroupIdRe     = regexp.MustCompile(`<groupId>([^<]+)</groupId>`)
 	pomArtifactIdRe  = regexp.MustCompile(`<artifactId>([^<]+)</artifactId>`)
 	gradleRootNameRe = regexp.MustCompile(`rootProject\.name\s*=\s*["']([^"']+)['"]`)

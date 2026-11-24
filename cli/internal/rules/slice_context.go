@@ -134,7 +134,10 @@ func sliceContracts(kbRoot, rel, content string, pf resolve.PlanFrontMatter, cfg
 }
 
 // sliceQuirks lists quirk documents whose repo:// sources name one of
-// the plan's component projects.
+// the plan's component projects. Matching is alias-scoped by design:
+// the slice orients on the whole component, while quirk guardrails
+// are path-scoped per target. A source pinned with alias@branch
+// lists only on that branch, the same rule guardrails apply.
 func sliceQuirks(kbRoot string, components []string) []string {
 	if len(components) == 0 {
 		return nil
@@ -143,10 +146,14 @@ func sliceQuirks(kbRoot string, components []string) []string {
 	for _, c := range components {
 		comps[c] = true
 	}
+	branch := ledgerBranch(kbRoot)
 	var out []string
 	for _, q := range quirkDocs(kbRoot) {
 		for _, src := range q.sources {
 			if u, ok := resolve.ParseURI(src); ok && u.Scheme == "repo" && comps[u.Alias] {
+				if u.Branch != "" && u.Branch != branch {
+					continue
+				}
 				out = append(out, q.path)
 				break
 			}

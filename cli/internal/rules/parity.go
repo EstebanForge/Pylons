@@ -310,13 +310,16 @@ func scanRoutePaths(root string, paths []string) map[string]bool {
 }
 
 var (
-	goConstStartRe     = regexp.MustCompile(`(?m)^\s*const\s*\(`)
-	goConstLineRe      = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?::?\s*([A-Za-z_][\w.]*))?\s*(?:=\s*(?:(iota)|"((?:[^"\\]|\\.)*)"|` + "`" + `((?:[^` + "`" + `])*)` + "`" + `))?\s*$`)
-	declEnumRe         = regexp.MustCompile(`\benum\s+(\w+)`)
-	cEnumDeclRe        = regexp.MustCompile(`\benum\s+(?:class\s+|struct\s+)?(\w+)`)
-	kotlinEnumDeclRe   = regexp.MustCompile(`\benum\s+class\s+(\w+)(?:\s*:\s*[\w<>. ]+)?`)
-	rustMemberRe       = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*[^,}\s]+)?\s*,?\s*$`)
-	javaMemberRe       = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*,?\s*$`)
+	goConstStartRe   = regexp.MustCompile(`(?m)^\s*const\s*\(`)
+	goConstLineRe    = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?::?\s*([A-Za-z_][\w.]*))?\s*(?:=\s*(?:(iota)|"((?:[^"\\]|\\.)*)"|` + "`" + `((?:[^` + "`" + `])*)` + "`" + `))?\s*$`)
+	declEnumRe       = regexp.MustCompile(`\benum\s+(\w+)`)
+	cEnumDeclRe      = regexp.MustCompile(`\benum\s+(?:class\s+|struct\s+)?(\w+)`)
+	kotlinEnumDeclRe = regexp.MustCompile(`\benum\s+class\s+(\w+)(?:\s*:\s*[\w<>. ]+)?`)
+	rustMemberRe     = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:=\s*[^,}\s]+)?\s*,?\s*$`)
+	javaMemberRe     = regexp.MustCompile(`^\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*,?\s*$`)
+	// ^ anchors against the per-call slice, so the opener must sit at a
+	// token boundary the caller already checked.
+	dollarOpenRe       = regexp.MustCompile(`^\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$`)
 	sqlEnumDeclRe      = regexp.MustCompile(`(?i)\bcreate\s+type\s+(\w+(?:\.\w+)?)\s+as\s+enum\s*\(`)
 	sqlAlterAddValueRe = regexp.MustCompile(`(?i)\balter\s+type\s+(\w+(?:\.\w+)?)\s+add\s+value\s+(?:if\s+not\s+exists\s+)?'((?:[^']|'')*)'`)
 	phpMemberRe        = regexp.MustCompile(`^\s*case\s+([A-Za-z_]\w*)\s*(?:=\s*['"]((?:[^'\\]|\\.)*)['"]|=\s*(-?\d+))?\s*;`)
@@ -633,6 +636,91 @@ func extractDartEnum(source, enumName string) ([]parityCase, error) {
 	return extractBracedEnum(declEnumRe, "enum", source, enumName, tsMemberRe, true, false, nil)
 }
 
+// maskDollarQuotes blanks the interior of postgres dollar-quoted
+// strings ($$...$$ and $tag$...$tag$) so a comment or quote marker
+// inside one is never read as syntax. The scanner walks comments and
+// single-quoted strings first: a $ inside a comment or a string is
+// text, and a $ that follows an identifier character belongs to that
+// identifier, so only a token-boundary opener may mask. An
+// unterminated opener masks to the end of input.
+func maskDollarQuotes(text string) string {
+	var b strings.Builder
+	i, n := 0, len(text)
+	for i < n {
+		switch c := text[i]; {
+		case c == '\'':
+			// Single-quoted string, '' is the escape. Copy verbatim;
+			// masking is not this function's job here.
+			j := i + 1
+			for j < n {
+				if text[j] == '\'' {
+					if j+1 < n && text[j+1] == '\'' {
+						j += 2
+						continue
+					}
+					j++
+					break
+				}
+				j++
+			}
+			b.WriteString(text[i:j])
+			i = j
+		case c == '-' && i+1 < n && text[i+1] == '-':
+			j := strings.IndexByte(text[i:], '\n')
+			if j < 0 {
+				j = n - i
+			} else {
+				j++
+			}
+			b.WriteString(text[i : i+j])
+			i += j
+		case c == '/' && i+1 < n && text[i+1] == '*':
+			j := strings.Index(text[i+2:], "*/")
+			if j < 0 {
+				j = n - i
+			} else {
+				j += 4
+			}
+			b.WriteString(text[i : i+j])
+			i += j
+		case c == '$':
+			if i > 0 && isIdentByte(text[i-1]) {
+				b.WriteByte(c)
+				i++
+				continue
+			}
+			m := dollarOpenRe.FindString(text[i:])
+			if m == "" {
+				b.WriteByte(c)
+				i++
+				continue
+			}
+			body := text[i+len(m):]
+			end := strings.Index(body, m)
+			if end < 0 {
+				b.WriteString(m)
+				b.WriteString(strings.Repeat(" ", len(body)))
+				return b.String()
+			}
+			b.WriteString(m)
+			b.WriteString(strings.Repeat(" ", end))
+			b.WriteString(m)
+			i += len(m) + end + len(m)
+		default:
+			b.WriteByte(c)
+			i++
+		}
+	}
+	return b.String()
+}
+
+// isIdentByte reports whether b can appear inside a postgres
+// identifier; a $ after such a byte is an identifier tail, never an
+// opener.
+func isIdentByte(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '$'
+}
+
 // extractSqlEnum reads Postgres CREATE TYPE ... AS ENUM statements.
 // The values are quoted strings and carry the case name verbatim
 // (doubled quotes unescape); the type name matches with or without a
@@ -640,7 +728,8 @@ func extractDartEnum(source, enumName string) ([]parityCase, error) {
 // identifiers fold. MySQL column ENUM(...) is a column option, not a
 // named set, so it has no extractor.
 func extractSqlEnum(source, enumName string) ([]parityCase, error) {
-	clean := stripSQLLineComments(source)
+	clean := maskDollarQuotes(source)
+	clean = stripSQLLineComments(clean)
 	clean = stripCCommentsQuoteAware(clean)
 	matches := sqlEnumDeclRe.FindAllStringSubmatchIndex(clean, -1)
 	// A bare name that two schema-qualified declarations answer is

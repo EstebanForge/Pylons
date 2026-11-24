@@ -34,12 +34,13 @@ type rippleArtifacts struct {
 func rippleFindings(kbRoot string, cfg config.Config, targets []normalizedTarget) []report.Finding {
 	decls, globs := rippleIndex(kbRoot)
 	terms := domainTermList(kbRoot)
+	branch := ledgerBranch(kbRoot)
 	var out []report.Finding
 	for _, nt := range targets {
 		if nt.alias == "" || nt.path == "" {
 			continue
 		}
-		arts := rippleArtifactsFor(kbRoot, cfg, nt, decls, globs, terms)
+		arts := rippleArtifactsFor(kbRoot, cfg, nt, decls, globs, terms, branch)
 		items := slices.Concat(arts.contracts, arts.quirks, arts.terms)
 		if len(items) == 0 {
 			continue
@@ -164,7 +165,7 @@ func uriSurfacePath(path string) string {
 // rippleArtifactsFor resolves the artifacts for one target: declaring
 // docs, quirks anchored to the same file, and domain terms found in the
 // target's source.
-func rippleArtifactsFor(kbRoot string, cfg config.Config, nt normalizedTarget, decls rippleDecls, globs []rippleGlob, terms []domainTerm) rippleArtifacts {
+func rippleArtifactsFor(kbRoot string, cfg config.Config, nt normalizedTarget, decls rippleDecls, globs []rippleGlob, terms []domainTerm, branch string) rippleArtifacts {
 	var arts rippleArtifacts
 	seen := map[string]bool{}
 	addContract := func(doc string) {
@@ -184,7 +185,7 @@ func rippleArtifactsFor(kbRoot string, cfg config.Config, nt normalizedTarget, d
 	}
 	// Quirks anchored to the same file by repo:// source.
 	root := cfg.ProjectPath(kbRoot, nt.alias)
-	for _, q := range quirkSourcesFor(kbRoot, nt.alias, nt.path) {
+	for _, q := range quirkSourcesFor(kbRoot, nt.alias, nt.path, branch) {
 		if !seen[q] {
 			seen[q] = true
 			arts.quirks = append(arts.quirks, q+" (quirk)")
@@ -203,9 +204,12 @@ func rippleArtifactsFor(kbRoot string, cfg config.Config, nt normalizedTarget, d
 	return arts
 }
 
-// quirkSourcesFor returns quirk documents whose repo:// sources name the
-// same alias and file path.
-func quirkSourcesFor(kbRoot, alias, targetPath string) []string {
+// quirkSourcesFor returns quirk documents whose repo:// sources name
+// the same alias and file path. A source pinned with alias@branch
+// matches only on that branch, the same rule quirk guardrails apply.
+// branch arrives resolved once per run: resolving it per target would
+// shell out to git for every path in a multi-target context call.
+func quirkSourcesFor(kbRoot, alias, targetPath, branch string) []string {
 	if alias == "" {
 		return nil
 	}
@@ -229,6 +233,9 @@ func quirkSourcesFor(kbRoot, alias, targetPath string) []string {
 		}
 		for _, src := range meta.Sources {
 			if u, ok := resolve.ParseURI(src); ok && u.Scheme == "repo" && u.Alias == alias && uriSurfacePath(u.Path) == targetPath {
+				if u.Branch != "" && u.Branch != branch {
+					continue
+				}
 				out = append(out, "quirks/"+e.Name())
 			}
 		}

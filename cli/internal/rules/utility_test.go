@@ -140,6 +140,38 @@ func TestUtilityGhostDocumentNeverScores(t *testing.T) {
 	}
 }
 
+// The stub dates come from the run's injected Now in UTC, so a run
+// near local midnight cannot stamp the wrong day into frontmatter.
+func TestUtilityStubDatesAreUTC(t *testing.T) {
+	now := time.Date(2026, 11, 23, 23, 30, 0, 0, time.FixedZone("UTC+9", 9*3600))
+	root := utilityFixture(t, false)
+	markers := strings.Repeat("<!-- pylon:referenced-doc: quirks/trap.md -->\n", 3)
+	for _, f := range []string{"plans/a.md", "plans/b.md"} {
+		if err := os.MkdirAll(filepath.Join(root, filepath.Dir(f)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(f)), []byte(markers), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := ReviewUtility(UtilityOptions{KBRoot: root, Now: now, Promote: true}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "conventions", "proposals"))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("promote stub missing: %v %v", entries, err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "conventions", "proposals", entries[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Local date at +09:00 is 2026-11-24; the stub must carry the UTC
+	// day, matching the telemetry records it will be judged against.
+	if !strings.Contains(string(data), "created: 2026-11-23") {
+		t.Fatalf("stub stamped a non-UTC date:\n%s", data)
+	}
+}
+
 func TestUtilityStubSlugSanitizedAndDistinct(t *testing.T) {
 	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
 	root := utilityFixture(t, false)

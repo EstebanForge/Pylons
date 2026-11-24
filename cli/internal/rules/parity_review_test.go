@@ -72,8 +72,77 @@ func TestImportMatcherNamespaceDirection(t *testing.T) {
 func TestExtractKotlinImports(t *testing.T) {
 	data := []byte("import a.b.C\nimport a.b.D as E // side effect\nimport a.b.F;\n// import gone.F\n")
 	got := extractKotlinImports(data)
-	if len(got) != 2 || got[0] != "a.b.C" || got[1] != "a.b.D" {
-		t.Fatalf("extractKotlinImports = %v, want [a.b.C a.b.D] (semicolon form and comments yield nothing)", got)
+	if len(got) != 3 || got[0] != "a.b.C" || got[1] != "a.b.D" || got[2] != "a.b.F" {
+		t.Fatalf("extractKotlinImports = %v, want [a.b.C a.b.D a.b.F] (trailing semicolon and comments allowed)", got)
+	}
+}
+
+func TestPomIdentityOneLine(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "pom.xml"),
+		"<project><groupId>com.acme</groupId><artifactId>lib</artifactId></project>")
+	pom := pomIdentity(dir)
+	if len(pom) != 1 || pom[0] != "com.acme.lib" {
+		t.Fatalf("pomIdentity = %v, want [com.acme.lib] (tag order, not line order)", pom)
+	}
+}
+
+// TestSqlDollarMaskStaysInLiveSQL pins the masking state machine: a
+// $ pair inside a comment or a quoted string is text, and a $ that
+// follows an identifier character belongs to that identifier, so only
+// a token-boundary opener may mask.
+func TestSqlDollarMaskStaysInLiveSQL(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want []string
+	}{
+		{"$$ inside a line comment is text",
+			"-- uses $$ quoting\nCREATE TYPE s AS ENUM ('a');\nALTER TYPE s ADD VALUE 'b';\n",
+			[]string{"a", "b"}},
+		{"$$ inside a block comment is text",
+			"/* $tag$ */\nCREATE TYPE s AS ENUM ('a');\nALTER TYPE s ADD VALUE 'b';\n",
+			[]string{"a", "b"}},
+		{"$$ inside a quoted string is text",
+			"SELECT '$$';\nCREATE TYPE s AS ENUM ('a');\nALTER TYPE s ADD VALUE 'b';\n",
+			[]string{"a", "b"}},
+		{"a quoted value may contain $$",
+			"CREATE TYPE s AS ENUM ('a$$');\nALTER TYPE s ADD VALUE 'b';\nSELECT '$$';\n",
+			[]string{"a$$", "b"}},
+		{"a $ after an identifier character never opens a mask",
+			"CREATE TYPE s AS ENUM ('a');\nSELECT price$$ FROM t;\nALTER TYPE s ADD VALUE 'b';\n",
+			[]string{"a", "b"}},
+		{"a tag opener after digits is an identifier tail",
+			"CREATE TYPE s AS ENUM ('a');\nSELECT 5$x$;\nALTER TYPE s ADD VALUE 'b';\n",
+			[]string{"a", "b"}},
+		{"a real dollar quote still masks comment syntax",
+			"CREATE TYPE s AS ENUM ('a');\nDO $$ SELECT '--x' AS /*y*/; $$;\nALTER TYPE s ADD VALUE 'b';\n",
+			[]string{"a", "b"}},
+	}
+	for _, tc := range cases {
+		got, err := extractSqlEnum(tc.src, "s")
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if len(got) != len(tc.want) {
+			t.Fatalf("%s: extracted %v, want %v", tc.name, got, tc.want)
+		}
+		for i, w := range tc.want {
+			if got[i].name != w {
+				t.Fatalf("%s: extracted %v, want %v", tc.name, got, tc.want)
+			}
+		}
+	}
+}
+
+func TestSqlDollarQuotedCommentSurvives(t *testing.T) {
+	src := "SELECT $$ keep /* markers $$;\nCREATE TYPE s AS ENUM ('a');\n-- */\nALTER TYPE s ADD VALUE 'b';\n"
+	cases, err := extractSqlEnum(src, "s")
+	if err != nil {
+		t.Fatalf("comment markers inside a dollar-quoted string must stay inside it: %v", err)
+	}
+	if len(cases) != 2 || cases[0].name != "a" || cases[1].name != "b" {
+		t.Fatalf("extracted %+v, want a and b", cases)
 	}
 }
 

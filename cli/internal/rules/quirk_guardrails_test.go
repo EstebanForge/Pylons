@@ -5,8 +5,12 @@ package rules
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/estebanforge/pylons/cli/internal/report"
 )
 
 // guardrailFixture builds a temp ledger with one tracked project
@@ -55,6 +59,122 @@ func guardrailFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+func TestQuirkBranchScopedSource(t *testing.T) {
+	root := guardrailFixture(t)
+	for _, c := range [][]string{{"git", "init", "-q"}, {"git", "symbolic-ref", "HEAD", "refs/heads/dev"}} {
+		cmd := exec.Command(c[0], c[1:]...)
+		cmd.Dir = root
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %v: %s", c, err, out)
+		}
+	}
+	quirk := func(name, sources string) {
+		t.Helper()
+		body := "---\ntitle: \"B\"\ntype: quirk\nstatus: active\nsources: " + sources + "\ncreated: 2026-11-24\nupdated: 2026-11-24\n---\n\n## Symptom\ns\n\n## Cause\nc\n\n## Resolution\nr\n"
+		if err := os.WriteFile(filepath.Join(root, "quirks", name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	quirk("branch-dev.md", "[repo://alpha@dev/src/x.go]")
+	quirk("branch-other.md", "[repo://alpha@other/src/x.go]")
+
+	got := QuirkGuardrails(root, []string{"repo://alpha/src/x.go"})
+	want := []string{"quirks/branch-dev.md", "quirks/file-trap.md"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("on dev = %v, want %v (a branch-pinned source fires only on its branch)", got, want)
+	}
+
+	if out, err := exec.Command("git", "-C", root, "symbolic-ref", "HEAD", "refs/heads/main").CombinedOutput(); err != nil {
+		t.Fatalf("switch branch: %v: %s", err, out)
+	}
+	got = QuirkGuardrails(root, []string{"repo://alpha/src/x.go"})
+	if len(got) != 1 || got[0] != "quirks/file-trap.md" {
+		t.Fatalf("on main = %v, want [quirks/file-trap.md]", got)
+	}
+}
+
+// TestRippleBranchScopedSource pins the quirk to a branch: the ripple
+// advisory consumes the same quirk sources and must fire only on that
+// branch, the same rule quirk guardrails and the slice apply.
+func TestRippleBranchScopedSource(t *testing.T) {
+	root := guardrailFixture(t)
+	for _, c := range [][]string{{"git", "init", "-q"}, {"git", "symbolic-ref", "HEAD", "refs/heads/dev"}} {
+		cmd := exec.Command(c[0], c[1:]...)
+		cmd.Dir = root
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %v: %s", c, err, out)
+		}
+	}
+	quirk := func(name, sources string) {
+		t.Helper()
+		body := "---\ntitle: \"B\"\ntype: quirk\nstatus: active\nsources: " + sources + "\ncreated: 2026-11-24\nupdated: 2026-11-24\n---\n\n## Symptom\ns\n\n## Cause\nc\n\n## Resolution\nr\n"
+		if err := os.WriteFile(filepath.Join(root, "quirks", name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	quirk("branch-dev.md", "[repo://alpha@dev/src/x.go]")
+
+	mentions := func(fs []report.Finding, needle string) bool {
+		for _, f := range fs {
+			if f.RuleID == "PYLON044" && strings.Contains(f.Message, needle) {
+				return true
+			}
+		}
+		return false
+	}
+	if got := Check(root, []string{"repo://alpha/src/x.go"}); !mentions(got, "quirks/branch-dev.md") {
+		t.Fatalf("on dev the ripple advisory must name quirks/branch-dev.md, got %v", got)
+	}
+
+	if out, err := exec.Command("git", "-C", root, "symbolic-ref", "HEAD", "refs/heads/main").CombinedOutput(); err != nil {
+		t.Fatalf("switch branch: %v: %s", err, out)
+	}
+	if got := Check(root, []string{"repo://alpha/src/x.go"}); mentions(got, "quirks/branch-dev.md") {
+		t.Fatalf("on main the branch-pinned quirk must stay silent, got %v", got)
+	}
+}
+
+func TestSliceQuirksBranchScoped(t *testing.T) {
+	root := guardrailFixture(t)
+	for _, c := range [][]string{{"git", "init", "-q"}, {"git", "symbolic-ref", "HEAD", "refs/heads/dev"}} {
+		cmd := exec.Command(c[0], c[1:]...)
+		cmd.Dir = root
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %v: %s", c, err, out)
+		}
+	}
+	body := "---\ntitle: \"B\"\ntype: quirk\nstatus: active\nsources: [repo://alpha@dev/src/x.go]\ncreated: 2026-11-24\nupdated: 2026-11-24\n---\n\n## Symptom\ns\n\n## Cause\nc\n\n## Resolution\nr\n"
+	if err := os.WriteFile(filepath.Join(root, "quirks", "branch-dev.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := sliceQuirks(root, []string{"alpha"})
+	found := false
+	for _, g := range got {
+		if g == "quirks/branch-dev.md" {
+			found = true
+		}
+		if g == "quirks/other-alias.md" {
+			t.Fatalf("slice listed a foreign alias: %v", got)
+		}
+	}
+	if !found {
+		t.Fatalf("on dev: branch-scoped quirk missing from %v", got)
+	}
+
+	if out, err := exec.Command("git", "-C", root, "symbolic-ref", "HEAD", "refs/heads/main").CombinedOutput(); err != nil {
+		t.Fatalf("switch branch: %v: %s", err, out)
+	}
+	for _, g := range sliceQuirks(root, []string{"alpha"}) {
+		if g == "quirks/branch-dev.md" {
+			t.Fatal("branch-scoped quirk listed on the wrong branch")
+		}
+	}
 }
 
 func TestQuirkGuardrailsMatchesTargets(t *testing.T) {
