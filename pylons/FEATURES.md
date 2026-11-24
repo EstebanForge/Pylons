@@ -126,6 +126,13 @@ Every incident has 2 costs: the outage and the relearning. The features in this 
 - **For agents**: The loop needs no session memory: the record accumulates in files, and a human accepts or drops each candidate.
 - **Guard**: Report-only commands. Malformed records fail closed.
 
+#### Knowledge utility (`pylon review utility`)
+
+- **What**: A deterministic utility score per document, from citations the corpus declares and injections the engine records.
+- **The pain**: The quirks ledger only grows. Obsolete traps inject into every session forever, and proven patterns never rise from quirks into formal conventions.
+- **How it works**: An agent session that closes with a citation comment (`<!-- pylon:referenced-doc: quirks/<file>.md -->`) names the document that shaped its work. The engine records one injection every time `pylon context` delivers a document: finding source docs, plain-context quirk guardrails, or slice-linked quirks. The score is citations over injections, every event decayed on a 30-day half-life.
+- **Guard**: `--prune` moves quirks delivered on at least two distinct days whose uncited weighted mass clears 3.0 to `quirks/archive/`; `--promote` opens one convention proposal per document cited 3 or more times from more than one place. Both need evidence: absence of telemetry never prunes, one heavy day is not repeated use, deleted documents never score, and the engine never rewrites an existing archive entry or stub.
+
 #### Decision records (`decisions/`)
 
 - **What**: Architecture decision records. Once accepted, a decision is immutable; a change of direction means a new record that supersedes the old one.
@@ -163,7 +170,7 @@ An agent with the wrong context ships the wrong thing fast. These features feed 
 
 - **What**: The minimal relevant architectural slice for the files about to change: matching contracts, active collisions, quirk guardrails, conventions, and anti-patterns.
 - **The pain**: Stuffing whole repository directories into a context window burns tokens, slows generation, and degrades attention. The model drowns instead of reading.
-- **How it works**: Given target paths, it emits only what applies to those paths, cutting prompt tokens sharply while putting exact constraints at the point of work. `--preamble` prepends a cache-friendly architecture preamble for session boots.
+- **How it works**: Given target paths, it emits only what applies to those paths, cutting prompt tokens sharply while putting exact constraints at the point of work. Quirks whose `repo://` sources cover a target (exact path, or the source path as a directory ancestor) surface as quirk guardrails in the human output; targets need project attribution (`repo://` URIs or absolute paths inside tracked projects), the same rule the collision walk applies. `--preamble` prepends a cache-friendly architecture preamble for session boots.
 - **For agents**: This is the difference between an agent that guesses and an agent that reads the rules for exactly the code it is about to touch.
 
 #### Stop blocks and protected paths (`pylon check`)
@@ -433,6 +440,7 @@ Run commands through the `pylon` binary in the ledger root (`./bin/pylon` from a
 | `review annotations --from <file|->` | Converts lint findings (SARIF or JSON) into GitHub Check annotations plus a summary comment body; blocking errors only, capped at 50 with the total kept, hostile text sanitized. | CI PR feedback (the workflow posts; the engine emits) | Never; unparsable input exits 2 |
 | `harvest pr --diff <patch|-> [--metadata <json>]` | Turn a merged PR diff into a candidate patch: exported-symbol `exposes:` proposals anchored to the claiming package doc, scaffolded quirk post-mortems for `Footgun:` markers in commit or review bodies, warnings for unattributed and vendored paths. | Capture at merge time | Report-only; never exits on findings |
 | `review retro --findings <file|->` | Count review-finding signatures inside a window and open exactly one promotion candidate per repeated signature: a convention stub in `conventions/proposals/`, a `wrong_if` falsifier entry for the named contract, or a lint-rule proposal. Structured records accumulate on lens, rule, contract, and path; free-text findings accumulate on a normalized-text slug, so differently-worded markers never merge. | Closing the loop on repeated review comments | Report-only; malformed records fail closed |
+| `review utility [--prune] [--promote]` | Knowledge utility: scores documents from citation markers (`pylon:referenced-doc`) and injection telemetry recorded at human `context` delivery, decayed on a 30-day half-life with day granularity. `--prune` archives uncited quirks delivered on 2+ distinct days past the weighted floor (mass 3.0); `--promote` writes one convention proposal per document cited 3+ times from 2+ files. Ghost paths (deleted documents) never score. | Knowledge hygiene, context ranking | Never; malformed telemetry exits 2 |
 | `review-brief <plan>` | Assembles a self-contained review packet for fresh-context reviewers. | Peer review | Plan errors |
 | `review-brief --validate <file>` | Stage-1 validation: verifies review completeness and empty evaluations. | Review submission | Incomplete reviews |
 | `review-brief --validate-resolutions <f>` | Stage-2 validation: verifies every finding was resolved before merge. | Pre-merge verification | Unresolved findings |

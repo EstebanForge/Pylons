@@ -143,27 +143,11 @@ func sliceQuirks(kbRoot string, components []string) []string {
 	for _, c := range components {
 		comps[c] = true
 	}
-	quirkDir := filepath.Join(kbRoot, "quirks")
-	entries, err := os.ReadDir(quirkDir)
-	if err != nil {
-		return nil
-	}
 	var out []string
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") || e.Name() == "README.md" || e.Name() == "AGENTS.md" || strings.HasPrefix(e.Name(), "._") {
-			continue
-		}
-		data, err := readBounded(filepath.Join(quirkDir, e.Name()))
-		if err != nil {
-			continue
-		}
-		var meta resolve.DocMeta
-		if !resolve.ParseDocMeta(string(data), &meta) || meta.Type != "quirk" {
-			continue
-		}
-		for _, src := range meta.Sources {
+	for _, q := range quirkDocs(kbRoot) {
+		for _, src := range q.sources {
 			if u, ok := resolve.ParseURI(src); ok && u.Scheme == "repo" && comps[u.Alias] {
-				out = append(out, "quirks/"+e.Name())
+				out = append(out, q.path)
 				break
 			}
 		}

@@ -51,6 +51,7 @@ Usage:
   pylon review gate-surface [--base <ref>] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review annotations --from <file|-> [--path-prefix <p>] [--format=human|json] [--json] [--pylons <path>]
   pylon review retro --findings <file|-> [--window <period>] [--min <n>] [--shape <s>] [--pylons <path>]
+  pylon review utility [--prune] [--promote] [--pylons <path>]
   pylon harvest pr --diff <patch|-> [--metadata <json>] [--record <file>] [--pylons <path>]
   pylon gate <pre-commit|pre-push>
   pylon sync             [--detached] [--pylons <path>]
@@ -151,6 +152,7 @@ func run(args []string) int {
 	newNumbered := false
 	retroFindingsPath, retroShape := "", ""
 	retroMin := 0
+	utilityPrune, utilityPromote := false, false
 	graphDepth := 0
 	graphSet, depthSet := false, false
 	mapType, mapTag, mapStatus, mapFolder, mapQuery := "", "", "", "", ""
@@ -192,6 +194,10 @@ func run(args []string) int {
 			preamble = true
 		case arg == "--check-sources":
 			checkSources = true
+		case arg == "--prune":
+			utilityPrune = true
+		case arg == "--promote":
+			utilityPromote = true
 		case arg == "--number":
 			newNumbered = true
 		case arg == "--stdout":
@@ -515,9 +521,26 @@ func run(args []string) int {
 			fmt.Fprintf(os.Stderr, "pylon: context --plan: %v\n", err)
 			return 2
 		}
+		// Guardrails are a session-delivery surface: they surface in the
+		// human render and count as injections there. CI runs context as
+		// a SARIF report sink and JSON captures findings only, so neither
+		// computes or records guardrails.
+		var guardrails []string
+		if format == report.FormatHuman {
+			guardrails = rules.QuirkGuardrails(kbRoot, rest)
+			if injected := append(injectedFiles(findings), guardrails...); len(injected) > 0 {
+				rules.RecordInjections(kbRoot, injected)
+			}
+		}
 		rules.Remediate(findings)
 		if err := report.Render(os.Stdout, format, findings); err != nil {
 			return 2
+		}
+		if format == report.FormatHuman && len(guardrails) > 0 {
+			fmt.Printf("=== Quirk guardrails (%d) ===\n", len(guardrails))
+			for _, q := range guardrails {
+				fmt.Printf("  quirk: %s\n", q)
+			}
 		}
 		return 0
 
@@ -547,6 +570,8 @@ func run(args []string) int {
 			return renderFindings(rules.CheckStaleness(kbRoot, pkgArg, fix), format, ci)
 		case "retro":
 			return cmdRetro(retroFindingsPath, reworkWindow, retroMin, retroShape)
+		case "utility":
+			return cmdUtility(kbRoot, utilityPrune, utilityPromote)
 		case "annotations":
 			return cmdAnnotations(annFrom, annPrefix, format)
 		case "ratchet":
@@ -778,6 +803,7 @@ func cmdSliceContext(kbRoot, planArg string, allowExternal bool, format report.F
 		fmt.Fprintf(os.Stderr, "pylon: context: %v\n", err)
 		return 2
 	}
+	rules.RecordInjections(kbRoot, append([]string{planArg}, rep.Quirks...))
 	if format == report.FormatJSON {
 		if err := json.NewEncoder(os.Stdout).Encode(rep); err != nil {
 			fmt.Fprintf(os.Stderr, "pylon: context: encode report: %v\n", err)
@@ -881,7 +907,7 @@ func cmdInit(dir string) int {
 		return 1
 	}
 	seedFiles := map[string]string{
-		"AGENTS.md": "# Guidelines\n\nA pylon: the plain-text map of this platform. See `manifests/vocabulary.json` and `pylons/docs/`.\n",
+		"AGENTS.md": "# Guidelines\n\nA pylon: the plain-text map of this platform. See `manifests/vocabulary.json` and `pylons/docs/`.\n\nWhen a quirk or convention guardrail from `pylon context` shapes your work, close the record with one citation comment: `<!-- pylon:referenced-doc: quirks/<file>.md -->`.\n",
 	}
 	for _, dir := range scaffoldDirs {
 		zone, _, _ := strings.Cut(dir, "/")

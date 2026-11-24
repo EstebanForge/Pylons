@@ -12,15 +12,6 @@ All features, rules, and commands in Pylons and the `pylon` CLI must be 100% det
 
 ## Future Directions
 
-### knowledge-utility
-- **Command**: `pylon review utility [--prune] [--promote]`
-- **Deterministic Mechanism**: Track knowledge usage across agent sessions using structured citation comments (`<!-- pylon:referenced-doc: <slug> -->`). Compute a deterministic utility score for each document: citation count divided by injection count, combined with recency decay.
-- **Automated Lifecycle**:
-  - *Quirk Pruning*: Demote or archive quirks that appear in context repeatedly without citations, preventing context bloat from obsolete bugs.
-  - *Pattern Promotion*: Detect quirks or conventions cited frequently across multiple packages. Propose promotion to formal platform conventions in `conventions/` or automated rules in `pylon lint`.
-- **Consumer**: Filter input for `pylon context` ranking and periodic hygiene reviews.
-- **Objective**: Keep context lean and high-signal. Weed out obsolete quirks and elevate proven operational patterns to formal engineering standards.
-
 ### enforcement-hardening
 
 Agreed 2026-11-23 and deferred. Nothing here is scheduled. Every gate runs on one clone, and git lets the client skip each one: `--no-verify`, `PYLON_HOOKS_OPTIONAL=1` with no binary, an unset `core.hooksPath`, and plumbing commits. The items below close what a local gate can close and add the server check for the rest. Each item carries its design, its tests, and its known limits, so work can start without new research. Code paths are left out on purpose; read the engine first. Dependencies sit under **Needs** and are the only ordering.

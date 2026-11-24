@@ -213,6 +213,12 @@ func FetchChild(gitDir string) int {
 	return st.LastExit
 }
 
+// GitDirOf resolves the absolute git directory: a real directory even
+// in worktrees and submodules, where .git is a file.
+func GitDirOf(kbRoot string) (string, error) {
+	return gitDirOf(kbRoot)
+}
+
 // gitDirOf resolves the absolute git directory: a real directory even
 // in worktrees and submodules, where .git is a file.
 func gitDirOf(kbRoot string) (string, error) {

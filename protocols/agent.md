@@ -15,11 +15,11 @@ Run this protocol at the start of every work session on a platform mapped by Pyl
 ## The Loop
 
 1. **Orient.** Run `{{.Bin}} brief --pylons {{.Root}}`. List the tracked projects and read the package maps for the area you will touch. Run `{{.Bin}} map` when you need to find documents by topic.
-2. **Check ground.** Run `{{.Bin}} check <paths>` on every path you plan to edit. A `FORCED` finding is a stop signal: do not edit contested ground. Read the `ADVISORY` findings and the `pylon context <paths>` output first.
+2. **Check ground.** Run `{{.Bin}} check <paths>` on every path you plan to edit. A `FORCED` finding is a stop signal: do not edit contested ground. Read the `ADVISORY` findings and the `pylon context <paths>` output first, including its quirk guardrails: quirks whose sources cover the paths you touch.
 3. **Slice the work.** Take one plan as the task boundary; for a `slice: true` plan, `{{.Bin}} context --slice <plan>` loads its contracts, linked quirks, and domain terms and nothing else. If no plan exists, write one in `plans/` with its contracts before editing code. One plan per session. Do not widen scope past the plan's contracts. Then run `{{.Bin}} check --plan <plan> <paths>`. The `contract.editing` and `contract.unstable` sets of that plan are your own work and no longer stop you. Any other finding still does.
 4. **Record discoveries.** Start a record with `{{.Bin}} new <type> <name>`, which places and stamps the file from the template; then fill it. A trap you hit becomes a `quirks/` post-mortem. A promise the code makes becomes a contract entry on the plan. A settled choice becomes a `decisions/` record. Write these when you learn them, not at the end.
 5. **Gate.** Before every commit, run `{{.Bin}} lint --changed` on staged files. Before every push, the gate hooks run the full corpus. Fix `FORCED` findings; read advisories.
-6. **Close.** Mark shipped work with its plan status, record the artifact, and let the plan move to `plans/archive/` when it is done.
+6. **Close.** Mark shipped work with its plan status, record the artifact, and let the plan move to `plans/archive/` when it is done. When a quirk or convention guardrail shaped the work, add one citation comment to the record you close with: `<!-- pylon:referenced-doc: quirks/<file>.md -->`. The document path is ledger-relative, with its `.md` extension. `pylon review utility` reads these markers and promotes what keeps earning citations.
 
 ## Rules
 
