@@ -42,6 +42,7 @@ Usage:
   pylon context --graph <package> [--depth N] [--format=human|json] [--json] [--pylons <path>]
   pylon context --slice <plan> [--format=human|json] [--json] [--pylons <path>]
   pylon staleness        [--package <pkg>] [--fix] [--format=human|json|sarif] [--json] [--pylons <path>]
+  pylon status <doc-path> <new-status> [--format=human|json] [--pylons <path>]
   pylon review plan <path> [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review postmortem [path] [--check-sources] [--format=human|json|sarif] [--json] [--pylons <path>]
   pylon review staleness [--package <pkg>] [--fix] [--format=human|json|sarif] [--json] [--pylons <path>]
@@ -552,6 +553,26 @@ func run(args []string) int {
 	case "staleness":
 		findings := rules.CheckStaleness(kbRoot, pkgArg, fix)
 		return renderFindings(findings, format, ci)
+
+	case "status":
+		if len(rest) != 2 {
+			fmt.Fprintln(os.Stderr, "pylon: status requires <doc-path> <new-status>")
+			return 2
+		}
+		cfg, _ := config.Load(kbRoot)
+		dstRel, findings, err := rules.ApplyStatus(kbRoot, rest[0], rest[1], cfg.DecisionPrefixOrDefault())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "pylon: status: %v\n", err)
+			return 2
+		}
+		if len(findings) > 0 {
+			if err := report.Render(os.Stdout, format, findings); err != nil {
+				return 2
+			}
+			return 1
+		}
+		fmt.Printf("status: %s is now %s\n", dstRel, rest[1])
+		return 0
 
 	case "review":
 		if len(rest) == 0 {
