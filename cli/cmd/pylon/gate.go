@@ -104,7 +104,7 @@ func gatePreCommit(kbRoot string) int {
 
 func gatePrePush(kbRoot string) int {
 	fail := false
-	if cmdManifestJSON(filepath.Join(kbRoot, "manifests", "vocabulary.json"), rules.BuildVocabularyManifest(), true) != 0 {
+	if generatesManifest(kbRoot, "vocabulary") && cmdManifestJSON(filepath.Join(kbRoot, "manifests", "vocabulary.json"), rules.BuildVocabularyManifest(), true) != 0 {
 		fail = true
 	}
 	for _, kind := range []string{"rules", "packages"} {

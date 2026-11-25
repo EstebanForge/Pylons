@@ -154,4 +154,142 @@ func TestStatusCommand(t *testing.T) {
 			t.Fatalf("accepted decision with a non-conforming filename must refuse with exit 1, got %d", code)
 		}
 	})
+
+	t.Run("abandoned does not demand artifact", func(t *testing.T) {
+		dir := statusKB(t)
+		p := filepath.Join(dir, "plans", "feature-x.md")
+		body, _ := os.ReadFile(p)
+		if err := os.WriteFile(p, []byte(strings.Replace(string(body), "artifact: x\n", "", 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if code := run([]string{"status", "plans/feature-x.md", "abandoned", "--pylons", dir}); code != 0 {
+			t.Fatalf("abandoned plans need no artifact (lint ships PYLON009 for shipped only), got %d", code)
+		}
+	})
+
+	t.Run("crlf doc transitions fully", func(t *testing.T) {
+		dir := statusKB(t)
+		p := filepath.Join(dir, "plans", "feature-x.md")
+		body, _ := os.ReadFile(p)
+		crlf := strings.ReplaceAll(string(body), "\n", "\r\n")
+		if err := os.WriteFile(p, []byte(crlf), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if code := run([]string{"status", "plans/feature-x.md", "shipped", "--pylons", dir}); code != 0 {
+			t.Fatalf("crlf doc transition must exit 0, got %d", code)
+		}
+		data, err := os.ReadFile(filepath.Join(dir, "plans", "archive", "feature-x.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), "status: shipped") || !strings.Contains(string(data), "updated: "+today) {
+			t.Fatal("crlf patch must actually land: new status and today's date required")
+		}
+	})
+
+	t.Run("refuses doc without a status line", func(t *testing.T) {
+		dir := statusKB(t)
+		p := filepath.Join(dir, "plans", "feature-x.md")
+		body, _ := os.ReadFile(p)
+		if err := os.WriteFile(p, []byte(strings.Replace(string(body), "status: in-progress\n", "", 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if code := run([]string{"status", "plans/feature-x.md", "shipped", "--pylons", dir}); code != 2 {
+			t.Fatalf("missing status line must exit 2, got %d", code)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "plans", "archive", "feature-x.md")); !os.IsNotExist(err) {
+			t.Fatal("refusal must not move the file")
+		}
+	})
+
+	t.Run("refuses empty status value", func(t *testing.T) {
+		dir := statusKB(t)
+		p := filepath.Join(dir, "plans", "feature-x.md")
+		body, _ := os.ReadFile(p)
+		if err := os.WriteFile(p, []byte(strings.Replace(string(body), "status: in-progress", "status:", 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if code := run([]string{"status", "plans/feature-x.md", "shipped", "--pylons", dir}); code != 2 {
+			t.Fatalf("empty status value must exit 2, got %d", code)
+		}
+		data, _ := os.ReadFile(p)
+		if strings.Contains(string(data), "shipped") {
+			t.Fatal("refusal must not write anything")
+		}
+	})
+
+	t.Run("creates a missing archive dir", func(t *testing.T) {
+		dir := statusKB(t)
+		if err := os.WriteFile(filepath.Join(dir, "tickets", "t-1.md"), []byte("---\ntitle: T\ntype: ticket\nstatus: in-progress\ncreated: 2026-01-01\nupdated: 2026-01-01\nowners: [o]\nlinks: []\ndescription: d\ntags: [t]\n---\n\n# T\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.RemoveAll(filepath.Join(dir, "tickets", "archive")); err != nil {
+			t.Fatal(err)
+		}
+		if code := run([]string{"status", "tickets/t-1.md", "done", "--pylons", dir}); code != 0 {
+			t.Fatalf("done with missing archive dir must succeed, got %d", code)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "tickets", "archive", "t-1.md")); err != nil {
+			t.Fatal("the archive move must create the missing archive dir")
+		}
+	})
+
+	t.Run("moves proposed plans into proposals", func(t *testing.T) {
+		dir := statusKB(t)
+		if err := os.WriteFile(filepath.Join(dir, "plans", "feature-dem.md"), []byte("---\ntitle: Dem\ntype: plan\nstatus: accepted\ncreated: 2026-01-01\nupdated: 2026-01-01\nowners: [o]\nartifact: x\nlinks: []\ndescription: d\ntags: [p]\n---\n\n# Dem\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if code := run([]string{"status", "plans/feature-dem.md", "proposed", "--pylons", dir}); code != 0 {
+			t.Fatalf("proposed transition must exit 0, got %d", code)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "plans", "proposals", "feature-dem.md")); err != nil {
+			t.Fatal("proposed plans belong in plans/proposals/")
+		}
+	})
+
+	t.Run("accepts heading suffixes like the linter", func(t *testing.T) {
+		dir := statusKB(t)
+		if err := os.WriteFile(filepath.Join(dir, "investigations", "2026-11-02-s.md"), []byte("---\ntitle: S\ntype: investigation\nstatus: active\ncreated: 2026-11-02\nupdated: 2026-11-02\nowners: [o]\nlinks: []\ndescription: d\ntags: [i]\n---\n\n# S\n\n## Root Cause: cache\n\nr\n\n## Resolution (final)\n\nx\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if code := run([]string{"status", "investigations/2026-11-02-s.md", "resolved", "--pylons", dir}); code != 0 {
+			t.Fatalf("heading suffixes must be accepted exactly like the linter accepts them, got %d", code)
+		}
+	})
+
+	t.Run("audit investigations skip the section obligation", func(t *testing.T) {
+		dir := statusKB(t)
+		if err := os.WriteFile(filepath.Join(dir, "investigations", "2026-11-03-a.md"), []byte("---\ntitle: A\ntype: audit\nstatus: active\ncreated: 2026-11-03\nupdated: 2026-11-03\nowners: [o]\nlinks: []\ndescription: d\ntags: [i]\n---\n\n# A\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if code := run([]string{"status", "investigations/2026-11-03-a.md", "resolved", "--pylons", dir}); code != 0 {
+			t.Fatalf("audit docs are not held to PYLON031 by the linter, got %d", code)
+		}
+	})
+
+	t.Run("refuses symlinked docs", func(t *testing.T) {
+		dir := statusKB(t)
+		real := filepath.Join(t.TempDir(), "real.md")
+		if err := os.WriteFile(real, []byte("---\ntitle: R\ntype: plan\nstatus: in-progress\ncreated: 2026-01-01\nupdated: 2026-01-01\nowners: [o]\nartifact: x\nlinks: []\ndescription: d\ntags: [p]\n---\n\n# R\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		link := filepath.Join(dir, "plans", "feature-link.md")
+		if err := os.Symlink(real, link); err != nil {
+			t.Fatal(err)
+		}
+		if code := run([]string{"status", "plans/feature-link.md", "shipped", "--pylons", dir}); code != 2 {
+			t.Fatalf("symlinked docs must refuse with exit 2, got %d", code)
+		}
+		data, _ := os.ReadFile(real)
+		if strings.Contains(string(data), "shipped") {
+			t.Fatal("refusal must not write through the symlink")
+		}
+	})
+
+	t.Run("refuses zone entry guides", func(t *testing.T) {
+		dir := statusKB(t)
+		if code := run([]string{"status", "packages/README.md", "retired", "--pylons", dir}); code != 2 {
+			t.Fatalf("README/AGENTS entry guides must refuse with exit 2, got %d", code)
+		}
+	})
 }

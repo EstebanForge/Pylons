@@ -144,7 +144,7 @@ func CheckFor(kbRoot, planArg string, targets []string) ([]report.Finding, error
 					if globMatchesTarget(glob, nt, comps) {
 						sev := report.SeverityError
 						grade := report.GradeForced
-						if owner == "ask-first" {
+						if ProtectedOwnerSeverity(owner) == "advisory" {
 							sev = report.SeverityAdvisory
 							grade = report.GradeAdvisory
 						}

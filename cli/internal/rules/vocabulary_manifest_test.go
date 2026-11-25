@@ -86,29 +86,44 @@ func TestBuildVocabularyManifestMirrorsCompiledTables(t *testing.T) {
 	}
 	// A set claiming enforcement must declare exactly the values its
 	// compiled token map holds, or the mirror lies in either direction.
-	enforced := map[string]map[string]bool{
+	// The loop derives the pairs from closedValueSets itself, so a
+	// future entry with EnforcedBy cannot skip the check.
+	enforcedTokens := map[string]map[string]bool{
 		"ai_authored_contributed": aiAuthoredTokens,
 		"volume_pressure":         volumePressureTokens,
 		"guard":                   quirkGuards,
 	}
-	for name, tokens := range enforced {
-		raw, ok := sets[name].(map[string]any)
+	for _, set := range closedValueSets {
+		raw, ok := sets[set.Name].(map[string]any)
 		if !ok {
-			t.Fatalf("closed_sets[%s] missing", name)
-		}
-		if raw["enforced_by"] == nil {
-			t.Errorf("closed_sets[%s] claims no enforcement but the engine enforces it", name)
+			t.Fatalf("closed_sets[%s] missing", set.Name)
 		}
 		gotVals := map[string]bool{}
 		for _, v := range raw["values"].([]any) {
 			gotVals[v.(string)] = true
 		}
+		if set.EnforcedBy == "" {
+			if raw["enforced_by"] != nil {
+				t.Errorf("closed_sets[%s] declares enforcement but no token map backs it", set.Name)
+			}
+			continue
+		}
+		tokens, known := enforcedTokens[set.Name]
+		if !known {
+			t.Fatalf("closed_sets[%s] claims enforcement by %s but no token map backs it; add the map here", set.Name, set.EnforcedBy)
+		}
+		if _, inCatalog := Catalog[set.EnforcedBy]; !inCatalog {
+			t.Errorf("closed_sets[%s] names rule %s which is not in the catalog", set.Name, set.EnforcedBy)
+		}
+		if raw["enforced_by"] == nil {
+			t.Errorf("closed_sets[%s] claims no enforcement but the engine enforces it", set.Name)
+		}
 		if len(gotVals) != len(tokens) {
-			t.Errorf("closed_sets[%s] values %v != token map %v", name, gotVals, tokens)
+			t.Errorf("closed_sets[%s] values %v != token map %v", set.Name, gotVals, tokens)
 		}
 		for v := range tokens {
 			if !gotVals[v] {
-				t.Errorf("closed_sets[%s] missing token %q", name, v)
+				t.Errorf("closed_sets[%s] missing token %q", set.Name, v)
 			}
 		}
 	}

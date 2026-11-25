@@ -28,7 +28,7 @@ var volumePressureTokens = map[string]bool{
 	"review": true, "test": true, "rollout": true, "observability": true, "none": true,
 }
 
-var updatedLineRe = regexp.MustCompile(`(?m)^(updated:\s*)(?:"[^"\n]+"|'[^'\n]+'|[^\s#\n]+)(.*)$`)
+var updatedLineRe = regexp.MustCompile(`(?m)^(updated:[ \t]*)(?:"[^"\n]+"|'[^'\n]+'|[^\s#\n]+)(.*)$`)
 
 // CheckPlanContract validates all contract entries, falsifiers, and test refs in a plan document.
 func CheckPlanContract(kbRoot, planArg string, allowExternal bool) ([]report.Finding, error) {
@@ -117,16 +117,13 @@ func CheckStaleness(kbRoot, pkgFilter string, fix bool) []report.Finding {
 
 // patchUpdatedFrontMatter rewrites updated: only inside frontmatter, so
 // example blocks in body text are never corrupted by staleness --fix.
+// patchUpdatedFrontMatter bumps the updated: line inside the leading
+// frontmatter block only, on raw content (CRLF included) so the
+// normalize-then-replace round-trip cannot silently no-op.
 func patchUpdatedFrontMatter(content, today string) string {
-	front := resolve.ExtractFrontMatter(content)
-	if front == "" {
-		return content
-	}
-	patchedFront := updatedLineRe.ReplaceAllString(front, "${1}"+today+"${2}")
-	if patchedFront == front {
-		return content
-	}
-	return strings.Replace(content, front, patchedFront, 1)
+	return patchFrontmatter(content, func(block string) string {
+		return updatedLineRe.ReplaceAllString(block, "${1}"+today+"${2}")
+	})
 }
 
 // hasHeading matches an exact trimmed heading line, not a substring.
