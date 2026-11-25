@@ -26,6 +26,17 @@ var TemplateKeys = map[string][]string{
 	"ticket":        {"title", "type", "kind", "status", "priority", "created", "updated", "owners", "components", "plan", "description", "tags"},
 }
 
+// TemplateKeyRegistry returns a copy of the per-type frontmatter key
+// registry so manifest generation reads the declared schema without
+// mutating it.
+func TemplateKeyRegistry() map[string][]string {
+	out := make(map[string][]string, len(TemplateKeys))
+	for k, v := range TemplateKeys {
+		out[k] = append([]string(nil), v...)
+	}
+	return out
+}
+
 // Closed payload shapes: the checks join on these keys, so an unknown
 // key inside one fails closed instead of silently dropping a check.
 var closedMachinesKeys = []string{"machine", "states", "initial", "terminal", "transitions", "states_symbol", "transitions_symbol", "on_unevaluated", "persisted_key", "verified_by"}

@@ -104,6 +104,9 @@ func gatePreCommit(kbRoot string) int {
 
 func gatePrePush(kbRoot string) int {
 	fail := false
+	if cmdManifestJSON(filepath.Join(kbRoot, "manifests", "vocabulary.json"), rules.BuildVocabularyManifest(), true) != 0 {
+		fail = true
+	}
 	for _, kind := range []string{"rules", "packages"} {
 		if !generatesManifest(kbRoot, kind) {
 			continue
@@ -118,7 +121,7 @@ func gatePrePush(kbRoot string) int {
 		}
 	}
 	if fail {
-		fmt.Fprintln(os.Stderr, "pylon: manifests stale with frontmatter; run: bin/pylon manifest rules && bin/pylon manifest packages")
+		fmt.Fprintln(os.Stderr, "pylon: manifests stale with frontmatter; run: bin/pylon manifest rules && bin/pylon manifest packages && bin/pylon manifest vocabulary")
 		return 1
 	}
 

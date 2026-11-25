@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"time"
 
 	"encoding/json"
@@ -746,7 +747,7 @@ func run(args []string) int {
 
 	case "manifest":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "pylon: manifest requires 'rules', 'packages', or 'product'")
+			fmt.Fprintln(os.Stderr, "pylon: manifest requires 'rules', 'packages', 'vocabulary', or 'product'")
 			return 2
 		}
 		switch rest[0] {
@@ -790,8 +791,10 @@ func run(args []string) int {
 				return 0
 			}
 			return cmdManifestJSON(filepath.Join(kbRoot, "manifests", "packages.json"), rules.BuildPackagesManifest(kbRoot), checkManifest)
+		case "vocabulary":
+			return cmdManifestJSON(filepath.Join(kbRoot, "manifests", "vocabulary.json"), rules.BuildVocabularyManifest(), checkManifest)
 		default:
-			fmt.Fprintln(os.Stderr, "pylon: manifest supports 'rules', 'packages', or 'product'")
+			fmt.Fprintln(os.Stderr, "pylon: manifest supports 'rules', 'packages', 'vocabulary', or 'product'")
 			return 2
 		}
 
@@ -1155,12 +1158,17 @@ func generatesManifest(kbRoot, name string) bool {
 }
 
 func cmdManifestJSON(outPath string, payload any, checkOnly bool) int {
-	data, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
+	// SetEscapeHTML(false): the mirror carries literal angle brackets in
+	// id-form docs; MarshalIndent's default escaping would churn them.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(payload); err != nil {
 		fmt.Fprintf(os.Stderr, "pylon: marshal manifest: %v\n", err)
 		return 1
 	}
-	data = append(data, '\n')
+	data := buf.Bytes()
 	if checkOnly {
 		existing, err := os.ReadFile(outPath)
 		if err != nil {

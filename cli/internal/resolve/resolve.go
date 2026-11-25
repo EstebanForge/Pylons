@@ -58,6 +58,42 @@ type Registry struct {
 	kinds             map[Kind]Resolver
 }
 
+// CoreKindDoc names a built-in contract kind and documents the id
+// forms its resolver accepts; the vocabulary mirror carries both.
+type CoreKindDoc struct {
+	Name   string
+	IDForm string
+}
+
+var coreKindDocs = []CoreKindDoc{
+	{"file", "repo://<alias>/path/to/file or path/to/file"},
+	{"glob", "repo://<alias>/path/**/*.ext or path/**/*.ext"},
+	{"symbol", "path/to/file::SymbolName"},
+	{"route", "METHOD /path/pattern"},
+	{"cli", "command subcommand"},
+	{"event", "event.name"},
+	{"schema", "ModelOrTableName"},
+}
+
+// CoreKindDocs returns the built-in contract kinds with their id-form
+// documentation, in canonical order. The resolver registry map stays
+// the enforcement home; vocabulary manifest generation reads this list,
+// and the rules-package test keeps the two from drifting.
+func CoreKindDocs() []CoreKindDoc {
+	out := make([]CoreKindDoc, len(coreKindDocs))
+	copy(out, coreKindDocs)
+	return out
+}
+
+// CoreKinds returns the built-in contract kind names in canonical order.
+func CoreKinds() []string {
+	names := make([]string, len(coreKindDocs))
+	for i, k := range coreKindDocs {
+		names[i] = k.Name
+	}
+	return names
+}
+
 // NewRegistry builds a resolver registry with external execution disabled by default.
 func NewRegistry(enabledExtensions []string, extDir string) *Registry {
 	return NewRegistryWithOptions(RegistryOptions{

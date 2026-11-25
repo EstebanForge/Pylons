@@ -60,7 +60,7 @@
     "name": "accepted_decision_unnumbered",
     "severity": "error",
     "description": "Accepted decision must use a numbered DNNNN-slug.md filename.",
-    "fix_hint": "Rename the file to DNNNN-\u003cslug\u003e.md."
+    "fix_hint": "Rename the file to DNNNN-<slug>.md."
   },
   {
     "id": "PYLON011",
@@ -185,8 +185,8 @@
     "id": "PYLON030",
     "name": "investigation_filename_invalid",
     "severity": "error",
-    "description": "Investigation filename must match YYYY-MM-DD-\u003cslug\u003e.md.",
-    "fix_hint": "Rename the investigation file to YYYY-MM-DD-\u003cslug\u003e.md."
+    "description": "Investigation filename must match YYYY-MM-DD-<slug>.md.",
+    "fix_hint": "Rename the investigation file to YYYY-MM-DD-<slug>.md."
   },
   {
     "id": "PYLON031",
@@ -207,7 +207,7 @@
     "name": "path_mention_style",
     "severity": "error",
     "description": "Document contains a raw machine path instead of repo:// or pylon:// URI.",
-    "fix_hint": "Replace machine paths with repo://\u003calias\u003e/\u003cpath\u003e or pylon://\u003cpath\u003e."
+    "fix_hint": "Replace machine paths with repo://<alias>/<path> or pylon://<path>."
   },
   {
     "id": "PYLON034",
@@ -305,7 +305,7 @@
     "name": "merge_danger",
     "severity": "error",
     "description": "The pull request body lacks a valid merge danger line, or the derived minimum door outranks the author door.",
-    "fix_hint": "Keep exactly one 'Merge danger: \u003cone-way|two-way\u003e | blast radius: \u003cscope\u003e' line; a one-way door needs a release marker or a 'Data migration:' note."
+    "fix_hint": "Keep exactly one 'Merge danger: <one-way|two-way> | blast radius: <scope>' line; a one-way door needs a release marker or a 'Data migration:' note."
   },
   {
     "id": "PYLON048",

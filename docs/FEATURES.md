@@ -290,7 +290,7 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 #### Machine feeds (`pylon manifest`)
 
 - **The pain**: External tools re-parse Markdown and duplicate extraction logic in every language that touches the platform.
-- **How it works**: `manifest` compiles validated JSON artifacts (`packages.json`, `rules.json`) from the source documents. `manifest --check` proves the committed JSON matches the compiled catalogs, so CI catches drift.
+- **How it works**: `manifest` compiles validated JSON artifacts (`packages.json`, `rules.json`, `vocabulary.json`) from the source documents and the compiled tables. The vocabulary mirror states the closed frontmatter vocabulary — status sets, contract kinds with id forms, the per-type key registry, protected owners, and the closed value sets — and the pre-push gate fails when it drifts from the binary, so the text can never quietly lie about what the engine enforces. `manifest --check` proves the committed JSON matches the compiled catalogs, so CI catches drift.
 - **Guard**: The pre-push gate runs the check on every push.
 
 #### Machine parity (`lint --parity`)

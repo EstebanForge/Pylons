@@ -63,6 +63,9 @@ func gateKB(t *testing.T) string {
 	if code := run([]string{"manifest", "packages", "--pylons", dir}); code != 0 {
 		t.Fatalf("manifest packages: %d", code)
 	}
+	if code := run([]string{"manifest", "vocabulary", "--pylons", dir}); code != 0 {
+		t.Fatalf("manifest vocabulary: %d", code)
+	}
 	gitRun("add", "-Af", ".")
 	gitRun("commit", "-qm", "manifests")
 	return dir

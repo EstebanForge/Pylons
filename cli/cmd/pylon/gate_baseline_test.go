@@ -35,6 +35,9 @@ func TestGateAppliesBaseline(t *testing.T) {
 	if code, _, _ := runPylon(t, kb, "manifest", "packages"); code != 0 {
 		t.Fatalf("manifest packages: %d", code)
 	}
+	if code, _, _ := runPylon(t, kb, "manifest", "vocabulary"); code != 0 {
+		t.Fatalf("manifest vocabulary: %d", code)
+	}
 
 	// The unbaselined finding blocks the gate.
 	if code, _, _ := runPylon(t, kb, "gate", "pre-push"); code != 1 {
