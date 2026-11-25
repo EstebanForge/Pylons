@@ -157,6 +157,23 @@ func resolvePySymbol(projectRoot, ref string, kind Kind, id string) Verdict {
 	})
 }
 
+// matchNamespacedClass reports whether data declares the namespace of
+// a namespaced id (Vendor\Class) and declares the short name bare: the
+// file declares the namespace on its own line and the class bare. PHP
+// folds case on namespaces, classes, and functions; the namespace may
+// share the opening tag's line and the braced form is legal. decl
+// selects the declaration keywords matched against the short name.
+func matchNamespacedClass(data []byte, namespaced, decl string) bool {
+	i := strings.LastIndexByte(namespaced, '\\')
+	if i <= 0 {
+		return false
+	}
+	ns, short := namespaced[:i], namespaced[i+1:]
+	nsRe := regexp.MustCompile(`(?mi)^\s*(?:<\?php\s+)?namespace\s+` + regexp.QuoteMeta(ns) + `\s*[;{]`)
+	shortRe := regexp.MustCompile(`(?mi)\b(?:` + decl + `)\s+` + regexp.QuoteMeta(short) + `\b`)
+	return nsRe.Match(data) && shortRe.Match(data)
+}
+
 func resolvePHPSymbol(projectRoot, ref string, kind Kind, id string) Verdict {
 	filePart, sym, ok := strings.Cut(id, "::")
 	if !ok || filePart == "" || sym == "" {
@@ -173,18 +190,8 @@ func resolvePHPSymbol(projectRoot, ref string, kind Kind, id string) Verdict {
 	if classPart, method, hasClass := strings.Cut(sym, "::"); hasClass && classPart != "" && method != "" {
 		classPart = strings.Trim(classPart, "\\")
 		methodRe := regexp.MustCompile(`(?m)\b(?:function|const)\s+` + regexp.QuoteMeta(method) + `\b`)
-		// A namespaced id (Vendor\Class) cannot appear in the class
-		// declaration: the file declares the namespace on its own line
-		// and the class bare. Compare the namespace against the
-		// declaration and the short name against the class keyword.
 		if i := strings.LastIndexByte(classPart, '\\'); i > 0 {
-			ns, short := classPart[:i], classPart[i+1:]
-			// PHP folds case on namespaces, classes, and functions;
-			// the namespace may share the opening tag's line and the
-			// braced form is legal.
-			nsRe := regexp.MustCompile(`(?mi)^\s*(?:<\?php\s+)?namespace\s+` + regexp.QuoteMeta(ns) + `\s*[;{]`)
-			classRe := regexp.MustCompile(`(?mi)\b(?:class|interface|trait|enum)\s+` + regexp.QuoteMeta(short) + `\b`)
-			if nsRe.Match(data) && classRe.Match(data) && methodRe.Match(data) {
+			if matchNamespacedClass(data, classPart, "class|interface|trait|enum") && methodRe.Match(data) {
 				return Verdict{Kind: kind, ID: id, Resolved: true, Detail: rel}
 			}
 			return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "class or method not found"}
@@ -194,6 +201,16 @@ func resolvePHPSymbol(projectRoot, ref string, kind Kind, id string) Verdict {
 			return Verdict{Kind: kind, ID: id, Resolved: true, Detail: rel}
 		}
 		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "class or method not found"}
+	}
+	// Class-only ids keep the bare keyword path unless the symbol is
+	// namespaced: a backslashed name can never follow a declaration
+	// keyword, so resolve through the namespace declaration. The short
+	// name may be a function or const, not only a class-like decl.
+	if strings.LastIndexByte(sym, '\\') > 0 {
+		if matchNamespacedClass(data, strings.Trim(sym, "\\"), "function|class|interface|trait|enum|const") {
+			return Verdict{Kind: kind, ID: id, Resolved: true, Detail: rel}
+		}
+		return Verdict{Kind: kind, ID: id, Resolved: false, Detail: "declaration not found"}
 	}
 	q := regexp.QuoteMeta(sym)
 	re := regexp.MustCompile(`(?m)\b(?:function|class|interface|trait|enum|const)\s+` + q + `\b`)

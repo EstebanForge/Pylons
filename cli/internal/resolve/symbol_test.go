@@ -90,3 +90,43 @@ func TestPHPSymbolNamespaceForms(t *testing.T) {
 		}
 	}
 }
+
+// Class-only namespaced ids (file.php::Vendor\Class) carry no method
+// part: the resolver must still compare the namespace against the
+// declaration instead of feeding the backslashed name to the bare
+// keyword regex, which can never match it.
+func TestResolvePHPSymbolClassOnlyNamespaced(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "src"), 0o755)
+	os.MkdirAll(filepath.Join(root, "deep"), 0o755)
+	write := func(name, src string) {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("src/Schema.php", "<?php\nnamespace Acme\\Mdp;\n\nclass Schema {}\n")
+	write("src/Other.php", "<?php\nnamespace Other;\nclass Schema {}\n")
+	write("src/Missing.php", "<?php\nnamespace Acme\\Mdp;\nclass SomethingElse {}\n")
+	write("deep/Gate.php", "<?php\nnamespace A\\B;\ntrait Gate {}\n")
+	write("deep/fmt.php", "<?php\nnamespace A\\B;\nfunction fmt_date($d) { return $d; }\n")
+	reg := NewRegistry([]string{"php"}, "")
+	if v := reg.Resolve(root, Kind("php-symbol"), "src/Schema.php::Acme\\Mdp\\Schema"); !v.Resolved {
+		t.Fatalf("class-only namespaced id must resolve: %s", v.Detail)
+	}
+	if v := reg.Resolve(root, Kind("php-symbol"), "src/Other.php::Acme\\Mdp\\Schema"); v.Resolved {
+		t.Fatal("a foreign namespace must not resolve for class-only ids")
+	}
+	if v := reg.Resolve(root, Kind("php-symbol"), "src/Missing.php::Acme\\Mdp\\Schema"); v.Resolved {
+		t.Fatal("a missing class must not resolve even under a matching namespace")
+	}
+	if v := reg.Resolve(root, Kind("php-symbol"), "deep/Gate.php::A\\B\\Gate"); !v.Resolved {
+		t.Fatalf("class-only trait in a multi-level namespace must resolve: %s", v.Detail)
+	}
+	if v := reg.Resolve(root, Kind("php-symbol"), "deep/fmt.php::A\\B\\fmt_date"); !v.Resolved {
+		t.Fatalf("namespaced function id must resolve: %s", v.Detail)
+	}
+	// Bare class-only ids keep the plain keyword path.
+	if v := reg.Resolve(root, Kind("php-symbol"), "src/Schema.php::Schema"); !v.Resolved {
+		t.Fatalf("bare class-only id must keep resolving: %s", v.Detail)
+	}
+}
