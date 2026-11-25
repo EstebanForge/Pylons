@@ -3,7 +3,7 @@ title: "Adopting an Existing Ledger"
 type: reference
 status: active
 created: 2026-11-21
-updated: 2026-11-23
+updated: 2026-11-24
 owners: [Pylons]
 sources: []
 description: "Bringing a ledger that predates Pylons under the engine, without losing your content."
@@ -39,6 +39,30 @@ A ledger can predate Pylons: its own frontmatter conventions, its own URI scheme
 - Legacy keys survive one advisory pass (PYLON064). A doc type the engine does not know falls back to the union of known keys. Only keys unknown everywhere are flagged. On a known type, an out-of-template key is flagged individually. Either extend the template or drop the key. The registry in `manifests/vocabulary.json` stays the closed list.
 - Hook ownership is binary: either your hook template chains the engine, or the shipped shims own `.githooks/`. An external tool that regenerates hook files will overwrite the shims. The chain line in your own template is the durable path.
 - Contract resolution needs registered projects. `repo://` surfaces that name unregistered aliases fail closed (PYLON003); register the projects or drop the pointers.
+
+## Migrate a foreign package manifest
+
+A predecessor tool can own `manifests/packages.json` with its own schema. Atlas is the worked example: a dict keyed by package name, with eleven fields per package. Pylon owns the same paths, so the two tools cannot share the directory. Retire the foreign tool and move the data. Every field has a destination:
+
+| Foreign field | Pylon destination |
+| --- | --- |
+| package name | the `projects:` alias key in `manifests/pylons.yaml` |
+| `path` | `projects[].path` |
+| `tier` | `projects[].tier` (free-form) |
+| `repo` | `projects[].repo` |
+| `ref` | `projects[].ref`; carry every branch pin, a dropped pin changes resolution silently |
+| `status` | package doc `status:`; the vocabulary is narrower, so map `production` to `active` |
+| `depends_on` | package doc `depends_on:` |
+| `type` | package docs stay `type: package`; put `wordpress-plugin` and kin in `tags:` |
+| `composer_name`, `testable` | `tags:` entries |
+| `clonable` | no destination; it governed the foreign tool's clone mechanics |
+
+Four facts keep the migration honest:
+
+- The package catalog is the docs, not the registry: a `depends_on:` name with no `packages/*.md` doc of `type: package` is an unknown package (PYLON013). Write one stub doc per third-party name.
+- Contract kinds are closed: `file`, `glob`, `symbol`, `route`, `cli`, `event`, `schema`, plus enabled extensions. Remap foreign kinds before lint (`rest-route` to `route`, `template-glob` to `glob`).
+- Quirk `sources:` name code and resolve against the ledger root or a project. Rewrite stack-relative paths to `repo://<alias>/<path>`.
+- Absorb the prose debt once with `pylon lint --update-baseline`, then wire the gates. Advisory counts still escalate under `--ci`.
 
 ## The ratchet, not the switch
 
