@@ -80,6 +80,7 @@ var Catalog = map[string]RuleSpec{
 	"PYLON062": {ID: "PYLON062", Name: "gate_surface_changed", Severity: "error", Description: "The diff touches a surface the checker itself relies on.", FixHint: "Revert or walk the change through the ledger owners; gate surfaces decide what the checker may silence."},
 	"PYLON063": {ID: "PYLON063", Name: "gate_surface_not_evaluated", Severity: "advisory", Description: "The gate surface check could not run against the requested base.", FixHint: "Pin --base to a reachable ref so the check can run."},
 	"PYLON064": {ID: "PYLON064", Name: "frontmatter_unknown_key", Severity: "advisory", Description: "The frontmatter carries keys no check reads for this doc type.", FixHint: "Remove the key or declare it in the type's template; no check reads it."},
+	"PYLON065": {ID: "PYLON065", Name: "paused_plan_no_state", Severity: "error", Description: "Paused plan carries no ## State section.", FixHint: "Add ## State naming the resume point: what is done, the next step, and any blocker."},
 }
 
 // AllRules returns the sorted rule catalog.

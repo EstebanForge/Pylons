@@ -59,6 +59,9 @@ func scanLifecycleRules(kbRoot string, docs []corpusDoc, cfg config.Config, hasC
 				if d.meta.Status == "proposed" {
 					out = append(out, ReviewPlan(kbRoot, d.rel)...)
 				}
+				if d.meta.Status == "paused" && !strings.Contains(d.content, "## State") {
+					out = append(out, errFinding("PYLON065", d.rel, 1, "paused plan must include ## State naming the resume point"))
+				}
 			}
 		case "proposals":
 			if !planFilenameRe.MatchString(base) {

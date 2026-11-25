@@ -301,7 +301,7 @@ func lintDoc(kbRoot, rel, content string, cfg config.Config, opts LintOptions) [
 
 var allowedStatuses = map[string][]string{
 	"proposals":      {"proposed"},
-	"plans":          {"proposed", "accepted", "in-progress", "shipped", "abandoned"},
+	"plans":          {"proposed", "accepted", "in-progress", "paused", "shipped", "abandoned"},
 	"conventions":    {"proposed", "accepted", "enforced", "superseded"},
 	"decisions":      {"proposed", "accepted", "superseded", "deprecated"},
 	"investigations": {"active", "resolved", "abandoned", "superseded", "withdrawn", "retired"},

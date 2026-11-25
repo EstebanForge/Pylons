@@ -425,5 +425,12 @@
     "severity": "advisory",
     "description": "The frontmatter carries keys no check reads for this doc type.",
     "fix_hint": "Remove the key or declare it in the type's template; no check reads it."
+  },
+  {
+    "id": "PYLON065",
+    "name": "paused_plan_no_state",
+    "severity": "error",
+    "description": "Paused plan carries no ## State section.",
+    "fix_hint": "Add ## State naming the resume point: what is done, the next step, and any blocker."
   }
 ]

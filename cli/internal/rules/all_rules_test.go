@@ -5,6 +5,7 @@ package rules
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -159,6 +160,31 @@ R.
 		if !got[want] {
 			t.Errorf("expected %s to fire; got %+v", want, findings)
 		}
+	}
+}
+
+func TestPausedPlanRequiresState(t *testing.T) {
+	kb := t.TempDir()
+	mustWrite(t, filepath.Join(kb, "plans/feature-token-refresh.md"), "---\ntitle: \"Token refresh\"\ntype: plan\nstatus: paused\n---\n\n# Token refresh\n\nWork stopped without a resume point.\n")
+	mustWrite(t, filepath.Join(kb, "plans/feature-slug-router.md"), "---\ntitle: \"Slug router\"\ntype: plan\nstatus: paused\n---\n\n# Slug router\n\n## State\n\nDone: parser. Next: resolver wiring.\n")
+
+	findings := Lint(kb, LintOptions{HasCode: false})
+	for _, f := range findings {
+		if f.RuleID == "PYLON065" && strings.Contains(f.File, "feature-slug-router") {
+			t.Errorf("PYLON065 fired on a paused plan with ## State: %+v", f)
+		}
+		if f.RuleID == "PYLON008" && strings.Contains(f.File, "feature-") {
+			t.Errorf("PYLON008 rejected status paused: %+v", f)
+		}
+	}
+	fired := false
+	for _, f := range findings {
+		if f.RuleID == "PYLON065" && strings.Contains(f.File, "feature-token-refresh") {
+			fired = true
+		}
+	}
+	if !fired {
+		t.Errorf("expected PYLON065 on the paused plan without ## State; got %+v", findings)
 	}
 }
 

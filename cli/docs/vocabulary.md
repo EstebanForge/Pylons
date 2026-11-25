@@ -22,7 +22,7 @@ The `status:` field records where a document sits in its lifecycle. Allowed valu
 | Root | Allowed `status:` values |
 |---|---|
 | `proposals/` | `proposed` |
-| `plans/` | `proposed`, `accepted`, `in-progress`, `shipped`, `abandoned` |
+| `plans/` | `proposed`, `accepted`, `in-progress`, `paused`, `shipped`, `abandoned` |
 | `conventions/` | `proposed`, `accepted`, `enforced`, `superseded` |
 | `decisions/` | `proposed`, `accepted`, `superseded`, `deprecated` |
 | `investigations/` | `active`, `resolved`, `abandoned`; audit docs add `superseded`, `withdrawn`, `retired` |
