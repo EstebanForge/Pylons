@@ -76,6 +76,13 @@ Every card answers in the same order: **What** names the feature, **The pain** n
 - **For agents**: `pylon check <paths>` before editing. If a path intersects `contract.editing` or `contract.unstable`, the CLI emits a blocking stop signal, and the agent stops instead of writing code on contested ground. When the agent works that plan, `check --plan <plan>` holds the scope of the plan as its own, and every other plan still stops it.
 - **Guard**: `pylon contract <plan>` resolves every stable contract against tracked repositories. A missing symbol, route, or file fails validation.
 
+#### The plan lifecycle (`plans/`)
+
+- **What**: A plan moves through a closed status set: `proposed`, `accepted`, `in-progress`, `paused`, `shipped`, `abandoned`. Each status carries its own obligations.
+- **The pain**: Started work stops mid-flight and nothing records where it stopped. The next session re-derives the state from diffs, or restarts the work.
+- **How it works**: Proposals under review get the full structural review (`PYLON021`) and the type-prefix filenames (`PYLON038`). In-progress plans name their trace: a feature branch or an `artifact:` link (`PYLON027`). A paused plan carries a `## State` section naming the resume point: what is done, the next step, any blocker (`PYLON065`). Paused work is not held to live contracts; the checks keep their accepted and in-progress scope. Shipping closes the loop: terminal status, `artifact:` link, move to `plans/archive/` (`PYLON009`).
+- **Guard**: `pylon lint` enforces the statuses, folder placement, and the section rules above. `pylon map --type plan --status in-progress` lists active work.
+
 #### Ubiquitous language (`domain/`)
 
 - **What**: The canonical vocabulary of the platform: entities, nouns, and verbs, defined once in the domain zone.
@@ -217,7 +224,7 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 #### Zero model calls
 
 - **The pain**: Verification that depends on a model gives a different verdict every run, costs per call, fails offline, and can be argued with.
-- **How it works**: The engine is a Go binary. Every check is AST parsing, YAML schema validation, git inspection, or exact set intersection. Same input, same verdict, on your laptop and in CI.
+- **How it works**: The engine is a Go binary. Every check is AST parsing, YAML schema validation, git inspection, or exact set intersection. Same input, same verdict, on your laptop and in CI. A fact about other documents is computed at check time, never stored: no frontmatter key records a `blocked` or `ready` state.
 - **For agents**: A deterministic error signal cannot be negotiated with. An agent cannot charm an AST resolver.
 - **Guard**: External `pylon-ext-<name>` binaries are opt-in, namespace-gated, and validated in configuration; the core checks never leave the deterministic path.
 
@@ -251,7 +258,7 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 
 - **What**: Stable contracts of provable kinds demand a pointer to the test that proves or falsifies them.
 - **The pain**: A stable contract with no test is a promise nobody plans to keep, and nothing says so until the code drifts.
-- **How it works**: `symbol`, `route`, `cli`, `event`, `schema`, and their language-prefixed variants (`go-symbol`, `ts-export`) demand `verified_by:` or `falsified_by:` on accepted and in-progress plans (`PYLON040`). Resolution of the pointer stays `PYLON035`.
+- **How it works**: `symbol`, `route`, `cli`, `event`, `schema`, and their language-prefixed variants (`go-symbol`, `php-symbol`, `py-symbol`, `js-export`, `ts-export`) demand `verified_by:` or `falsified_by:` on accepted and in-progress plans (`PYLON040`). Resolution of the pointer stays `PYLON035`.
 - **Guard**: `pylon review ratchet` holds the advisory count at the baseline.
 
 #### Advisory ratchet (`pylon review ratchet`)
@@ -302,7 +309,7 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 
 - **What**: A one-command installer that downloads a released binary and scaffolds a fresh ledger with its own git repository, wired hooks, and verified checksums.
 - **The pain**: A map that requires a build chain to install gets skipped. Adoption dies in the setup instructions.
-- **How it works**: `install.sh` detects the platform, downloads the release artifacts, verifies them against `checksums.txt`, extracts into `./pylons`, runs `git init`, wires the gate hooks, and scaffolds an initial commit. Windows users download the binary directly.
+- **How it works**: `install.sh` detects the platform, downloads the release artifacts, verifies them against `checksums.txt`, and extracts into a ledger folder it names with you (default `pylons`). It runs `git init`, wires the gate hooks, and scaffolds an initial commit; it refuses a target that already holds a repository. A re-run updates an existing pylon in place without touching user files; `--bin-only .` drops just the binary. Ledger discovery walks 3 steps: an explicit `--pylons`, a walk up from the working directory, then the binary's own home. The binary inside its ledger answers from the parent project root. Gate hooks stay an installed-ledger feature; a nested dev ledger runs `pylon lint --pylons pylons` instead. Windows users download the binary directly.
 - **For agents**: Nothing to build. The agent registers repositories in `pylons/manifests/pylons.yaml` and starts checking against real code.
 
 #### Secret shapes (`PYLON060`, `PYLON061`)
