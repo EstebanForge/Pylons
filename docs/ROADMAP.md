@@ -87,6 +87,45 @@ Agreed 2026-11-23 and deferred. Nothing here is scheduled. Every gate runs on on
 - **Not in scope**: Running the rule files. They run in the CI of the code repository. The ledger proves that the file exists.
 - **Needs**: Nothing.
 
+### guardrails-proof-and-recovery
+
+Agreed 2026-11-26 and deferred. Nothing here is scheduled. These items extend static guardrails, contract proof strictness, audit observability, and rollback recovery inside Pylons' deterministic offline boundary (complements `enforcement-hardening` above, which already covers `server-boundary`, `no-verify-guard`, `bypass-marker`, `history-aware-rules`, `enforced-by-pointer`, and `code-repo-gate`). Code paths are left out on purpose; read the engine first.
+
+#### quirk-guard-pointer
+- **Problem**: `PYLON028` checks that `guard:` on an active quirk over 30 days old is one of `lint-rule`, `convention`, `test`, or `accepted-risk`. A quirk can claim `guard: test` or `guard: lint-rule` without pointing to a real test or rule, so the guard rots into an unverified claim.
+- **Design**: Extend `PYLON028` (or add a companion `FORCED` rule) so `guard: test` and `guard: lint-rule` require a non-empty `guardrail:` (or `verified_by:`) pointer that resolves against tracked project sources via the `file` or `symbol` contract resolver. Require `guard: convention` to resolve a `pylon://conventions/` target. Keep `guard: accepted-risk` pointer-free, with an optional `links:` entry to an accepted decision. Update `manifests/rules.json` and `manifests/vocabulary.json` if new keys or rules are added.
+- **Tests**: Fail first on an active quirk over 30 days old with `guard: test` and an empty or dead pointer, and on `guard: convention` without a resolving convention link. Pass when the pointer resolves or `guard: accepted-risk` is set.
+- **Not in scope**: Running the referenced test or lint rule from `pylon`. The code repository CI runs it.
+- **Needs**: Nothing.
+
+#### strict-contract-proof
+- **Problem**: `PYLON040` (`contract_unproven`), `PYLON045` (`slice_incomplete`), and `PYLON046` (`contract_no_scenario`) are advisory-only. Teams cannot block merges when `machines:` transitions or `contract.stable` surfaces ship without `verified_by:` or `falsified_by:` pointers, or when a `slice: true` plan lacks scenario coverage.
+- **Design**: Add `strict_proofs: true|false` (default `false`) in `manifests/pylons.yaml` and a `--strict-proofs` flag on `pylon lint` and `pylon contract`. When enabled, promote `PYLON040` on `machines:` and `contract.stable` entries, and `PYLON045`/`PYLON046` on accepted or in-progress `slice: true` plans, from `ADVISORY` to `FORCED` (exit 1). Keep default `false` so existing ledgers do not break on upgrade.
+- **Tests**: Fail first with exit 1 when `strict_proofs` is enabled and a `contract.stable` or `machines:` entry lacks `verified_by:`/`falsified_by:`, or when a `slice: true` plan misses a behavior/test contract or covering scenario. Pass with exit 0 when disabled or when all pointers resolve via `PYLON035`.
+- **Not in scope**: Executing mapped repository test suites or parsing test assertions.
+- **Needs**: Nothing.
+
+#### ledger-trend-export
+- **Problem**: `pylon review ratchet` checks current advisory counts against a snapshot, and `pylon review utility` reads local `.git/` injection telemetry, but teams have no deterministic way to inspect rule hit rates, ratchet burn-down, or rework trends across commits or CI runs.
+- **Design**: Add `pylon review trends [--window <period>] [--package <pkg>] [--format human|json]`. Walk git commits in the requested window by commit timestamp, compute per-rule finding counts, ratchet deltas, and `rework` ratios, and include `utility` citation/injection counts when present. Emit deterministic `human` and `json` output with no daemon or external store.
+- **Tests**: Table tests over a fixture git repo with multiple commits showing advisory burn-down, rising rule counts, and byte-stable JSON output across repeated runs.
+- **Not in scope**: Runtime application logs, traces, metrics, live alerting, or hosted dashboards.
+- **Needs**: Nothing.
+
+#### self-update-rollback
+- **Problem**: `pylon self-update` backs up replaced and removed product files under `_pylons-backup`, but has no restore command if a release breaks a workflow or introduces a regression.
+- **Design**: Write a backup manifest inside `_pylons-backup` (previous version, binary path, and backed-up relative file paths and SHA-256 hashes) during `self-update`. Add `pylon self-update --rollback [--dry-run]` to verify the backup manifest, restore backed-up product files, delete files newly added by the failed update, and atomically restore the previous `pylon` binary. Refuse fail-closed (exit 2) when `_pylons-backup` or its manifest is missing or corrupt.
+- **Tests**: Fail first when no backup exists. Pass on round-trip `self-update` followed by `self-update --rollback`, proving restored files, dropped-file recovery, and binary hash match pre-update state, and `--dry-run` leaves disk untouched.
+- **Not in scope**: Production deployment, database migration, or feature-flag rollback.
+- **Needs**: Nothing.
+
+#### merge-danger-rollback-note
+- **Problem**: `PYLON047` (`pylon review merge-danger`) requires a `one-way` door to carry a breaking release marker or a `Data migration:` note, but does not require a recovery or rollback plan when a change is hard to reverse.
+- **Design**: Extend `pylon review merge-danger` so a `one-way` door also requires a non-empty `Rollback:` (or `Recovery:`) line in the PR body naming the revert procedure, forward-fix strategy, or `pylon://` runbook link. Gate behind a `manifests/pylons.yaml` flag or `--require-rollback-note` if backward compatibility with existing PR templates is needed, and update `USAGE.md` and `conv.merge-danger-line`.
+- **Tests**: Fail first on a `one-way` PR body with `Data migration:` but no `Rollback:` line when enabled; pass when `Rollback:` is non-empty; leave `two-way` PRs unaffected.
+- **Not in scope**: Automated execution of rollback scripts or runbooks.
+- **Needs**: Nothing.
+
 ## Explicitly Not Adopted
 
 - **Hosted context runtime.** The agent harness owns sessions. No external portal dependency.
