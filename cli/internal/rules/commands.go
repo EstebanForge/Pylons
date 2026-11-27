@@ -137,6 +137,49 @@ func hasHeading(content, heading string) bool {
 }
 
 // ReviewPlan validates a plan or proposal document's structure and STE-100 compliance.
+// PlanReviewPath reports whether rel sits in a zone the commit gate
+// reviews with the plan structure rules. One predicate serves both the
+// gate and the lint pass, so neither can drift from the other.
+func PlanReviewPath(rel string) bool {
+	if !strings.HasSuffix(rel, ".md") {
+		return false
+	}
+	base := filepath.Base(rel)
+	if base == "README.md" || base == "AGENTS.md" {
+		return false
+	}
+	return strings.HasPrefix(rel, "proposals/") || strings.HasPrefix(rel, "plans/proposals/")
+}
+
+// QuirkReviewPath reports whether rel sits in the zone the commit gate
+// reviews with the postmortem rules.
+func QuirkReviewPath(rel string) bool {
+	if !strings.HasSuffix(rel, ".md") {
+		return false
+	}
+	base := filepath.Base(rel)
+	if base == "README.md" || base == "AGENTS.md" {
+		return false
+	}
+	return strings.HasPrefix(rel, "quirks/")
+}
+
+// checkPlanStructure emits PYLON020 and PYLON021 for one plan document:
+// valid plan frontmatter and the three required sections.
+func checkPlanStructure(rel, content string) []report.Finding {
+	var findings []report.Finding
+	var fm resolve.PlanFrontMatter
+	if !resolve.ParsePlanFrontMatter(content, &fm) || strings.TrimSpace(fm.Title) == "" || fm.Type != "plan" {
+		findings = append(findings, errFinding("PYLON020", rel, 1, "plan lacks valid frontmatter (title, type: plan, status)"))
+	}
+	for _, sec := range []string{"## Problem", "## Design", "## Milestones"} {
+		if !strings.Contains(content, sec) {
+			findings = append(findings, errFinding("PYLON021", rel, 1, fmt.Sprintf("plan missing required section %q", sec)))
+		}
+	}
+	return findings
+}
+
 func ReviewPlan(kbRoot, planArg string) []report.Finding {
 	abs := planArg
 	if !filepath.IsAbs(abs) {
@@ -151,16 +194,7 @@ func ReviewPlan(kbRoot, planArg string) []report.Finding {
 		rel = filepath.ToSlash(r)
 	}
 	content := string(raw)
-	var findings []report.Finding
-	var fm resolve.PlanFrontMatter
-	if !resolve.ParsePlanFrontMatter(content, &fm) || strings.TrimSpace(fm.Title) == "" || fm.Type != "plan" {
-		findings = append(findings, errFinding("PYLON020", rel, 1, "plan lacks valid frontmatter (title, type: plan, status)"))
-	}
-	for _, sec := range []string{"## Problem", "## Design", "## Milestones"} {
-		if !strings.Contains(content, sec) {
-			findings = append(findings, errFinding("PYLON021", rel, 1, fmt.Sprintf("plan missing required section %q", sec)))
-		}
-	}
+	findings := checkPlanStructure(rel, content)
 	findings = append(findings, checkSTE100(rel, resolve.WithoutFrontMatter(content))...)
 	return findings
 }

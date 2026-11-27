@@ -73,30 +73,30 @@ func gatePreCommit(kbRoot string) int {
 	}
 
 	for _, f := range stagedFiles(kbRoot) {
-		if f == "proposals/README.md" || f == "proposals/AGENTS.md" ||
-			f == "plans/proposals/README.md" || f == "plans/proposals/AGENTS.md" {
+		if !rules.PlanReviewPath(f) {
 			continue
 		}
-		if (strings.HasPrefix(f, "proposals/") || strings.HasPrefix(f, "plans/proposals/")) && strings.HasSuffix(f, ".md") {
-			findings := rules.ReviewPlan(kbRoot, f)
-			if report.HasBlocking(findings) {
-				renderHuman(findings)
-				fmt.Fprintf(os.Stderr, "pylon: plan review findings in %s; fix structure before committing\n", f)
-				return 1
-			}
+		// The review rides the same accepted-debt baseline as the lint
+		// pass: debt the operator accepted must not resurrect as a
+		// commit blocker (see lintCorpus).
+		findings := rules.ReviewPlan(kbRoot, f)
+		findings, _, _ = rules.ApplyBaseline(kbRoot, findings)
+		if report.HasBlocking(findings) {
+			renderHuman(findings)
+			fmt.Fprintf(os.Stderr, "pylon: plan review findings in %s; fix structure before committing\n", f)
+			return 1
 		}
 	}
 	for _, f := range stagedFiles(kbRoot) {
-		if f == "quirks/README.md" || f == "quirks/AGENTS.md" {
+		if !rules.QuirkReviewPath(f) {
 			continue
 		}
-		if strings.HasPrefix(f, "quirks/") && strings.HasSuffix(f, ".md") {
-			findings := rules.ReviewPostmortem(kbRoot, f, true)
-			if report.HasBlocking(findings) {
-				renderHuman(findings)
-				fmt.Fprintf(os.Stderr, "pylon: postmortem review findings in %s; verify source paths before committing\n", f)
-				return 1
-			}
+		findings := rules.ReviewPostmortem(kbRoot, f, true)
+		findings, _, _ = rules.ApplyBaseline(kbRoot, findings)
+		if report.HasBlocking(findings) {
+			renderHuman(findings)
+			fmt.Fprintf(os.Stderr, "pylon: postmortem review findings in %s; verify source paths before committing\n", f)
+			return 1
 		}
 	}
 	return 0
@@ -136,6 +136,7 @@ func gatePrePush(kbRoot string) int {
 	}
 
 	findings := rules.ReviewPostmortem(kbRoot, "", true)
+	findings, _, _ = rules.ApplyBaseline(kbRoot, findings)
 	if report.HasBlocking(findings) {
 		renderHuman(findings)
 		fmt.Fprintln(os.Stderr, "pylon: quirk source validation failed; declared code paths missing")
