@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -211,4 +212,87 @@ func WriteProductManifest(m ProductManifest) ([]byte, error) {
 func quoteJSON(s string) string {
 	data, _ := json.Marshal(s)
 	return string(data)
+}
+
+// ExactFiles returns a copy of the product files a complete ledger
+// ships at fixed paths.
+func ExactFiles() []string { return slices.Clone(productExactFiles) }
+
+// DocZones returns a copy of the zones that ship an AGENTS.md entry doc.
+func DocZones() []string { return slices.Clone(docZones) }
+
+// Keepers returns a copy of the archive directories kept alive by a
+// .gitkeep placeholder.
+func Keepers() []string { return slices.Clone(productKeepers) }
+
+// ProductTrees returns a copy of the directories that ship whole trees.
+func ProductTrees() []string { return slices.Clone(productTrees) }
+
+// RequiredTreeFiles returns a copy of the files each product tree must
+// carry even when its other contents vary.
+func RequiredTreeFiles() []string { return slices.Clone(requiredTreeFiles) }
+
+// ReadProductManifest parses a manifests/product.json record. It is
+// the read counterpart of WriteProductManifest, for tooling that only
+// reports on a ledger.
+func ReadProductManifest(path string) (ProductManifest, error) {
+	var m ProductManifest
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return m, err
+	}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return m, err
+	}
+	if m.Version == "" || len(m.Files) == 0 {
+		return m, fmt.Errorf("%s carries no version or file hashes", path)
+	}
+	return m, nil
+}
+
+// RecordCurrentState hashes whatever of the product layer exists,
+// skipping absent files and empty trees instead of failing. It backs
+// the doctor --fix bootstrap of a legacy ledger: the record must
+// describe the ledger as it stands so later self-updates three-way
+// against it, and a release-time hole is a doctor warning, not a
+// recording blocker. It errors only when nothing product-owned exists.
+func RecordCurrentState(root, version string) (ProductManifest, error) {
+	m := ProductManifest{Version: version, Files: map[string]string{}}
+	var wanted []string
+	wanted = append(wanted, productExactFiles...)
+	for _, zone := range docZones {
+		wanted = append(wanted, filepath.ToSlash(filepath.Join(zone, "AGENTS.md")))
+	}
+	for _, k := range productKeepers {
+		wanted = append(wanted, filepath.ToSlash(filepath.Join(k, ".gitkeep")))
+	}
+	for _, rel := range wanted {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			continue
+		}
+		m.Files[rel] = sha256Hex(data)
+	}
+	for _, tree := range productTrees {
+		base := filepath.Join(root, filepath.FromSlash(tree))
+		_ = filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !d.Type().IsRegular() {
+				return nil
+			}
+			rel, relErr := filepath.Rel(root, p)
+			if relErr != nil {
+				return relErr
+			}
+			data, readErr := os.ReadFile(p)
+			if readErr != nil {
+				return nil
+			}
+			m.Files[filepath.ToSlash(rel)] = sha256Hex(data)
+			return nil
+		})
+	}
+	if len(m.Files) == 0 {
+		return m, fmt.Errorf("no product-owned files exist to record")
+	}
+	return m, nil
 }

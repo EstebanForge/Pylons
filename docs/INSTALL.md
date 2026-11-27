@@ -3,7 +3,7 @@ title: "Installing and Setting Up Pylons"
 type: meta
 status: active
 created: 2026-11-19
-updated: 2026-11-25
+updated: 2026-11-27
 ---
 
 # Installing and Setting Up Pylons
@@ -35,7 +35,7 @@ The installer needs `bash`, `curl` or `wget`, and a sha256 tool. Minimal contain
 
 Released binaries are cross-built per platform (linux and macOS in amd64 and arm64; Windows amd64 only) with symbols and DWARF tables stripped (`-ldflags "-s -w"`, `CGO_ENABLED=0`, `-trimpath`). Every release carries `checksums.txt`; the installer verifies it before unpacking.
 
-To install manually instead, download `pylons-vX.Y.Z-<os>-<arch>.tar.gz` and `pylons-kb-vX.Y.Z.tar.gz` from a release, unpack both into one directory, run `git init`, then `./bin/pylon install --pylons .`.
+To install manually instead, download `pylons-X.Y.Z-<os>-<arch>.tar.gz` and `pylons-kb-X.Y.Z.tar.gz` from a release, unpack both into one directory, run `git init`, then `./bin/pylon install --pylons .`.
 
 ## 3. Build the `pylon` CLI from Source
 
@@ -110,3 +110,5 @@ In CI, run full corpus validation with:
 ```bash
 ./bin/pylon lint --ci --format sarif
 ```
+
+To bring an existing pylon to a new release later, see [UPDATING.md](UPDATING.md).

@@ -162,3 +162,42 @@ func gitTopLevel(kbRoot string) (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
+// HookState is the pure picture of gate wiring doctor reports on:
+// which shipped hooks are absent from .githooks, which were locally
+// edited, and what core.hooksPath currently says.
+type HookState struct {
+	Missing   []string
+	Drifted   []string
+	HooksPath string
+	InGitRepo bool
+	RepoRoot  string
+}
+
+// CheckHooks inspects gate wiring without writing anything. Outside a
+// git repository it reports InGitRepo false and leaves the rest empty;
+// hooks are meaningless there.
+func CheckHooks(kbRoot string) HookState {
+	var st HookState
+	top, err := gitTopLevel(kbRoot)
+	if err != nil {
+		return st
+	}
+	st.InGitRepo = true
+	st.RepoRoot = top
+	if cur, err := resolve.GitRun(top, nil, "config", "--get", "core.hooksPath"); err == nil {
+		st.HooksPath = strings.TrimSpace(string(cur))
+	}
+	for _, name := range hookNames {
+		dst := filepath.Join(top, ".githooks", name)
+		existing, statErr := os.ReadFile(dst)
+		want, assetErr := assets.ReadFile("assets/" + name)
+		switch {
+		case statErr != nil:
+			st.Missing = append(st.Missing, name)
+		case assetErr == nil && string(existing) != string(want):
+			st.Drifted = append(st.Drifted, name)
+		}
+	}
+	return st
+}

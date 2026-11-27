@@ -65,6 +65,7 @@ Usage:
   pylon search <query>   [--limit <n>] [--all] [--format=human|json] [--json] [--pylons <path>]
   pylon manifest [rules|packages|product] [--check] [--release-version <v>] [--binary <os-arch>=<file>]... [--pylons <path>]
   pylon self-update --from <staged-release-dir> [--dry-run] [--force] [--pylons <path>]
+  pylon doctor           [--fix] [--format=human|json] [--pylons <path>]
   pylon explain <rule_id>
   pylon aroma search|recommend --corpus <dir> (--lines <path>:a-b | --snippet <file|-> | --diff <file|->) [--json]
   pylon install         [--force] [--pylons <path>]
@@ -742,6 +743,8 @@ func run(args []string) int {
 		ranked := filterDocs(docs, "", "", "", "", "", full, limit, queryProjectAliases(kbRoot))
 		return renderSearch(ranked, expanded, format)
 
+	case "doctor":
+		return cmdDoctor(findPylonsRoot(pylonsPath), fix, format)
 	case "self-update":
 		return cmdSelfUpdate(kbRoot, annFrom, forceHooks, dryRunUpdate)
 
