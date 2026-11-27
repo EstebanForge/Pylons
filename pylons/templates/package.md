@@ -17,6 +17,11 @@ components: []
 exposes: []
 protected: []
 asana: []                    # Ticket(s) driving the package work
+clonable: false               # wicket clonable <pkg> scaffolds a client copy
+testable: false               # wicket test covers this package
+sources: []                   # Authoritative file paths inside the package
+refs: []                      # Designs, tickets, and external specs
+migrated_from: ""             # Pre-Pylons location, kept for provenance
 description: ""
 tags: []
 ---

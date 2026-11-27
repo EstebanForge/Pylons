@@ -9,9 +9,11 @@ updated: YYYY-MM-DD
 owners:
   - Pylons
 ticket: []
+asana: []                     # Ticket(s) requesting the audit
 scope: []
 criteria: ""
 artifact: ""
+applies_to: []                # Packages or sites the audit covers
 components: []
 description: ""
 tags: [audit]

@@ -273,3 +273,19 @@ func TestLedgerWorkflowKeysAreKnown(t *testing.T) {
 		t.Error("guard on a reference must stay unknown")
 	}
 }
+
+func TestLedgerProvenanceAndCapabilityKeysAreKnown(t *testing.T) {
+	cases := []struct{ typ, front string }{
+		{"package", "title: p\ntype: package\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nclonable: true\ntestable: true\nsources: []\nrefs: []\nmigrated_from: meta/x.md\ntags: []"},
+		{"reference", "title: r\ntype: reference\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nmigrated_from: meta/x.md\ntags: []"},
+		{"investigation", "title: i\ntype: investigation\nstatus: active\nseverity: high\nreproducible: true\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nasana: []\nartifact: \"\"\ntarget_release: \"\"\ntags: []"},
+		{"audit", "title: a\ntype: audit\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nasana: []\napplies_to: []\ntags: []"},
+		{"decision", "title: d\ntype: decision\nstatus: accepted\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\ndate: 2026-11-26\ndeciders: [Pylons]\ntags: []"},
+	}
+	for _, tc := range cases {
+		m, _ := strictParse(t, tc.front)
+		if len(m.Unknown) > 0 {
+			t.Errorf("type %s: keys %v must be known", tc.typ, m.Unknown)
+		}
+	}
+}

@@ -6,6 +6,8 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 owners:
   - Pylons
+date: YYYY-MM-DD              # When the decision was made
+deciders: []                  # Who decided
 ticket: []
 supersedes: []
 superseded_by: []

@@ -9,8 +9,11 @@ updated: YYYY-MM-DD
 owners:
   - Pylons
 ticket: []
+asana: []                     # Ticket(s) driving the investigation
 components: []
 links: []
+artifact: ""                  # Where the findings landed
+target_release: ""            # Release the fix targets
 description: ""
 tags: [investigation]
 ---
