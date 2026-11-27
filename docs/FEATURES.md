@@ -13,7 +13,7 @@ This file is the feature guide for the Pylons ledger and its `pylon` CLI. It dou
 
 Two reading paths. If you manage people or products, read sections 1 and 2, then skim the feature cards in section 3. If you write code here, or an agent writes it for you, the whole file applies, and section 5 is the command reference you keep open.
 
-Sources of truth: [`../README.md`](../README.md) (overview), [`../pylons/AGENTS.md`](../pylons/AGENTS.md) (ledger rules and CLI manual), [`MANIFESTO.md`](MANIFESTO.md) (design philosophy), [`USAGE.md`](USAGE.md) (daily workflow), [`ROADMAP.md`](ROADMAP.md) (future work). Fix drift in the source files first, then mirror here.
+Sources of truth: [`../README.md`](../README.md) (overview), [`../pylons/AGENTS.md`](../pylons/AGENTS.md) (ledger rules and CLI manual), [`SPINE.md`](SPINE.md) (design philosophy), [`USAGE.md`](USAGE.md) (daily workflow), [`ROADMAP.md`](ROADMAP.md) (future work). Fix drift in the source files first, then mirror here.
 
 ## 1. The problem we built Pylons for
 

@@ -6,7 +6,7 @@ A Pylons is a plain-text ledger and map of a platform, and an enforcer of the ru
 - **The map.** Package docs record what each project does, what depends on what, and which interfaces are safe to build on, with typed contracts (`kind` + `id`) the engine resolves against real code.
 - **The enforcer.** The `pylon` binary re-checks the claims on every commit. A symbol, route, or machine transition the map declares must exist in code, or the gate fails. The map cannot quietly rot into fiction.
 
-The engine is deterministic: zero model calls, closed vocabularies, stable rule IDs (`PYLON0xx`), and two grades only. `FORCED` stops work; `ADVISORY` informs. That contract is the product's spine; see `MANIFESTO.md`.
+The engine is deterministic: zero model calls, closed vocabularies, stable rule IDs (`PYLON0xx`), and two grades only. `FORCED` stops work; `ADVISORY` informs. That contract is the product's spine; see `SPINE.md`.
 
 ## Pylons the product
 
@@ -28,7 +28,7 @@ The installable copy of Pylons, what users will see and use, lives at: `pylons/`
 - `cli/docs/` — engine-facing reference (machine contract, vocabulary, extension protocol). Not shipped; end-user equivalents live in `pylons/pylons-docs/`.
 - `pylons/` — the installable ledger payload: zones (`packages/ decisions/ quirks/ conventions/ plans/ tickets/ investigations/ proposals/ domain/ references/ prompts/ skills/ templates/ protocols/ extensions/`) plus `manifests/` and `pylons-docs/`. Releases archive this folder verbatim.
 - `pylons/manifests/` — `rules.json`, `packages.json`, `parity.json`, `ratchet.json`, `vocabulary.json`, `extensions.json`, `baseline.json`, `pylons.yaml` (+ `.example.*` twins). Generated files: never hand-edit.
-- `docs/` — source-repo manual: `USAGE.md` (canonical command dictionary, single source), `FEATURES.md`, `INSTALL.md`, `CHANGELOG.md`, `ROADMAP.md`, `MANIFESTO.md`, `EXTENSIONS.md`, `INDEX.md`.
+- `docs/` — source-repo manual: `USAGE.md` (canonical command dictionary, single source), `FEATURES.md`, `INSTALL.md`, `CHANGELOG.md`, `ROADMAP.md`, `SPINE.md`, `EXTENSIONS.md`, `INDEX.md`.
 - `scripts/` — `install.sh` (bootstrap a ledger; `--bin-only .` drops the binary into an existing dir), `release.sh` (the CI: gates, cross-build, pack, checksum, publish).
 - `dist/` — release artifacts. `examples/ledger/` — sample ledger. No CI workflows, no Makefile/Justfile: `scripts/release.sh` is the pipeline.
 

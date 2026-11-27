@@ -1,12 +1,12 @@
 ---
-title: "The Pylons Manifesto"
+title: "The Pylons Spine"
 type: meta
 status: active
 created: 2026-11-19
 updated: 2026-11-25
 ---
 
-# The Pylons manifesto
+# The Pylons spine
 
 Documentation you cannot verify is a rumor with formatting. Pylons gives multi-repo platforms and single-project teams a shared memory backed by deterministic proof.
 
