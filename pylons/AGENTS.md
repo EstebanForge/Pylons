@@ -1,4 +1,4 @@
-# Pylons
+# Pylons - Deterministic Architecture Record
 
 Pylons stores shared architectural context, domain knowledge, and decisions. Keep documentation accurate or delete it. Source Code is Truth.
 
