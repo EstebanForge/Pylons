@@ -1371,6 +1371,12 @@ type docEntry struct {
 
 func scanDocs(kbRoot string, includeArchive bool) []docEntry {
 	kbRoot = resolve.EvalRoot(kbRoot)
+	// exclude: promises "never linted and never indexed"; the corpus
+	// map feeds map/search/status, so it honors the globs too.
+	var exclude []string
+	if cfg, err := config.Load(kbRoot); err == nil {
+		exclude = cfg.Exclude
+	}
 	var docs []docEntry
 	_ = filepath.WalkDir(kbRoot, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -1406,6 +1412,16 @@ func scanDocs(kbRoot string, includeArchive bool) []docEntry {
 		}
 		rel, _ := filepath.Rel(kbRoot, p)
 		rel = filepath.ToSlash(rel)
+		excluded := false
+		for _, pat := range exclude {
+			if resolve.MatchGlob(pat, rel) {
+				excluded = true
+				break
+			}
+		}
+		if excluded {
+			return nil
+		}
 		raw, err := os.ReadFile(p)
 		if err != nil {
 			return nil

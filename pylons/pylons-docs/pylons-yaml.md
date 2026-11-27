@@ -59,7 +59,7 @@ projects:
 | `projects.<alias>.repo` | no | Repository URL for documentation value. |
 | `generate` | no | Manifests the gate hooks maintain: `rules`, `packages`. Absent means both; an exact list disables the rest. |
 | `schemes` | no | Extra URI schemes the ledger recognizes; declared-scheme links are checked for well-formedness. |
-| `exclude` | no | KB-relative globs never linted and never indexed. |
+| `exclude` | no | KB-relative globs never linted and never indexed. A whole folder takes `folder/**`; a trailing `/**` needs at least one segment under it. |
 | `projects.<alias>.ref` | no | Git ref the checker reads when resolving the project's code. Unset means the working tree. |
 | `projects.<alias>.tier` | no | Free-form tier hint, for example `core`, `app`, or `service`. |
 | `decision_prefix` | no | One to four uppercase letters naming accepted-decision files `<prefix>NNNN-slug.md`. Absent means `D`. |
