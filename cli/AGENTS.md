@@ -18,9 +18,11 @@ Go module (`github.com/estebanforge/pylons/cli`) for the `pylon` command-line to
 
 ```bash
 cd cli
-go test ./...
 go build -o ../pylons/bin/pylon ./cmd/pylon
+go test ./...
 ```
+
+The `cmd/pylon` tests exec the built binary at `pylons/bin/pylon`; `go test` never rebuilds it, so build before testing or a fresh clone fails those tests.
 
 ## Rules
 

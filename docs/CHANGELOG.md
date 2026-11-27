@@ -10,6 +10,11 @@ updated: 2026-11-26
 
 Notable changes to the Pylons format and `pylon` CLI.
 
+## Unreleased
+
+- Lint reviews `plans/proposals/` documents regardless of status, matching the commit gate's path-based selection: the gate reviewed every staged doc there while lint only reviewed `status: proposed`, so a finding the gate blocked on could never be recorded through `pylon lint --update-baseline` and blocked every commit forever. The review now keys off one shared predicate (`PlanReviewPath`), and `plans/regular.md` style docs outside the review zones stay unreviewed.
+- The commit gate's review passes skip documents the ledger excluded through `pylons.yaml`: lint already honored the exclude list, but the plan and postmortem review loops did not, so an excluded zone turned back into a commit blocker that no baseline entry could ever cover (excluded docs generate no lint findings).
+
 ## 2026-11-26
 
 - Gate review passes honor the accepted-debt baseline: the commit hook ran the plan and postmortem reviews on staged files outside `ApplyBaseline`, so debt accepted in `manifests/baseline.json` passed `pylon lint` and still blocked the commit (observed live: a proposal with twenty-four accepted findings sailed through lint and died at pre-commit). Review findings now flow through the same baseline as lint, and the staged-path predicates moved into the rules package (`PlanReviewPath`, `QuirkReviewPath`) so the gate and lint cannot drift apart.

@@ -17,7 +17,7 @@ The installable copy of Pylons, what users will see and use, lives at: `pylons/`
 - Go module `github.com/estebanforge/pylons/cli` (Go 1.27+, single dep `gopkg.in/yaml.v3`). No cobra: hand-rolled dispatch in `cli/cmd/pylon/main.go`.
 - Source guide with per-package layout: `cli/AGENTS.md` (read before editing the engine). Agent loop for ledger work: `protocols/agent.md`.
 - Build: `cd cli && go build -o ../pylons/bin/pylon ./cmd/pylon` (no `go.mod` at repo root — never `go build` from the root).
-- Test all: `cd cli && go test ./...` (~695 tests, 11 packages). Single: `cd cli && go test ./internal/resolve -run Name`. Vet: `cd cli && go vet ./...`.
+- Test all: build first (`cd cli && go build -o ../pylons/bin/pylon ./cmd/pylon`), then `cd cli && go test ./...`; the `cmd/pylon` tests exec the built binary and a fresh clone fails without it. Single: `cd cli && go test ./internal/resolve -run Name`. Vet: `cd cli && go vet ./...`.
 - Format: `gofmt -l cli` (release gate; run `gofmt -w` on touched files).
 - Exit codes: `0` clean/advisory, `1` FORCED finding, `2` usage/setup error, `3` no ledger root.
 - Lint the product's own ledger: `./pylons/bin/pylon lint --pylons pylons`; gates: `pylon gate pre-commit|pre-push`; refresh accepted debt with `pylon lint --update-baseline --pylons pylons`.
