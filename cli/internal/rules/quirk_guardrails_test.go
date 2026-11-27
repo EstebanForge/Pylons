@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/estebanforge/pylons/cli/internal/report"
+	"github.com/estebanforge/pylons/cli/internal/resolve"
 )
 
 // guardrailFixture builds a temp ledger with one tracked project
@@ -252,5 +253,20 @@ func TestQuirkGuardrailsSortedDistinctAcrossTargets(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("guardrails = %v, want %v", got, want)
 		}
+	}
+}
+
+// Zone entry guides (AGENTS.md) live in quirks/ as references, not as
+// quirks; the 30-day guard clock must not age them into advisories.
+func TestQuirkGuardSkipsEntryDocs(t *testing.T) {
+	old := resolve.DocMeta{Type: "reference", Status: "active", Created: "2026-07-15"}
+	entry := corpusDoc{rel: "quirks/AGENTS.md", meta: old}
+	if got := checkQuirkRules(entry); len(got) != 0 {
+		t.Fatalf("entry guide must not trip the guard clock, got %v", got)
+	}
+	quirk := corpusDoc{rel: "quirks/q.md", meta: resolve.DocMeta{Type: "quirk", Status: "active", Created: "2026-07-15"}}
+	got := checkQuirkRules(quirk)
+	if len(got) != 1 || got[0].RuleID != "PYLON028" {
+		t.Fatalf("a real quirk without guard must still fire PYLON028, got %v", got)
 	}
 }

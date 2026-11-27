@@ -6,6 +6,7 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 owners:
   - Pylons
+package: ""                  # Package the reference serves; wicket-wp-stack if stack-wide
 sources: []
 description: ""
 tags: [reference]

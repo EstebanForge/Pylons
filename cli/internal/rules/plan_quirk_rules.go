@@ -208,6 +208,12 @@ func checkPackageExtended(kbRoot, rel string, pkg resolve.PackageFrontMatter, cf
 }
 
 func checkQuirkRules(d corpusDoc) []report.Finding {
+	// Zone entry guides live in quirks/ as references, not as quirks;
+	// the 30-day guard clock would only age them into noise.
+	switch filepath.Base(d.rel) {
+	case "AGENTS.md", "README.md":
+		return nil
+	}
 	var out []report.Finding
 	guard := strings.TrimSpace(d.meta.Guard)
 	if guard != "" && !quirkGuards[guard] {

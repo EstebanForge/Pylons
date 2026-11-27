@@ -10,8 +10,10 @@ owners:
   - Pylons
 ticket: []
 applies_to: ["all"]
+asana: []                    # Ticket(s) prompting the convention
 supersedes: []
 artifact: ""
+anti_patterns: []            # The wrong near-synonym practices this rule forbids
 description: ""
 tags: [conventions]
 ---

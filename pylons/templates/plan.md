@@ -7,10 +7,12 @@ updated: YYYY-MM-DD
 owners:
   - Pylons
 ticket: []
+asana: []                    # Ticket(s) requesting the feature
 artifact: ""
 target_release: ""
 components: []
 links: []
+review_note: ""              # Review verdict line while the plan sits in review
 description: ""
 slice: false
 scenarios: []

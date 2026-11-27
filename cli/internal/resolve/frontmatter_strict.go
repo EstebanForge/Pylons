@@ -15,15 +15,17 @@ import (
 // declared schema: a key is known exactly when a template declares it.
 var TemplateKeys = map[string][]string{
 	"audit":         {"title", "type", "slug", "status", "remediation", "reaudit", "created", "updated", "owners", "ticket", "scope", "criteria", "artifact", "components", "description", "tags"},
-	"convention":    {"title", "type", "slug", "level", "status", "created", "updated", "owners", "ticket", "applies_to", "supersedes", "artifact", "description", "tags"},
-	"decision":      {"title", "type", "status", "created", "updated", "owners", "ticket", "supersedes", "superseded_by", "artifact", "links", "description", "tags"},
-	"domain-entity": {"title", "type", "status", "created", "updated", "owners", "components", "source_of_truth", "relationships", "states", "states_symbol", "machines", "avoid", "description", "tags"},
+	"convention":    {"title", "type", "slug", "level", "status", "created", "updated", "owners", "ticket", "applies_to", "supersedes", "artifact", "asana", "anti_patterns", "description", "tags"},
+	"decision":      {"title", "type", "status", "created", "updated", "owners", "ticket", "supersedes", "superseded_by", "artifact", "links", "asana", "description", "tags"},
+	"domain-entity": {"title", "type", "status", "created", "updated", "owners", "components", "source_of_truth", "relationships", "states", "states_symbol", "machines", "avoid", "asana", "description", "tags"},
 	"investigation": {"title", "type", "status", "severity", "reproducible", "created", "updated", "owners", "ticket", "components", "links", "description", "tags"},
-	"package":       {"title", "type", "status", "created", "updated", "owners", "ticket", "package", "repo", "ref", "tier", "rollout", "depends_on", "components", "exposes", "protected", "description", "tags"},
-	"plan":          {"title", "type", "status", "created", "updated", "owners", "ticket", "artifact", "target_release", "components", "links", "description", "slice", "scenarios", "tags", "contract"},
+	"package":       {"title", "type", "status", "created", "updated", "owners", "ticket", "package", "repo", "ref", "tier", "rollout", "depends_on", "components", "exposes", "protected", "asana", "description", "tags"},
+	"plan":          {"title", "type", "status", "created", "updated", "owners", "ticket", "artifact", "target_release", "components", "links", "asana", "review_note", "description", "slice", "scenarios", "tags", "contract"},
 	"quirk":         {"title", "type", "status", "created", "updated", "owners", "description", "package", "sources", "contracts", "guard", "guardrail", "ai_authored_contributed", "volume_pressure", "tags"},
-	"reference":     {"title", "type", "status", "created", "updated", "owners", "sources", "description", "tags"},
+	"reference":     {"title", "type", "status", "created", "updated", "owners", "package", "sources", "description", "tags"},
 	"ticket":        {"title", "type", "kind", "status", "priority", "created", "updated", "owners", "components", "plan", "description", "tags"},
+	"user-guide":    {"title", "type", "status", "created", "updated", "owners", "package", "persona", "description", "tags"},
+	"configuration": {"title", "type", "status", "created", "updated", "owners", "package", "persona", "description", "tags"},
 }
 
 // TemplateKeyRegistry returns a copy of the per-type frontmatter key

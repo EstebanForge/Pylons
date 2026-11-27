@@ -244,3 +244,32 @@ func TestUnknownDocTypeFallsBackToUnionKeys(t *testing.T) {
 		t.Fatalf("only the genuinely unknown key must fire, got %v", m.Unknown)
 	}
 }
+
+// The Atlas ledger documents its workflow keys (asana ticket links,
+// audience persona, reference-to-package binding, review notes,
+// anti-patterns) in templates/*.md. The registry must know them or
+// PYLON064 fires on every doc the ledger's own templates bless.
+func TestLedgerWorkflowKeysAreKnown(t *testing.T) {
+	cases := []struct{ typ, front string }{
+		{"reference", "title: r\ntype: reference\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\npackage: wicket-wp-stack\ntags: []"},
+		{"package", "title: p\ntype: package\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nasana: []\ntags: []"},
+		{"convention", "title: c\ntype: convention\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nasana: []\nanti_patterns: []\ntags: []"},
+		{"plan", "title: pl\ntype: plan\nstatus: proposed\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nasana: []\nreview_note: \"\"\ntags: []"},
+		{"decision", "title: d\ntype: decision\nstatus: accepted\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nasana: []\ntags: []"},
+		{"domain-entity", "title: e\ntype: domain-entity\nstatus: accepted\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nasana: []\ntags: []"},
+		{"user-guide", "title: u\ntype: user-guide\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\npersona: Developer\npackage: wicket-wp-stack\ntags: []"},
+		{"configuration", "title: cfg\ntype: configuration\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\npersona: Developer\npackage: wicket-wp-stack\ntags: []"},
+	}
+	for _, tc := range cases {
+		m, _ := strictParse(t, tc.front)
+		if len(m.Unknown) > 0 {
+			t.Errorf("type %s: keys %v must be known", tc.typ, m.Unknown)
+		}
+	}
+	// guard stays a quirk key: entry docs get the checker skip, not a
+	// widened reference schema.
+	m, _ := strictParse(t, "title: r\ntype: reference\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nguard: test\ntags: []")
+	if len(m.Unknown) == 0 {
+		t.Error("guard on a reference must stay unknown")
+	}
+}

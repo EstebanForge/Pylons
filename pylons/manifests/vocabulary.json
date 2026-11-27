@@ -89,6 +89,18 @@
       "description",
       "tags"
     ],
+    "configuration": [
+      "title",
+      "type",
+      "status",
+      "created",
+      "updated",
+      "owners",
+      "package",
+      "persona",
+      "description",
+      "tags"
+    ],
     "convention": [
       "title",
       "type",
@@ -102,6 +114,8 @@
       "applies_to",
       "supersedes",
       "artifact",
+      "asana",
+      "anti_patterns",
       "description",
       "tags"
     ],
@@ -117,6 +131,7 @@
       "superseded_by",
       "artifact",
       "links",
+      "asana",
       "description",
       "tags"
     ],
@@ -134,6 +149,7 @@
       "states_symbol",
       "machines",
       "avoid",
+      "asana",
       "description",
       "tags"
     ],
@@ -169,6 +185,7 @@
       "components",
       "exposes",
       "protected",
+      "asana",
       "description",
       "tags"
     ],
@@ -184,6 +201,8 @@
       "target_release",
       "components",
       "links",
+      "asana",
+      "review_note",
       "description",
       "slice",
       "scenarios",
@@ -214,6 +233,7 @@
       "created",
       "updated",
       "owners",
+      "package",
       "sources",
       "description",
       "tags"
@@ -229,6 +249,18 @@
       "owners",
       "components",
       "plan",
+      "description",
+      "tags"
+    ],
+    "user-guide": [
+      "title",
+      "type",
+      "status",
+      "created",
+      "updated",
+      "owners",
+      "package",
+      "persona",
       "description",
       "tags"
     ]

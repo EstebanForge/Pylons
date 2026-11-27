@@ -33,6 +33,7 @@ type newDocType struct {
 
 var newDocTypes = []newDocType{
 	{typ: "audit", template: "audit", dir: "investigations", status: "active"},
+	{typ: "configuration", template: "configuration", dir: "packages/configuration", status: "active"},
 	{typ: "convention", template: "convention", dir: "conventions/proposals", status: "proposed"},
 	{typ: "decision", template: "decision", dir: "decisions/proposals", status: "proposed"},
 	{typ: "domain-entity", template: "domain-entity", dir: "domain/entities", status: "proposed"},
@@ -42,6 +43,7 @@ var newDocTypes = []newDocType{
 	{typ: "quirk", template: "quirk", dir: "quirks", status: "active"},
 	{typ: "reference", template: "reference", dir: "references", status: "active"},
 	{typ: "ticket", template: "ticket", dir: "tickets", status: "open"},
+	{typ: "user-guide", template: "user-guide", dir: "user-guides", status: "active"},
 }
 
 // newSlugRe is kebab-case: lowercase letters and digits joined by
