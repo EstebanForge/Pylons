@@ -261,11 +261,15 @@ func SelfUpdate(kbRoot, stagedDir string, force, dryRun bool) (UpdateResult, err
 	// The new manifest is the new truth: write it so the next update
 	// compares against the hashes actually installed, not the ones
 	// from the release two hops ago.
-	if backupRoot == "" {
-		backupRoot = nextBackup()
-		res.BackupDir, _ = filepath.Rel(kbRoot, backupRoot)
-	}
+	// Only bootstrap the backup dir when something will actually land
+	// in it: an announcement for a dir that is never created reads as
+	// a lost backup (observed on a pre-manifest ledger whose only
+	// backup-able file was the absent old product.json).
 	if _, err := os.Stat(filepath.Join(kbRoot, "manifests", "product.json")); err == nil {
+		if backupRoot == "" {
+			backupRoot = nextBackup()
+			res.BackupDir, _ = filepath.Rel(kbRoot, backupRoot)
+		}
 		if err := backupFile(kbRoot, backupRoot, "manifests/product.json"); err != nil {
 			return res, err
 		}

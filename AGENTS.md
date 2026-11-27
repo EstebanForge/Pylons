@@ -19,7 +19,7 @@ The installable copy of Pylons, what users will see and use, lives at: `pylons/`
 - Build: `cd cli && go build -o ../pylons/bin/pylon ./cmd/pylon` (no `go.mod` at repo root — never `go build` from the root).
 - Test all: build first (`cd cli && go build -o ../pylons/bin/pylon ./cmd/pylon`), then `cd cli && go test ./...`; the `cmd/pylon` tests exec the built binary and a fresh clone fails without it. Single: `cd cli && go test ./internal/resolve -run Name`. Vet: `cd cli && go vet ./...`.
 - Format: `gofmt -l cli` (release gate; run `gofmt -w` on touched files).
-- Exit codes: `0` clean/advisory, `1` FORCED finding, `2` usage/setup error, `3` no ledger root.
+- Exit codes: `0` clean/advisory, `1` FORCED finding, `2` usage/setup error, `3` no ledger root, `4` update applied with drift (self-update).
 - Lint the product's own ledger: `./pylons/bin/pylon lint --pylons pylons`; gates: `pylon gate pre-commit|pre-push`; refresh accepted debt with `pylon lint --update-baseline --pylons pylons`.
 
 ## Product project structure

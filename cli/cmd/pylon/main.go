@@ -1167,7 +1167,10 @@ func cmdSelfUpdate(kbRoot, from string, force, dryRun bool) int {
 	}
 	if len(res.Drifted) > 0 || len(res.KeptDirty) > 0 {
 		fmt.Fprintf(os.Stderr, "pylon self-update: %d file(s) carry your edits; inspect the .pylons-new copies and kept files, then commit\n", len(res.Drifted)+len(res.KeptDirty))
-		return 1
+		// Exit 4, not 1: the update applied and the ledger is intact;
+		// drift is the review signal, not a failure. The piped
+		// installer keys off this to report success with a review note.
+		return 4
 	}
 	fmt.Fprintln(os.Stderr, "pylon self-update: review with git status, then commit the update")
 	return 0

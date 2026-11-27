@@ -420,5 +420,6 @@ The complete command and flag dictionary lives in [`USAGE.md`](USAGE.md): one de
 | `1` | Blocking finding (`FORCED` collision, broken contract, lint error, ratchet regression, foreign baseline). | Fix the violation or coordinate with the conflicting plan owner. |
 | `2` | Usage or runtime setup error (unknown command, invalid flag or window, unresolvable package filter). | Check syntax via `pylon --help`. |
 | `3` | Environment failure (no `manifests/pylons.yaml` found). | Run from the ledger root or pass `--pylons <path>`. |
+| `4` | Update applied with drift (`self-update` only): files carried your edits and were kept. | Review the `.pylons-new` copies, merge or remove each, then rerun the installer. |
 
 Lint-family commands (lint, check, review) report unreadable input as findings and exit 1; command-style commands (contract, review-brief, annotations, merge-danger) treat unreadable input as a setup error and exit 2.

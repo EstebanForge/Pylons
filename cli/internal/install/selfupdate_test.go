@@ -545,3 +545,23 @@ func TestSelfUpdateIdenticalBinaryIsNotAnUpdate(t *testing.T) {
 		t.Error("BinaryNew must stay false when the installed binary already matches the staged one")
 	}
 }
+
+func TestSelfUpdateLegacyFreshAddsAnnounceNoBackups(t *testing.T) {
+	kb, staged := t.TempDir(), t.TempDir()
+	// A pre-manifest ledger whose product layer is empty apart from a
+	// user edit: every staged file installs fresh, nothing pre-exists
+	// to back up, and the missing old manifest backs up nothing.
+	write(t, filepath.Join(kb, "AGENTS.md"), "# my own rules\n")
+	buildStaged(t, staged, "1.1.0", nil)
+
+	res, err := SelfUpdate(kb, staged, false, false)
+	if err != nil {
+		t.Fatalf("SelfUpdate: %v", err)
+	}
+	if res.BackupDir != "" {
+		t.Fatalf("BackupDir = %q; a run that backs up nothing must not announce a backup dir", res.BackupDir)
+	}
+	if _, err := os.Stat(filepath.Join(kb, "_pylons-backup")); !os.IsNotExist(err) {
+		t.Error("_pylons-backup must not exist when nothing was backed up")
+	}
+}

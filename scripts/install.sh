@@ -171,11 +171,22 @@ main() {
 		# product file, backs up what it replaces under _pylons-backup,
 		# and leaves your edits as .pylons-new copies for review.
 		log "existing pylon at $DEST; updating in place"
-		if "$work/stage/bin/pylon" self-update --from "$work/stage" --pylons "$DEST"; then
-			log "update applied; review with: cd $q2 && git status"
-		else
-			die "self-update reported drift or failed; inspect $DEST (.pylons-new copies), resolve or accept each one, then rerun this installer"
-		fi
+		update_exit=0
+		"$work/stage/bin/pylon" self-update --from "$work/stage" --pylons "$DEST" || update_exit=$?
+		case "$update_exit" in
+			0)
+				log "update applied; review with: cd $q2 && git status"
+				;;
+			4)
+				# Drift is the three-way mechanism working: your edits
+				# were kept and the new copies sit beside them. Rerunning
+				# converges once the release is recorded.
+				log "update applied with kept edits; review the .pylons-new copies, merge or remove each, then rerun this installer to finish"
+				;;
+			*)
+				die "self-update failed; inspect $DEST for .pylons-new copies, resolve each one, then rerun this installer"
+				;;
+		esac
 		log "done"
 		return 0
 	fi
