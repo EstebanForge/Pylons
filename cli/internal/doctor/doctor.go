@@ -10,17 +10,18 @@ package doctor
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/estebanforge/pylons/cli/internal/config"
 	"github.com/estebanforge/pylons/cli/internal/install"
+	"github.com/estebanforge/pylons/cli/internal/resolve"
 	"github.com/estebanforge/pylons/cli/internal/rules"
-	"github.com/estebanforge/pylons/cli/internal/version"
 )
 
 // Finding is one structural health report line.
@@ -68,8 +69,8 @@ func Run(kbRoot string) ([]Finding, error) {
 		})
 	}
 	fs = append(fs, checkExactFiles(kbRoot)...)
-	fs = append(fs, checkZoneDocs(kbRoot)...)
-	fs = append(fs, checkKeepers(kbRoot)...)
+	fs = append(fs, checkZoneDocs(kbRoot, cfg, cfgErr)...)
+	fs = append(fs, checkKeepers(kbRoot, cfg, cfgErr)...)
 	fs = append(fs, checkProductTrees(kbRoot)...)
 	fs = append(fs, checkProjects(kbRoot, cfg, cfgErr)...)
 	fs = append(fs, checkHooks(kbRoot)...)
@@ -81,50 +82,53 @@ func Run(kbRoot string) ([]Finding, error) {
 }
 
 // Fix applies every fixable finding and returns one line per repair.
-// Findings that stay unfixable are the user's calls by design: legal
-// text, semantic paths, and real binary builds.
+// Repair failures are collected, not fatal: one broken repair never
+// silently skips the rest. Findings that stay unfixable are the
+// user's calls by design: legal text, semantic paths, a real binary
+// build, and the product record, which only a real release applied by
+// self-update can establish.
 func Fix(kbRoot string) ([]string, error) {
 	fs, err := Run(kbRoot)
 	if err != nil {
 		return nil, err
 	}
+	// Only cfgErr matters here: the DOCTOR010 repair gate reads the
+	// generate opt-out through it.
+	_, cfgErr := config.Load(kbRoot)
 	var fixed []string
+	var failures []string
 	byID := map[string][]Finding{}
 	for _, f := range fs {
 		byID[f.ID] = append(byID[f.ID], f)
 	}
-	if _, ok := byID["DOCTOR002"]; ok {
-		for _, f := range byID["DOCTOR002"] {
-			if err := writeZoneDoc(kbRoot, f.File); err != nil {
-				return fixed, err
-			}
-			fixed = append(fixed, fmt.Sprintf("%s: wrote %s", f.ID, f.File))
+	fail := func(what string, err error) {
+		failures = append(failures, fmt.Sprintf("repair %s failed: %v", what, err))
+	}
+	for _, f := range byID["DOCTOR002"] {
+		if err := writeZoneDoc(kbRoot, f.File); err != nil {
+			fail(f.File, err)
+			continue
 		}
+		fixed = append(fixed, fmt.Sprintf("%s: wrote %s", f.ID, f.File))
 	}
 	for _, f := range byID["DOCTOR003"] {
 		path := filepath.Join(kbRoot, filepath.FromSlash(f.File))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return fixed, err
+			fail(f.File, err)
+			continue
 		}
 		if err := os.WriteFile(path, nil, 0o644); err != nil {
-			return fixed, err
+			fail(f.File, err)
+			continue
 		}
 		fixed = append(fixed, fmt.Sprintf("%s: created %s", f.ID, f.File))
 	}
-	if _, ok := byID["DOCTOR007"]; ok {
-		if _, err := install.EnsureHooks(kbRoot, false); err != nil {
-			return fixed, fmt.Errorf("hook wiring: %w", err)
+	if hookRepairDue(byID) {
+		if _, err := install.EnsureHooks(kbRoot, len(byID["DOCTOR008"]) > 0); err != nil {
+			fail("hook wiring", err)
+		} else {
+			fixed = append(fixed, "hooks wired or repaired via pylon install")
 		}
-		fixed = append(fixed, "DOCTOR007: wired gate hooks via pylon install")
-	}
-	for _, f := range byID["DOCTOR008"] {
-		if !strings.Contains(f.Message, "locally edited") {
-			continue
-		}
-		if _, err := install.EnsureHooks(kbRoot, true); err != nil {
-			return fixed, fmt.Errorf("hook repair: %w", err)
-		}
-		fixed = append(fixed, "DOCTOR008: rewrote drifted hooks (old copies kept as .bak)")
 	}
 	for _, f := range byID["DOCTOR009"] {
 		if !f.Fixable {
@@ -132,32 +136,52 @@ func Fix(kbRoot string) ([]string, error) {
 		}
 		path := filepath.Join(kbRoot, "bin", "pylon")
 		if err := os.Chmod(path, 0o755); err != nil {
-			return fixed, err
+			fail(f.File, err)
+			continue
 		}
 		fixed = append(fixed, fmt.Sprintf("%s: made %s executable", f.ID, f.File))
 	}
-	for _, f := range byID["DOCTOR010"] {
-		if err := regenerateManifest(kbRoot, f.File); err != nil {
-			return fixed, err
+	// With an unreadable pylons.yaml the generate opt-out cannot be
+	// read, so regenerating could stomp manifests handed to foreign
+	// tooling.
+	if len(byID["DOCTOR010"]) > 0 && cfgErr != nil {
+		failures = append(failures, "repair manifests skipped: pylons.yaml is unreadable, so the generate opt-out cannot be checked; fix the yaml first")
+	} else {
+		for _, f := range byID["DOCTOR010"] {
+			if err := regenerateManifest(kbRoot, f.File); err != nil {
+				fail(f.File, err)
+				continue
+			}
+			fixed = append(fixed, fmt.Sprintf("%s: regenerated %s", f.ID, f.File))
 		}
-		fixed = append(fixed, fmt.Sprintf("%s: regenerated %s", f.ID, f.File))
 	}
-	if _, ok := byID["DOCTOR011"]; ok {
-		line, err := recordProductState(kbRoot)
-		if err != nil {
-			return fixed, err
+	for _, f := range byID["DOCTOR012"] {
+		if !f.Fixable {
+			continue
 		}
-		if line != "" {
-			fixed = append(fixed, line)
-		}
-	}
-	if _, ok := byID["DOCTOR012"]; ok {
 		if err := rewriteBaseline(kbRoot); err != nil {
-			return fixed, err
+			fail("baseline rewrite", err)
+			continue
 		}
-		fixed = append(fixed, "DOCTOR012: rewrote manifests/baseline.json from a fresh lint run")
+		fixed = append(fixed, "DOCTOR012: rewrote manifests/baseline.json from a fresh lint run (old copy kept as .bak; every FORCED finding lint reports now is accepted)")
+	}
+	if len(failures) > 0 {
+		return fixed, errors.New(strings.Join(failures, "; "))
 	}
 	return fixed, nil
+}
+
+// hookRepairDue reports whether any hook finding is doctor-fixable;
+// foreign-owned paths and nested ledgers are hands-on by design.
+func hookRepairDue(byID map[string][]Finding) bool {
+	for _, id := range []string{"DOCTOR007", "DOCTOR008"} {
+		for _, f := range byID[id] {
+			if f.Fixable {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // --- checks ---
@@ -180,11 +204,14 @@ func checkExactFiles(kbRoot string) []Finding {
 	return fs
 }
 
-func checkZoneDocs(kbRoot string) []Finding {
+func checkZoneDocs(kbRoot string, cfg config.Config, cfgErr error) []Finding {
 	var fs []Finding
 	for _, zone := range install.DocZones() {
 		rel := zone + "/AGENTS.md"
-		if _, err := os.Stat(filepath.Join(kbRoot, zone, "AGENTS.md")); err != nil {
+		if cfgErr == nil && pathExcluded(cfg, rel) {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(kbRoot, zone, "AGENTS.md")); statSaysMissing(err) {
 			fs = append(fs, Finding{
 				ID: "DOCTOR002", Severity: "error", File: rel, Fixable: true,
 				Message: fmt.Sprintf("zone %s has no AGENTS.md entry doc", zone),
@@ -195,11 +222,14 @@ func checkZoneDocs(kbRoot string) []Finding {
 	return fs
 }
 
-func checkKeepers(kbRoot string) []Finding {
+func checkKeepers(kbRoot string, cfg config.Config, cfgErr error) []Finding {
 	var fs []Finding
 	for _, keeper := range install.Keepers() {
 		rel := keeper + "/.gitkeep"
-		if _, err := os.Stat(filepath.Join(kbRoot, filepath.FromSlash(rel))); err != nil {
+		if cfgErr == nil && pathExcluded(cfg, rel) {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(kbRoot, filepath.FromSlash(rel))); statSaysMissing(err) {
 			fs = append(fs, Finding{
 				ID: "DOCTOR003", Severity: "warning", File: rel, Fixable: true,
 				Message: fmt.Sprintf("archive directory %s has no .gitkeep; clones lose it", keeper),
@@ -208,6 +238,27 @@ func checkKeepers(kbRoot string) []Finding {
 		}
 	}
 	return fs
+}
+
+// pathExcluded reports whether a pylons.yaml exclude glob covers rel;
+// excluded paths are silent by design on every surface, including
+// doctor's structural expectations.
+func pathExcluded(cfg config.Config, rel string) bool {
+	for _, pattern := range cfg.Exclude {
+		if resolve.MatchGlob(pattern, rel) {
+			return true
+		}
+	}
+	return false
+}
+
+// statSaysMissing reports whether a Stat error means the path cannot
+// be read as it should be. Permission errors stay silent: doctor must
+// not propose writes it cannot attempt. Everything else (absent path,
+// a parent occupied by a regular file) is structural and repairable
+// or honestly reported as a failed repair.
+func statSaysMissing(err error) bool {
+	return err != nil && !errors.Is(err, iofs.ErrPermission)
 }
 
 func checkProductTrees(kbRoot string) []Finding {
@@ -274,29 +325,26 @@ func checkHooks(kbRoot string) []Finding {
 	if !st.InGitRepo {
 		return nil
 	}
+	if kbAbs, err := filepath.Abs(kbRoot); err == nil && filepath.Clean(st.RepoRoot) != filepath.Clean(kbAbs) {
+		return []Finding{{
+			ID: "DOCTOR008", Severity: "info", File: st.RepoRoot,
+			Message: "ledger sits inside the repo rooted at " + st.RepoRoot + "; gate hooks belong to that repo",
+			Fix:     "run pylon install at the repository root, or leave the gates to the parent checkout",
+		}}
+	}
+	if st.HooksPath != "" && st.HooksPath != ".githooks" {
+		return []Finding{{
+			ID: "DOCTOR008", Severity: "warning",
+			Message: fmt.Sprintf("core.hooksPath points at %q, owned by another tool; the gates may not run", st.HooksPath),
+			Fix:     "decide which owner wins, then run pylon install --force to take it back",
+		}}
+	}
 	var fs []Finding
 	if len(st.Missing) > 0 {
 		fs = append(fs, Finding{
-			ID: "DOCTOR007", Severity: "error",
-			File: st.HooksPath, Fixable: true,
+			ID: "DOCTOR007", Severity: "error", Fixable: true,
 			Message: fmt.Sprintf("gate hooks missing from .githooks: %s", strings.Join(st.Missing, ", ")),
 			Fix:     "doctor --fix runs pylon install to write them",
-		})
-	}
-	switch st.HooksPath {
-	case "":
-		fs = append(fs, Finding{
-			ID: "DOCTOR007", Severity: "error", Fixable: true,
-			Message: "core.hooksPath is not set; the gates never run",
-			Fix:     "doctor --fix sets it to .githooks",
-		})
-	case ".githooks":
-		// wired
-	default:
-		fs = append(fs, Finding{
-			ID: "DOCTOR008", Severity: "warning",
-			Message: fmt.Sprintf("core.hooksPath points at %q, owned by another tool", st.HooksPath),
-			Fix:     "decide which owner wins, then run pylon install --force to take it back",
 		})
 	}
 	if len(st.Drifted) > 0 {
@@ -358,24 +406,10 @@ func manifestBytes(payload any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// generates reports whether a kind is enabled under manifests.generate;
-// a nil list means the default pair ships enabled.
-func generates(cfg config.Config, kind string) bool {
-	if cfg.Generate == nil {
-		return kind == "rules" || kind == "packages"
-	}
-	for _, g := range *cfg.Generate {
-		if g == kind {
-			return true
-		}
-	}
-	return false
-}
-
 func checkGeneratedManifests(kbRoot string, cfg config.Config, cfgErr error) []Finding {
 	var fs []Finding
 	for _, kind := range generatedManifests {
-		if cfgErr == nil && !generates(cfg, kind) {
+		if cfgErr == nil && !cfg.GeneratesManifest(kind) {
 			continue
 		}
 		rel := "manifests/" + kind + ".json"
@@ -418,16 +452,16 @@ func checkProductRecord(kbRoot string) []Finding {
 	path := filepath.Join(kbRoot, "manifests", "product.json")
 	if _, err := os.Stat(path); err != nil {
 		return []Finding{{
-			ID: "DOCTOR011", Severity: "warning", File: "manifests/product.json", Fixable: true,
-			Message: "no product record; a legacy layout where the first self-update reports every product file as drifted",
-			Fix:     "doctor --fix records the current state as applied",
+			ID: "DOCTOR011", Severity: "warning", File: "manifests/product.json",
+			Message: "no product record; until one exists, self-update treats every product file as drifted",
+			Fix:     "run pylon self-update once (or reinstall); bootstrapping the record from disk would mislabel your edits as release state",
 		}}
 	}
 	if _, err := install.ReadProductManifest(path); err != nil {
 		return []Finding{{
-			ID: "DOCTOR011", Severity: "warning", File: "manifests/product.json", Fixable: true,
+			ID: "DOCTOR011", Severity: "warning", File: "manifests/product.json",
 			Message: fmt.Sprintf("product record unreadable: %v", err),
-			Fix:     "doctor --fix re-records the current state",
+			Fix:     "delete it and run pylon self-update once, or reinstall; the next update rewrites the record from the applied release",
 		}}
 	}
 	return nil
@@ -441,18 +475,32 @@ func checkBaseline(kbRoot string) []Finding {
 			Message: "no baseline; accepted debt is not recorded (nothing to do unless lint reports FORCED findings you accept)",
 		}}
 	}
+	data, err := os.ReadFile(path)
 	var m struct {
 		Version int `json:"version"`
 	}
-	data, err := os.ReadFile(path)
-	if err == nil && json.Unmarshal(data, &m) == nil && m.Version == 1 {
-		return nil
+	if err != nil || json.Unmarshal(data, &m) != nil {
+		return []Finding{{
+			ID: "DOCTOR012", Severity: "error", File: "manifests/baseline.json", Fixable: true,
+			Message: "baseline.json is unreadable; lint rejects it",
+			Fix:     "doctor --fix rewrites it from a fresh lint run; every FORCED finding lint reports now becomes accepted debt, and the old copy is kept as .bak",
+		}}
 	}
-	return []Finding{{
-		ID: "DOCTOR012", Severity: "error", File: "manifests/baseline.json", Fixable: true,
-		Message: "baseline.json is unreadable or not version 1; lint rejects it",
-		Fix:     "doctor --fix rewrites it from a fresh lint run (accepted debt not currently matching lint is dropped)",
-	}}
+	if m.Version > 1 {
+		return []Finding{{
+			ID: "DOCTOR012", Severity: "error", File: "manifests/baseline.json",
+			Message: fmt.Sprintf("baseline.json is version %d, written by a newer engine; this pylon cannot interpret it", m.Version),
+			Fix:     "update pylon to at least that version; doctor must not downgrade the record",
+		}}
+	}
+	if m.Version != 1 {
+		return []Finding{{
+			ID: "DOCTOR012", Severity: "error", File: "manifests/baseline.json", Fixable: true,
+			Message: fmt.Sprintf("baseline.json is version %d, not 1; lint rejects it", m.Version),
+			Fix:     "doctor --fix rewrites it from a fresh lint run; every FORCED finding lint reports now becomes accepted debt, and the old copy is kept as .bak",
+		}}
+	}
+	return nil
 }
 
 // --- repairs ---
@@ -493,37 +541,14 @@ func regenerateManifest(kbRoot, rel string) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func recordProductState(kbRoot string) (string, error) {
-	m, err := install.RecordCurrentState(kbRoot, version.Version)
-	if err != nil {
-		// Nothing product-owned exists yet; leave the warning standing.
-		return "", nil
-	}
-	pin := filepath.Join(kbRoot, "bin", "pylon")
-	if st, statErr := os.Stat(pin); statErr == nil && st.Mode().IsRegular() {
-		if err := install.PinBinary(&m, runtime.GOOS+"-"+runtime.GOARCH, pin); err != nil {
-			return "", err
+func rewriteBaseline(kbRoot string) error {
+	path := filepath.Join(kbRoot, "manifests", "baseline.json")
+	if data, err := os.ReadFile(path); err == nil {
+		backup := path + ".bak." + time.Now().Format("20060102-150405")
+		if err := os.WriteFile(backup, data, 0o644); err != nil {
+			return err
 		}
 	}
-	data, err := install.WriteProductManifest(m)
-	if err != nil {
-		return "", err
-	}
-	path := filepath.Join(kbRoot, "manifests", "product.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return "", err
-	}
-	note := ""
-	if _, statErr := os.Stat(pin); statErr != nil {
-		note = " (no binary pinned; bin/pylon absent)"
-	}
-	return fmt.Sprintf("DOCTOR011: recorded manifests/product.json as version %s%s", version.Version, note), nil
-}
-
-func rewriteBaseline(kbRoot string) error {
 	findings := rules.Lint(kbRoot, rules.LintOptions{HasCode: true})
 	return rules.UpdateBaseline(kbRoot, findings)
 }

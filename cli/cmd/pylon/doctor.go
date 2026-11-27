@@ -14,23 +14,32 @@ import (
 	"github.com/estebanforge/pylons/cli/internal/report"
 )
 
-// cmdDoctor audits ledger structure; exit 1 means error-grade findings
-// remain (after --fix if given), mirroring the findings exit contract.
+// cmdDoctor audits ledger structure; exit 1 means error-grade
+// findings remain (after --fix if given) or a repair failed,
+// mirroring the findings exit contract.
 func cmdDoctor(kbRoot string, fix bool, format report.Format) int {
 	if format != report.FormatHuman && format != report.FormatJSON {
 		fmt.Fprintf(os.Stderr, "pylon: doctor accepts --format human|json\n")
 		return 2
 	}
+	// JSON mode keeps stdout machine-readable: prose and repair
+	// lines go to stderr.
+	prose := os.Stdout
+	if format == report.FormatJSON {
+		prose = os.Stderr
+	}
+	repairFailed := false
 	if fix {
 		fixed, err := doctor.Fix(kbRoot)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "pylon: doctor --fix: %v\n", err)
+			fmt.Fprintf(prose, "pylon: doctor --fix: %v\n", err)
+			repairFailed = true
 		}
 		for _, line := range fixed {
-			fmt.Println(line)
+			fmt.Fprintln(prose, line)
 		}
 		if len(fixed) == 0 {
-			fmt.Println("doctor: nothing fixable to repair")
+			fmt.Fprintln(prose, "doctor: nothing fixable to repair")
 		}
 	}
 	fs, err := doctor.Run(kbRoot)
@@ -40,6 +49,9 @@ func cmdDoctor(kbRoot string, fix bool, format report.Format) int {
 	}
 	switch format {
 	case report.FormatJSON:
+		if fs == nil {
+			fs = []doctor.Finding{}
+		}
 		out, err := json.MarshalIndent(fs, "", "  ")
 		if err != nil {
 			return 2
@@ -55,8 +67,12 @@ func cmdDoctor(kbRoot string, fix bool, format report.Format) int {
 			return 1
 		}
 	}
+	if repairFailed {
+		fmt.Fprintln(os.Stderr, "pylon doctor: one or more repairs failed; see above")
+		return 1
+	}
 	if len(fs) == 0 {
-		fmt.Println("doctor: ledger structure is healthy")
+		fmt.Fprintln(prose, "doctor: ledger structure is healthy")
 	}
 	return 0
 }
@@ -74,8 +90,12 @@ func renderDoctorHuman(fs []doctor.Finding) {
 		}
 		return sorted[i].ID < sorted[j].ID
 	})
+	fixable := 0
 	severity := ""
 	for _, f := range sorted {
+		if f.Fixable {
+			fixable++
+		}
 		if f.Severity != severity {
 			severity = f.Severity
 			fmt.Printf("\n== %s ==\n", strings.ToUpper(severity))
@@ -91,5 +111,9 @@ func renderDoctorHuman(fs []doctor.Finding) {
 			fmt.Printf("  by hand: %s\n", f.Fix)
 		}
 	}
-	fmt.Printf("\ndoctor: %d finding(s); run pylon doctor --fix to apply the fixable ones\n", len(fs))
+	if fixable > 0 {
+		fmt.Printf("\ndoctor: %d finding(s); run pylon doctor --fix to apply the fixable ones\n", len(fs))
+	} else {
+		fmt.Printf("\ndoctor: %d finding(s); nothing here is doctor-fixable, the fixes above are hands-on calls\n", len(fs))
+	}
 }

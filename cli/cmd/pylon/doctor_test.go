@@ -110,3 +110,82 @@ func containsAll(s string, subs ...string) bool {
 	}
 	return true
 }
+
+func TestDoctorJsonHygieneAndRepairExit(t *testing.T) {
+	dir := doctorLedger(t)
+
+	// Broken: json stdout parses as findings with no prose.
+	code, out, _ := runPylon(t, dir, "doctor", "--pylons", ".", "--format", "json")
+	if code != 1 {
+		t.Fatalf("doctor json exit = %d, want 1", code)
+	}
+	var fs []map[string]any
+	if err := json.Unmarshal([]byte(out), &fs); err != nil {
+		t.Fatalf("json stdout is not pure JSON: %v\n%s", err, out)
+	}
+	if len(fs) == 0 {
+		t.Fatal("json findings empty on a broken ledger")
+	}
+
+	// Healthy: complete the layer doctor cannot build (trees, product
+	// record, valid baseline), let --fix write the rest, then stdout
+	// must be exactly [].
+	for _, rel := range install.RequiredTreeFiles() {
+		path := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(rel+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tree := range install.ProductTrees() {
+		filler := filepath.Join(dir, filepath.FromSlash(tree), "filler.md")
+		if err := os.MkdirAll(filepath.Dir(filler), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filler, []byte("filler\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(rel, body string) {
+		t.Helper()
+		path := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("manifests/product.json", `{"version": "test", "files": {"LICENSE": "x"}}`+"\n")
+	write("manifests/baseline.json", `{"version": 1}`+"\n")
+
+	code, out, _ = runPylon(t, dir, "doctor", "--fix", "--pylons", ".", "--format", "json")
+	if code != 0 {
+		t.Fatalf("doctor --fix exit = %d, want 0\nstdout:\n%s", code, out)
+	}
+	var after []map[string]any
+	if err := json.Unmarshal([]byte(out), &after); err != nil {
+		t.Fatalf("post-fix json stdout is not pure JSON: %v\n%s", err, out)
+	}
+	if string(out) != "[]\n" {
+		t.Fatalf("healthy json stdout = %q, want []", out)
+	}
+
+	// A failed repair forces exit 1 even with only warnings left: a
+	// regular file occupies plans/archive so the keeper mkdir fails.
+	if err := os.Remove(filepath.Join(dir, "plans", "archive", ".gitkeep")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "plans", "archive")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "plans", "archive"), []byte("occupied"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, _ = runPylon(t, dir, "doctor", "--fix", "--pylons", ".")
+	if code != 1 {
+		t.Fatalf("doctor --fix exit = %d with a failed repair, want 1", code)
+	}
+}
