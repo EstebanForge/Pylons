@@ -3,12 +3,16 @@ title: "Pylons Changelog"
 type: meta
 status: active
 created: 2026-01-26
-updated: 2026-11-26
+updated: 2026-11-27
 ---
 
 # Pylons Changelog
 
 Notable changes to the Pylons format and `pylon` CLI.
+
+## 2026-11-27
+
+- Ledger templates declare the frontmatter schema their docs are validated against: `pylon lint` unions the keys found in `templates/*.md` into the built-in registry, so a ledger-local workflow key no longer waits for an engine release to stop firing PYLON064. The key lives exactly while its template does — deleting the template restores the advisory — and generated manifests keep mirroring only the engine's built-in schema.
 
 ## 2026-11-26
 
