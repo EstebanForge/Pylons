@@ -12,6 +12,11 @@ Notable changes to the Pylons format and `pylon` CLI.
 
 ## 2026-11-27
 
+- A peer review caught a data-loss path in `doctor --fix`: bootstrapping `manifests/product.json` from disk mislabeled user edits and ledger-local files as release state, and the next self-update silently removed what it had recorded as release-dropped. The repair is gone; DOCTOR011 points at one self-update run or a reinstall, because only a real release can establish the record.
+- `doctor --fix` keeps its hands off other tools and half-broken state: a foreign `core.hooksPath` is reported, never taken over; a nested ledger gets an info finding instead of an unfixable error; one failed repair no longer silently skips the rest (failures are collected and exit 1); a corrupt baseline is rewritten with a `.bak` copy and a newer-version baseline is never downgraded; an unreadable pylons.yaml blocks manifest regeneration; `exclude:` globs stay silent.
+- `pylon doctor --format json` is clean: stdout is pure JSON with `[]` for healthy, prose and repair lines on stderr.
+- `pylon doctor` agrees with the pre-push gate on `generate:`: an absent list maintains `vocabulary` too.
+- `scripts/release.sh` runs the wire-level gates on the product ledger, and `install.sh --bin-only` lands LICENSE and NOTICE beside the binary.
 - `pylon doctor [--fix]` audits ledger structure: missing product files, zone entry docs, archive keepers, empty product trees, dead project paths, hook wiring, `bin/pylon`, generated-manifest parsability and staleness, the product record, and the baseline. `--fix` repairs the fixable class (writes entry docs and keepers, wires hooks, regenerates manifests, records a legacy product state) and leaves semantic calls to the user. Doctor checks the structure lint assumes; content rules stay with lint.
 - A dedicated update guide: `docs/UPDATING.md` covers the three update paths, the three-way file merge, drift review with the exit-4 contract, and legacy ledgers; INSTALL.md and the shipped `adopting.md` point at it.
 - The installer reports drift as success with a review note: `self-update` exits `4` when files carried your edits (previously `1`, indistinguishable from a real failure), so the piped installer no longer claims the update failed after it applied, and it no longer announces a `_pylons-backup/` directory when nothing needed backing up.
