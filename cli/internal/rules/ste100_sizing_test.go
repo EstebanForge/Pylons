@@ -35,6 +35,17 @@ func TestCheckSTE100IgnoresSizingTailsAndSymbols(t *testing.T) {
 			t.Fatalf("%s: expected no finding, got %v", tc.name, got)
 		}
 	}
+
+	// The preview keeps the raw leading tokens (a bullet dash counts
+	// in the head even though it is dropped from the word count), so
+	// baseline keys recorded by older engines still match.
+	flagged := checkSTE100(rel, "- "+repWords(20)+" = done\n")
+	if len(flagged) != 1 {
+		t.Fatalf("expected one finding for the 21-word bullet, got %d", len(flagged))
+	}
+	if want := "sentence exceeds 20 words under ASD-STE100: - word word word word word word word"; flagged[0].Message != want {
+		t.Fatalf("preview drifted from the stable format:\n got: %s\nwant: %s", flagged[0].Message, want)
+	}
 }
 
 func repWords(n int) string {

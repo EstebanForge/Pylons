@@ -484,7 +484,10 @@ func checkSTE100(rel, body string) []report.Finding {
 		for _, sentence := range strings.Split(cleaned, ". ") {
 			words := nonSymbolTokens(sentence)
 			if len(words) > limit {
-				head := words
+				// The preview keeps raw tokens so the message, and
+				// therefore every baseline key built from it, stays
+				// stable across counter changes.
+				head := strings.Fields(sentence)
 				if len(head) > 8 {
 					head = head[:8]
 				}
