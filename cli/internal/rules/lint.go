@@ -437,6 +437,33 @@ func checkMachinePaths(rel, body string) []report.Finding {
 	return out
 }
 
+// sizingTailRe matches the structured effort annotation ledgers append
+// to task bullets ("- dev 4 + qa 0 + review 1 = **5**"). It is sizing
+// data, not prose, so the sentence counter must not see it.
+var sizingTailRe = regexp.MustCompile(`(?:^|\s)(?:dev|qa|review)\s+\d+(?:\s*\+\s*(?:dev|qa|review)\s+\d+)+\s*=\s*\S+$`)
+
+func hasLetterOrDigit(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// nonSymbolTokens keeps only tokens that carry a letter or a digit, so
+// separators like "+" and "=" never inflate the word count.
+func nonSymbolTokens(sentence string) []string {
+	fields := strings.Fields(sentence)
+	kept := fields[:0]
+	for _, w := range fields {
+		if hasLetterOrDigit(w) {
+			kept = append(kept, w)
+		}
+	}
+	return kept
+}
+
 func checkSTE100(rel, body string) []report.Finding {
 	var out []report.Finding
 	inFence := false
@@ -453,9 +480,9 @@ func checkSTE100(rel, body string) []report.Finding {
 		if isProceduralLine(trim) {
 			limit = 20
 		}
-		cleaned := inlineCodeRe.ReplaceAllString(trim, "code")
+		cleaned := sizingTailRe.ReplaceAllString(inlineCodeRe.ReplaceAllString(trim, "code"), "")
 		for _, sentence := range strings.Split(cleaned, ". ") {
-			words := strings.Fields(sentence)
+			words := nonSymbolTokens(sentence)
 			if len(words) > limit {
 				head := words
 				if len(head) > 8 {
