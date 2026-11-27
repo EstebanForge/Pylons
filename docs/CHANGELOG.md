@@ -10,16 +10,13 @@ updated: 2026-11-26
 
 Notable changes to the Pylons format and `pylon` CLI.
 
-## Unreleased
-
-- Lint reviews `plans/proposals/` documents regardless of status, matching the commit gate's path-based selection: the gate reviewed every staged doc there while lint only reviewed `status: proposed`, so a finding the gate blocked on could never be recorded through `pylon lint --update-baseline` and blocked every commit forever. The review now keys off one shared predicate (`PlanReviewPath`), and `plans/regular.md` style docs outside the review zones stay unreviewed.
-- The commit gate's review passes skip documents the ledger excluded through `pylons.yaml`: lint already honored the exclude list, but the plan and postmortem review loops did not, so an excluded zone turned back into a commit blocker that no baseline entry could ever cover (excluded docs generate no lint findings).
-
 ## 2026-11-26
 
 - Gate review passes honor the accepted-debt baseline: the commit hook ran the plan and postmortem reviews on staged files outside `ApplyBaseline`, so debt accepted in `manifests/baseline.json` passed `pylon lint` and still blocked the commit (observed live: a proposal with twenty-four accepted findings sailed through lint and died at pre-commit). Review findings now flow through the same baseline as lint, and the staged-path predicates moved into the rules package (`PlanReviewPath`, `QuirkReviewPath`) so the gate and lint cannot drift apart.
 - STE100 counts words, not tokens: symbol-only tokens (`+`, `=`) and the structured sizing tails ledgers append to task bullets (`- dev 4 + qa 0 + review 1 = **5**`) no longer inflate sentence length, so fitting the twenty-word bullet limit no longer forces deleting real content from plan tasks. Prose rules are unchanged: long sentences still flag, and a tail never rescues genuinely long prose. The finding preview keeps its old format, so baseline keys recorded by earlier engines still match; within one line the flag can move to a later sentence when an earlier one drops under the limit, and a ledger refreshes that with `pylon lint --update-baseline`.
 - `exclude:` now keeps its full promise: pylons.yaml exclusion globs were honored by the lint walk but ignored by the corpus indexer, so an excluded folder stayed visible in `map`, `search`, and `status` and "never linted and never indexed" was half true. The indexer loads the manifest and applies the same globs, so one pattern (`atlas/**`) takes a whole folder out of every surface.
+- Lint reviews `plans/proposals/` documents regardless of status, matching the commit gate's path-based selection: the gate reviewed every staged doc there while lint only reviewed `status: proposed`, so a finding the gate blocked on could never be recorded through `pylon lint --update-baseline` and blocked every commit forever. The review now keys off one shared predicate (`PlanReviewPath`), and `plans/regular.md` style docs outside the review zones stay unreviewed.
+- The commit gate's review passes skip documents the ledger excluded through `pylons.yaml`: lint already honored the exclude list, but the plan and postmortem review loops did not, so an excluded zone turned back into a commit blocker that no baseline entry could ever cover (excluded docs generate no lint findings).
 
 ## 2026-11-25
 
