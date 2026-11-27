@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/estebanforge/pylons/cli/internal/config"
 	"github.com/estebanforge/pylons/cli/internal/report"
+	"github.com/estebanforge/pylons/cli/internal/resolve"
 	"github.com/estebanforge/pylons/cli/internal/rules"
 )
 
@@ -30,6 +32,10 @@ func runGate(kbRoot, stage string) int {
 }
 
 func gatePreCommit(kbRoot string) int {
+	// The review loops must skip the same documents lint skips, or an
+	// excluded zone becomes a commit blocker that --update-baseline
+	// can never record (excluded docs generate no lint findings).
+	exclude := loadExclude(kbRoot)
 	// Commit-time convenience: auto-stage manifest drift. Push time blocks instead.
 	// Only the kinds the generate knob enables take part: a foreign-owned
 	// manifest (generate: []) is nobody's drift to sweep into this commit,
@@ -73,7 +79,7 @@ func gatePreCommit(kbRoot string) int {
 	}
 
 	for _, f := range stagedFiles(kbRoot) {
-		if !rules.PlanReviewPath(f) {
+		if !rules.PlanReviewPath(f) || isExcluded(exclude, f) {
 			continue
 		}
 		// The review rides the same accepted-debt baseline as the lint
@@ -88,7 +94,7 @@ func gatePreCommit(kbRoot string) int {
 		}
 	}
 	for _, f := range stagedFiles(kbRoot) {
-		if !rules.QuirkReviewPath(f) {
+		if !rules.QuirkReviewPath(f) || isExcluded(exclude, f) {
 			continue
 		}
 		findings := rules.ReviewPostmortem(kbRoot, f, true)
@@ -136,6 +142,7 @@ func gatePrePush(kbRoot string) int {
 	}
 
 	findings := rules.ReviewPostmortem(kbRoot, "", true)
+	findings = dropExcluded(findings, loadExclude(kbRoot))
 	findings, _, _ = rules.ApplyBaseline(kbRoot, findings)
 	if report.HasBlocking(findings) {
 		renderHuman(findings)
@@ -172,6 +179,42 @@ func lintGate(kbRoot string, changedOnly bool) int {
 func lintCorpus(kbRoot string, opts rules.LintOptions) ([]report.Finding, int, int) {
 	findings := rules.Lint(kbRoot, opts)
 	return rules.ApplyBaseline(kbRoot, findings)
+}
+
+// loadExclude reads the ledger's exclude globs; a config error leaves
+// no filter, which is safe here because the lint stage already turned
+// a broken config into a blocking finding before these loops run.
+func loadExclude(kbRoot string) []string {
+	cfg, err := config.Load(kbRoot)
+	if err != nil {
+		return nil
+	}
+	return cfg.Exclude
+}
+
+func isExcluded(patterns []string, rel string) bool {
+	for _, pat := range patterns {
+		if resolve.MatchGlob(pat, rel) {
+			return true
+		}
+	}
+	return false
+}
+
+// dropExcluded removes findings from documents the ledger excluded;
+// the pre-push postmortem pass reviews every quirk in one call, so
+// the filter applies to results rather than file selection.
+func dropExcluded(findings []report.Finding, patterns []string) []report.Finding {
+	if len(patterns) == 0 {
+		return findings
+	}
+	kept := findings[:0]
+	for _, f := range findings {
+		if !isExcluded(patterns, f.File) {
+			kept = append(kept, f)
+		}
+	}
+	return kept
 }
 
 func stagedFiles(kbRoot string) []string {
