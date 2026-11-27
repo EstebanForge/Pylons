@@ -6,6 +6,7 @@ package resolve
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -287,5 +288,45 @@ func TestLedgerProvenanceAndCapabilityKeysAreKnown(t *testing.T) {
 		if len(m.Unknown) > 0 {
 			t.Errorf("type %s: keys %v must be known", tc.typ, m.Unknown)
 		}
+	}
+}
+
+func TestLedgerTemplatesExtendRegistry(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, "templates", name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("package-custom.md", "---\ntitle: Package custom\ntype: package\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nexperiment_key: true\n---\n\n# Package custom\n")
+	write("field-log.md", "---\ntitle: Field log\ntype: field-log\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\ncapture_window: 30d\n---\n\n# Field log\n")
+	write("broken.md", "---\nanchors: &a [x\n---\n")
+	pkgFront := "title: p\ntype: package\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\nexperiment_key: v\ntags: []"
+	customFront := "title: f\ntype: field-log\nstatus: active\ncreated: 2026-11-26\nupdated: 2026-11-26\nowners: [Pylons]\ncapture_window: 7d\ntags: []"
+
+	// Baseline without a ledger templates dir: the extra keys stay unknown.
+	if err := LoadLedgerTemplates(filepath.Join(root, "absent")); err != nil {
+		t.Fatalf("absent templates dir must not error: %v", err)
+	}
+	if m, ok := strictParse(t, pkgFront); ok && len(m.Unknown) != 1 || ok && m.Unknown[0] != "experiment_key" {
+		t.Fatalf("baseline must flag experiment_key, got %v", m.Unknown)
+	}
+
+	if err := LoadLedgerTemplates(root); err != nil {
+		t.Fatalf("LoadLedgerTemplates: %v", err)
+	}
+	if m, _ := strictParse(t, pkgFront); len(m.Unknown) != 0 {
+		t.Errorf("template key must join its declared type, got %v", m.Unknown)
+	}
+	if m, _ := strictParse(t, customFront); len(m.Unknown) != 0 {
+		t.Errorf("custom type keys must join UnionKeys, got %v", m.Unknown)
+	}
+	// The built-in registry itself stays untouched: manifests mirror the engine schema.
+	if registry := TemplateKeyRegistry(); slices.Contains(registry["package"], "experiment_key") {
+		t.Error("TemplateKeyRegistry must stay built-in only")
 	}
 }

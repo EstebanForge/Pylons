@@ -71,6 +71,9 @@ func isRootSkippedDir(kbRoot, dirPath string) bool {
 // Lint runs deterministic checks across all markdown files in kbRoot.
 func Lint(kbRoot string, opts LintOptions) []report.Finding {
 	kbRoot = resolve.EvalRoot(kbRoot)
+	// Every PYLON064 surface (lint, both gates) flows through here, so
+	// the ledger's own templates extend the key registry once per run.
+	_ = resolve.LoadLedgerTemplates(kbRoot)
 	cfg, err := config.Load(kbRoot)
 	if err != nil {
 		return []report.Finding{{

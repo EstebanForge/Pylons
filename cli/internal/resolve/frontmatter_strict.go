@@ -5,6 +5,9 @@ package resolve
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -26,6 +29,53 @@ var TemplateKeys = map[string][]string{
 	"ticket":        {"title", "type", "kind", "status", "priority", "created", "updated", "owners", "components", "plan", "description", "tags"},
 	"user-guide":    {"title", "type", "status", "created", "updated", "owners", "package", "persona", "description", "tags"},
 	"configuration": {"title", "type", "status", "created", "updated", "owners", "package", "persona", "description", "tags"},
+}
+
+// extraTypeKeys holds frontmatter keys declared by the ledger's own
+// templates/ beyond the built-in registry. Ledger templates are the
+// schema their docs are validated against; LoadLedgerTemplates fills
+// this once per run. A template typo therefore legalizes a key
+// silently — accepted: the alternative is an engine release for every
+// ledger-local workflow key.
+var extraTypeKeys = map[string][]string{}
+
+// LoadLedgerTemplates unions the frontmatter keys declared by
+// <root>/templates/*.md into the known-key sets: a template's keys
+// join the entry named by its type value, and unknown types join the
+// union fallback. Unparseable or absent templates extend nothing;
+// the registry returned by TemplateKeyRegistry stays built-in only so
+// generated manifests keep mirroring the engine schema.
+func LoadLedgerTemplates(root string) error {
+	extraTypeKeys = map[string][]string{}
+	paths, err := filepath.Glob(filepath.Join(root, "templates", "*.md"))
+	if err != nil || len(paths) == 0 {
+		return err
+	}
+	for _, p := range paths {
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		front := ExtractFrontMatter(string(raw))
+		if front == "" {
+			continue
+		}
+		var node yaml.Node
+		if yaml.Unmarshal([]byte(front), &node) != nil || len(node.Content) == 0 || node.Content[0].Kind != yaml.MappingNode {
+			continue
+		}
+		doc := node.Content[0]
+		docType := scalarValue(doc, "type")
+		if docType == "" {
+			continue
+		}
+		for _, k := range mappingKeys(doc) {
+			if !slices.Contains(extraTypeKeys[docType], k) {
+				extraTypeKeys[docType] = append(extraTypeKeys[docType], k)
+			}
+		}
+	}
+	return nil
 }
 
 // TemplateKeyRegistry returns a copy of the per-type frontmatter key
@@ -56,6 +106,11 @@ func UnionKeys() map[string]bool {
 			out[k] = true
 		}
 	}
+	for _, keys := range extraTypeKeys {
+		for _, k := range keys {
+			out[k] = true
+		}
+	}
 	return out
 }
 
@@ -77,6 +132,9 @@ func knownKeySet(docType string) map[string]bool {
 		for k := range UnionKeys() {
 			out[k] = true
 		}
+	}
+	for _, k := range extraTypeKeys[docType] {
+		out[k] = true
 	}
 	for _, k := range engineReadKeys {
 		out[k] = true
