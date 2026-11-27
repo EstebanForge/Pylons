@@ -30,6 +30,12 @@ func TestLintFlagsPlanStructureOnReviewPaths(t *testing.T) {
 	write(filepath.Join("proposals", "wrong-type.md"), "---\ntitle: Wrong type\ntype: proposal\nstatus: proposed\ncreated: 2026-01-01\nupdated: 2026-01-01\nowners: [Pylons]\ntags: []\n---\n\n## Problem\n\np\n")
 	write(filepath.Join("proposals", "README.md"), "# Proposals\n\nGuide text without plan sections.\n")
 	write(filepath.Join("plans", "regular.md"), "---\ntitle: Regular\ntype: plan\nstatus: accepted\ncreated: 2026-01-01\nupdated: 2026-01-01\nowners: [Pylons]\ntags: []\n---\n\n## Problem\n\np\n")
+	// The commit gate reviews every staged plans/proposals/ doc by
+	// path, regardless of status. Lint must see the same set: a
+	// finding the gate blocks on has to be recordable through
+	// `lint --update-baseline`, and lint must name the defect before
+	// the commit does.
+	write(filepath.Join("plans", "proposals", "docs-accepted.md"), "---\ntitle: Accepted\ntype: plan\nstatus: accepted\ncreated: 2026-01-01\nupdated: 2026-01-01\nowners: [Pylons]\ntags: []\n---\n\n## Problem\n\np\n")
 
 	findings := Lint(kb, LintOptions{})
 
@@ -47,9 +53,12 @@ func TestLintFlagsPlanStructureOnReviewPaths(t *testing.T) {
 	if !has("PYLON020", filepath.ToSlash(filepath.Join("proposals", "wrong-type.md"))) {
 		t.Fatalf("lint must flag non-plan type in proposals/, got:\n%v", findings)
 	}
+	if !has("PYLON021", filepath.ToSlash(filepath.Join("plans", "proposals", "docs-accepted.md"))) {
+		t.Fatalf("lint must review plans/proposals/ docs regardless of status, got:\n%v", findings)
+	}
 	for _, f := range findings {
 		if f.RuleID == "PYLON020" || f.RuleID == "PYLON021" {
-			if f.File != filepath.ToSlash(filepath.Join("proposals", "no-design.md")) && f.File != filepath.ToSlash(filepath.Join("proposals", "wrong-type.md")) {
+			if f.File != filepath.ToSlash(filepath.Join("proposals", "no-design.md")) && f.File != filepath.ToSlash(filepath.Join("proposals", "wrong-type.md")) && f.File != filepath.ToSlash(filepath.Join("plans", "proposals", "docs-accepted.md")) {
 				t.Fatalf("plan structure rules leaked to %s outside review paths", f.File)
 			}
 		}

@@ -53,10 +53,12 @@ func scanLifecycleRules(kbRoot string, docs []corpusDoc, cfg config.Config, hasC
 						out = append(out, errFinding("PYLON011", d.rel, 1, "archive move target already exists: plans/archive/"+base))
 					}
 				}
-				// Plan proposals (plans/proposals/, status proposed)
-				// get the same structural review as proposals/ docs;
-				// leaving them out was a silent review bypass.
-				if d.meta.Status == "proposed" {
+				// The commit gate reviews every staged plans/proposals/
+				// doc by path, regardless of status; lint must see the
+				// same set, or a finding the gate blocks on cannot be
+				// recorded through --update-baseline. Guard with the
+				// shared predicate so the sets cannot drift.
+				if PlanReviewPath(d.rel) {
 					out = append(out, ReviewPlan(kbRoot, d.rel)...)
 				}
 				if d.meta.Status == "paused" && !strings.Contains(d.content, "## State") {

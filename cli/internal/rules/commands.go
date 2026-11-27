@@ -136,10 +136,10 @@ func hasHeading(content, heading string) bool {
 	return false
 }
 
-// ReviewPlan validates a plan or proposal document's structure and STE-100 compliance.
-// PlanReviewPath reports whether rel sits in a zone the commit gate
-// reviews with the plan structure rules. One predicate serves both the
-// gate and the lint pass, so neither can drift from the other.
+// PlanReviewPath reports whether rel sits in a zone the plan
+// structure rules review: the commit gate selects staged files with
+// it, and lint runs ReviewPlan over the same zone set (proposals/ and
+// plans/proposals/), so the gate and lint cannot drift apart.
 func PlanReviewPath(rel string) bool {
 	if !strings.HasSuffix(rel, ".md") {
 		return false
@@ -180,6 +180,7 @@ func checkPlanStructure(rel, content string) []report.Finding {
 	return findings
 }
 
+// ReviewPlan validates a plan or proposal document's structure and STE-100 compliance.
 func ReviewPlan(kbRoot, planArg string) []report.Finding {
 	abs := planArg
 	if !filepath.IsAbs(abs) {
