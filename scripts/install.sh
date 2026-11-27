@@ -142,10 +142,15 @@ main() {
 		# Binary-only mode: an existing ledger gets the engine and its
 		# license files under bin/ and nothing else.
 		[ -d "$DEST" ] || die "--bin-only needs an existing directory; $DEST does not exist"
-		# The tarball carries a bin/ prefix; strip it so everything
-		# lands flat in the target's bin/.
-		mkdir -p "$DEST/bin"
-		tar -xzf "$work/$bin_asset" -C "$DEST/bin" --strip-components=1
+		# The tarball carries a bin/ prefix plus root-level LICENSE
+		# and NOTICE. Extract whole, then lay out: engine + license
+		# files flat under the target's bin/.
+		mkdir -p "$DEST/bin" "$work/extract"
+		tar -xzf "$work/$bin_asset" -C "$work/extract"
+		mv "$work/extract/bin/"* "$DEST/bin/"
+		for f in LICENSE NOTICE; do
+			[ -f "$work/extract/$f" ] && cp "$work/extract/$f" "$DEST/bin/$f"
+			done
 		chmod +x "$DEST/bin/pylon"
 		printf -v q '%q' "$DEST"
 		log "binary installed at $DEST/bin/pylon"

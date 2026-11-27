@@ -35,6 +35,10 @@ origin_sha="$(git rev-parse origin/main)"
 go build -C cli -o ../pylons/bin/pylon ./cmd/pylon
 (cd cli && go vet ./... && go test ./... -count=1)
 ./pylons/bin/pylon lint --pylons pylons >/dev/null
+# Wire-level gates: the shipped hooks must pass on the product ledger
+# itself, not just the lint pass they wrap.
+./pylons/bin/pylon gate pre-commit --pylons pylons >/dev/null
+./pylons/bin/pylon gate pre-push --pylons pylons >/dev/null
 junk="$(find . -name '._*' -not -path './.git/*' -print | head -n1)"
 [ -z "$junk" ] || { echo "AppleDouble junk present: $junk; sweep before releasing" >&2; exit 1; }
 export COPYFILE_DISABLE=1
