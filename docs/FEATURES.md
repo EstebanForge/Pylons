@@ -3,7 +3,7 @@ title: "Pylons: Feature Guide"
 type: meta
 status: active
 created: 2026-11-20
-updated: 2026-11-25
+updated: 2026-11-27
 tags: [features, workflow, agents, developer-guide]
 ---
 
@@ -132,6 +132,13 @@ Every incident has 2 costs: the outage and the relearning. The features in this 
 - **How it works**: `harvest pr` reads a merged diff: exported symbols become `exposes:` proposals for the claiming package, `Footgun:` markers become quirk stubs, and `--record` appends each marker as a JSONL finding. `review retro` counts finding signatures in a window and opens exactly one promotion candidate per repeated signature: a convention stub, a `wrong_if` falsifier entry, or a lint-rule proposal.
 - **For agents**: The loop needs no session memory: the record accumulates in files, and a human accepts or drops each candidate.
 - **Guard**: Report-only commands. Malformed records fail closed.
+
+#### Bulk adoption (`pylon import`)
+
+- **What**: Adopts existing markdown into the ledger: the type template's frontmatter grafted onto a byte-identical body.
+- **The pain**: Teams arrive with written material. Hand-copying it into templated files is the chore that kills adoption, and raw copies skip the schema.
+- **How it works**: Dry-run is the default: it names every target and writes nothing. `--write` applies; `--type` picks the zone and its template; `--name` overrides the slug. A file that already carries valid frontmatter skips, an unparseable frontmatter block refuses loudly, plan imports demand their type prefix, and an occupied target refuses.
+- **Guard**: Imported docs face the full rule set from the first lint. Adoption lands as ordinary ledger documents, not a side door.
 
 #### Knowledge utility (`pylon review utility`)
 
@@ -278,8 +285,15 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 #### Corpus health (`pylon lint`)
 
 - **The pain**: Documentation rots quietly: links decay, files land in the wrong folders, front matter drifts from the schema.
-- **How it works**: Lint validates frontmatter, lifecycle statuses, cross-document links, the dependency graph, and prose against the rule catalog. `--fix` auto-relocates misplaced documents and heals broken links. `--changed` keeps the pre-commit gate fast.
+- **How it works**: Lint validates frontmatter, lifecycle statuses, cross-document links, the dependency graph, and prose against the rule catalog. `--fix` auto-relocates misplaced documents and heals broken links. `--changed` keeps the pre-commit gate fast. `exclude:` globs in `manifests/pylons.yaml` take a folder off every surface: lint, `map`, `search`, and the gate review passes.
 - **Guard**: `pylon explain <rule_id>` prints any rule's meaning and fix hint in plain language, so humans and agents self-correct instead of guessing.
+
+#### Ledger health audit (`pylon doctor`)
+
+- **What**: One command auditing the structure lint assumes: missing product files, zone entry docs, archive keepers, empty product trees, dead project paths, hook wiring, the `bin/pylon` binary, generated-manifest parsability and staleness, the product record, the baseline, and corpus size once the ledger grows.
+- **The pain**: Lint judges documents, not the scaffolding around them. A missing entry doc, an unwired hook, or a stale manifest passes silently until a gate or a teammate trips over it.
+- **How it works**: Findings carry the same 2 grades with `DOCTOR` IDs and fix hints. `--fix` repairs only the mechanical class: entry docs, keepers, hook wiring, byte-identical manifest regeneration, and a baseline rewrite that keeps a `.bak`. It never invents legal text, never guesses project paths, and never takes over another tool's hooks. `--format json` keeps stdout machine-readable (`[]` when healthy); repair failures force exit 1.
+- **Guard**: Doctor checks the structure lint assumes; content rules stay with lint. Paths excluded through `pylons.yaml` stay silent.
 
 #### Staleness (`pylon staleness`)
 
@@ -339,7 +353,7 @@ Documentation you cannot verify is a rumor with formatting. This group makes eve
 #### Strict frontmatter
 
 - **The pain**: A typo in frontmatter used to fail silently and disable checks the author believed were active.
-- **How it works**: Frontmatter decodes node-first. Anchors, aliases, merge keys, and custom tags fail closed with line numbers. Unknown keys are per-type advisories (`PYLON064`); the closed payloads (machines, transitions, contract entries, scenarios) reject unknown sub-keys hard.
+- **How it works**: Frontmatter decodes node-first. Anchors, aliases, merge keys, and custom tags fail closed with line numbers. Unknown keys are per-type advisories (`PYLON064`); the ledger's own `templates/*.md` declare extra allowed keys, and deleting a template restores the advisory. The closed payloads (machines, transitions, contract entries, scenarios) reject unknown sub-keys hard.
 - **Guard**: `PYLON001` names the reason, `PYLON064` names the key.
 
 #### The readable baseline (`manifests/baseline.json`)
