@@ -128,7 +128,7 @@ Agreed 2026-11-26 and deferred. Nothing here is scheduled. These items extend st
 
 ### runtime-enforcement-and-recall
 
-Agreed 2026-11-27 and deferred. Nothing here is scheduled. These items extend the ledger past the git gate into the moment a session acts or asks: command-time enforcement for quirk rules, staleness judged by references instead of dates, and a receipt of what the ledger served. They complement `enforcement-hardening` and `guardrails-proof-and-recovery` above. Code paths are left out on purpose; read the engine first.
+Agreed 2026-11-27 and deferred. Nothing here is scheduled. These items extend the ledger past the git gate into the moment a session acts or asks: command-time enforcement for quirk rules, staleness judged by references instead of dates, a receipt of what the ledger served, and a sweep that flags the live records left holding a dead premise. They complement `enforcement-hardening` and `guardrails-proof-and-recovery` above. Code paths are left out on purpose; read the engine first.
 
 #### enforced-quirks
 - **Problem**: A quirk can claim a guard, and `pylon context` injects quirks as advice, but nothing in the ledger stops a command at the moment it runs. "Never force-push" informs. It does not enforce. The git gates cover commits and pushes only.
@@ -165,6 +165,34 @@ Agreed 2026-11-27 and deferred. Nothing here is scheduled. These items extend th
 - **Known limits**: The receipt records what the ledger served, not what the agent did with it. Tool calls that never touch `pylon` leave no line.
 - **Not in scope**: Transcript capture, telemetry export, a viewer or server, agent-behavior scoring.
 - **Needs**: Nothing.
+
+#### invalidation-sweep
+- **Problem**: `PYLON066` flags the doc that names its successor, and the archive holds the replaced record, but the docs that leaned on the dead premise stay silent. A live package still declaring `depends_on:` on a superseded package, or a live doc whose `links:` still resolve to a superseded decision, keeps serving with no review signal. The supersedes keys record the replacement chain; nothing walks the dependency direction.
+- **Design, dead set**: A target is dead when any of these hold: a non-empty `superseded_by:`, `status: superseded`, or a path under `/archive/` (the same detection the contract-claim pass uses). A subject is live when none of them hold for the subject itself.
+- **Design, edges**: Explicit edges only, one hop, no transitive closure: a `links:` entry whose URI resolves to a dead target, and a `depends_on:` entry naming a dead package by the identity `pylon context --graph` already uses. Prose mentions are not edges. Contract consumption is not an edge until a machine key for consumers exists.
+- **Design, rules**: Two `ADVISORY` rules with the next free IDs. The sweep rule emits one finding per live subject naming each dead target it still holds, beside the target's own `PYLON066` finding. The consistency rule checks the supersession pair: B names A in `superseded_by:` while A's `supersedes:` list does not name B back, or the reverse, and one finding names the missing side. No new status vocabulary: the finding carries the review duty, and the closed status sets stay closed.
+- **Choice**: Transitive closure was rejected. One dead premise would flood every transitively linked doc, and the flood hides the doc the author must actually fix. One hop keeps the signal; the author follows the chain by hand, one review at a time.
+- **Where it runs**: A corpus pass beside the contract-claim pass in the lint order, skipped under `ChangedOnly` like the graph pass, honoring `exclude:` globs and the root skip list. `pylon review` reports both rules like every advisory.
+- **Baseline**: Ordinary advisories: baselinable, so a team can accept a known dependency on a dead record, and the ratchet tracks them like the rest.
+- **Tests**: Fail first on a live package with `depends_on:` on a superseded package, a live doc with a `links:` entry resolving to an archived decision, and a pair missing its back link. Stay silent on: both docs archived together, a consistent pair, a two-hop path (A links B, B links dead C, A stays silent), and docs with no links or `depends_on`.
+- **False blocks**: Archiving a dead record and its dependents in separate commits fires advisories between the commits. The fix is order, not code: archive the dependents in the same change, or baseline the findings while the move spans commits.
+- **Known limits**: A doc that names a dead decision in prose with no `links:` entry is invisible. If a consumption key for contracts lands later, the sweep extends to it.
+- **Not in scope**: Transitive closure, auto-archiving dependents, a `needs_review` status, link rewriting.
+- **Needs**: Nothing. The supersedes keys parse today and the corpus pass shape exists.
+
+### adoption-and-interop
+
+Agreed 2026-11-27 and deferred. Nothing here is scheduled. These items let a ledger adopt records written for the file-based knowledge formats that formed around the same artifact class, starting with the Open Knowledge Format (OKF, v0.2). The ledger adopts the records and judges them under its own rules; it never adopts the format's permissiveness (unknown keys tolerated, broken links blessed, trust advisory). One line of positioning: the bundle format makes a corpus self-describing; Pylons makes it self-enforcing. Code paths are left out on purpose; read the engine first.
+
+#### okf-import
+- **Problem**: `pylon import` scaffolds bare markdown and skips files that already carry valid frontmatter, so OKF-shaped material lands either unwrapped or untouched, and nothing maps its provenance and lifecycle keys onto the ledger's. The two formats share an artifact class and oppose a philosophy: OKF standardizes exchange and judges nothing; Pylons judges truth. Adoption must take the records and refuse the permissiveness.
+- **Design**: An import profile selected with `--profile okf`. One static map, versioned against OKF 0.2: `type:` maps through a fixed table to a ledger type, unknown values to `reference` with the original value recorded in the body header; `description:` and `tags:` map through unchanged; `sources:` entries map to ledger `sources:` entries keeping `resource` verbatim (URLs stay URLs; `repo://` stays reserved for real registrations); `status:` maps `draft` to `proposed`, and `stable` and `deprecated` fall through to the target type's default status with the OKF status recorded in the body. Keys with no ledger counterpart (`generated`, `verified`, `stale_after`, the attested-computation fields) are never invented into frontmatter: the importer records them as one fenced block at the top of the body, so nothing drops silently. `--type` and `--name` keep their current meaning and override the map.
+- **Rules**: The importer never validates a bundle for OKF conformance; that is OKF tooling's job. Imported docs become ordinary ledger docs: every rule judges them from the first lint, and proof keys stay empty until a human or the strict-proof work fills them. Dry-run prints the per-file mapping before any `--write`.
+- **Tests**: Fail first on a file whose OKF `sources:` entries lose their `resource` at import, and on an unknown `type:` mapping to anything but `reference`. Pass on: a `draft` plan landing in `plans/proposals/` as `proposed`; a deprecated doc landing at the type's default status with the OKF status in the body block; dry-run exiting 0 with the mapping table and writing nothing; a body byte-identical apart from the recorded block.
+- **False blocks**: None at import. Bundle-relative links (`/tables/x.md`) survive into the body, and the normal link checks flag them after import; fixing targets is the designed post-import step, not a defect.
+- **Known limits**: OKF per-claim footnote attribution and Attested Computation contracts have no ledger counterpart; they stay as prose. `verified:` trust events are recorded, never trusted: a human-reviewed OKF doc is unverified until the ledger's own proof keys say so.
+- **Not in scope**: OKF export, conformance checking, trust-tier computation, a permissive lint mode for OKF keys.
+- **Needs**: Nothing. `pylon import` exists with dry-run default, `--write`, `--type`, and `--name`.
 
 ## Explicitly Not Adopted
 
