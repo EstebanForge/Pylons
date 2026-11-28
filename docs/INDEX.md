@@ -17,6 +17,7 @@ Documentation about Pylons and the `pylon` CLI. This folder is the source reposi
 - [EXTENSIONS.md](EXTENSIONS.md): how to enable built-in language extensions and author custom `pylon-ext-<name>` plugins.
 - [SPINE.md](SPINE.md): design philosophy, zero-model determinism, and the closed agent loop.
 - [CHANGELOG.md](CHANGELOG.md): release history and origin timeline.
+- [benchmarks/](benchmarks/): dated latency receipts from `scripts/bench.sh`, the only accepted form of a performance claim.
 - [../pylons/pylons-docs/pylons-yaml.md](../pylons/pylons-docs/pylons-yaml.md): schema and examples for `manifests/pylons.yaml`, the per-ledger configuration file (ships inside every ledger).
 - [../pylons/pylons-docs/adopting.md](../pylons/pylons-docs/adopting.md): bringing a ledger that predates Pylons under the engine, knob by knob (ships inside every ledger).
 - [../pylons/pylons-docs/parity-spec.md](../pylons/pylons-docs/parity-spec.md): the declarative parity spec: language profiles, machine declarations, and the machine discipline (ships inside every ledger).
