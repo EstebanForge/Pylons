@@ -15,6 +15,7 @@ import (
 	iofs "io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -78,6 +79,7 @@ func Run(kbRoot string) ([]Finding, error) {
 	fs = append(fs, checkGeneratedManifests(kbRoot, cfg, cfgErr)...)
 	fs = append(fs, checkProductRecord(kbRoot)...)
 	fs = append(fs, checkBaseline(kbRoot)...)
+	fs = append(fs, checkCorpusSize(kbRoot, cfg, cfgErr)...)
 	return fs, nil
 }
 
@@ -551,4 +553,104 @@ func rewriteBaseline(kbRoot string) error {
 	}
 	findings := rules.Lint(kbRoot, rules.LintOptions{HasCode: true})
 	return rules.UpdateBaseline(kbRoot, findings)
+}
+
+// checkCorpusSize keeps ledger growth visible: how many documents the
+// corpus walk would read, how many bytes they weigh, and which carry
+// the most. It stays silent while a ledger is small — the number only
+// matters once the corpus is big enough that latency and recall
+// budgets feel it. It counts the same corpus lint reads (excludes
+// honored); archive folders count because they still sit on disk.
+// Information only — doctor never trims anything to improve the number.
+const (
+	corpusSizeAdvisoryDocs  = 120
+	corpusSizeAdvisoryBytes = 1 << 20
+)
+
+func checkCorpusSize(kbRoot string, cfg config.Config, cfgErr error) []Finding {
+	var exclude []string
+	if cfgErr == nil {
+		exclude = cfg.Exclude
+	}
+	var total int64
+	docs := 0
+	type weight struct {
+		rel  string
+		size int64
+	}
+	var sizes []weight
+	_ = filepath.WalkDir(kbRoot, func(p string, d iofs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			relDir, rerr := filepath.Rel(kbRoot, p)
+			if rerr == nil {
+				relDir = filepath.ToSlash(relDir)
+				if !strings.Contains(relDir, "/") {
+					switch relDir {
+					case ".git", "cli", "bin", "templates", "manifests", "protocols", "extensions", "pylons-docs":
+						return filepath.SkipDir
+					}
+				}
+			}
+			if strings.HasPrefix(d.Name(), "_") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !d.Type().IsRegular() || !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+		rel, rerr := filepath.Rel(kbRoot, p)
+		if rerr != nil {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		for _, pat := range exclude {
+			if resolve.MatchGlob(pat, rel) {
+				return nil
+			}
+		}
+		info, ierr := d.Info()
+		if ierr != nil {
+			return nil
+		}
+		docs++
+		total += info.Size()
+		sizes = append(sizes, weight{rel: rel, size: info.Size()})
+		return nil
+	})
+	if docs == 0 || (docs < corpusSizeAdvisoryDocs && total < corpusSizeAdvisoryBytes) {
+		return nil
+	}
+	slices.SortStableFunc(sizes, func(a, b weight) int {
+		if a.size != b.size {
+			return int(b.size - a.size)
+		}
+		return strings.Compare(a.rel, b.rel)
+	})
+	shown := sizes
+	if len(shown) > 3 {
+		shown = shown[:3]
+	}
+	parts := make([]string, 0, len(shown))
+	for _, w := range shown {
+		parts = append(parts, fmt.Sprintf("%s (%s)", w.rel, humanBytes(w.size)))
+	}
+	return []Finding{{
+		ID: "DOCTOR013", Severity: "info",
+		Message: fmt.Sprintf("corpus: %d docs, %s total; largest: %s", docs, humanBytes(total), strings.Join(parts, ", ")),
+	}}
+}
+
+func humanBytes(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1024:
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }

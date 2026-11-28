@@ -161,9 +161,9 @@ An agent with the wrong context ships the wrong thing fast. These features feed 
 
 #### Session brief (`pylon brief`)
 
-- **What**: A compact summary at session start: the pylon root, the registered projects, the enabled extensions, and the corpus size.
+- **What**: A compact summary at session start: the pylon root, the registered projects, the enabled extensions, the corpus size, in-flight work, and the zone census.
 - **The pain**: Engineers and agents start work blind. Nobody knows whether the clone they are about to trust is registered, configured, or stale.
-- **How it works**: One command at boot. It never blocks: it reports what it sees and exits 0, and a missing or broken configuration surfaces on stderr instead of failing your session. When the last `pylon sync --detached` background fetch failed, brief prints `FETCH-FAILED <time>` so the failure is never silent.
+- **How it works**: One command at boot. It never blocks: it reports what it sees and exits 0, and a missing or broken configuration surfaces on stderr instead of failing your session. When the last `pylon sync --detached` background fetch failed, brief prints `FETCH-FAILED <time>` so the failure is never silent. Sections print under a line budget (`--budget`, default 4): fixed priority (header, fetch state, in-flight, zones) and an explicit hidden-lines marker when the budget cuts, so a growing ledger cannot flood the session-start context and nothing disappears quietly.
 - **For agents**: The counts tell an agent the ledger is wired before it plans against it. Deeper state lives one command away in `map` and `check`.
 
 #### Detached freshness (`pylon sync`)

@@ -36,7 +36,8 @@ Usage:
   pylon lint             [--changed] [--doc-only] [--fix] [--parity] [--update-baseline] [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
   pylon contract <plan>  [--allow-external-extensions] [--format=human|json|sarif] [--json] [--ci] [--pylons <path>]
   pylon check <paths...> [--plan <plan>] [--stop-block] [--format=human|json|sarif] [--json] [--pylons <path>]
-  pylon brief            [--format=human|json] [--json] [--pylons <path>]
+  pylon brief            [--budget <lines>] [--format=human|json] [--json] [--pylons <path>]
+  pylon import <file.md>... [--type <t>] [--name <kebab>] [--write] [--pylons <path>]
   pylon context <paths...> [--plan <plan>] [--preamble] [--format=human|json] [--json] [--pylons <path>]
   pylon context --diff-since <ref> [--manifest] [--format=human|json] [--json] [--pylons <path>]
   pylon context --graph <package> [--depth N] [--format=human|json] [--json] [--pylons <path>]
@@ -160,6 +161,9 @@ func run(args []string) int {
 	graphSet, depthSet := false, false
 	mapType, mapTag, mapStatus, mapFolder, mapQuery := "", "", "", "", ""
 	limit := 0
+	briefBudget := 4
+	importWrite := false
+	importName := ""
 	var rest []string
 	var cmd string
 
@@ -221,11 +225,13 @@ func run(args []string) int {
 			updateBaseline = true
 		case arg == "--dry-run":
 			dryRunUpdate = true
+		case arg == "--write":
+			importWrite = true
 		case arg == "--detached":
 			syncDetached = true
 		case strings.HasPrefix(arg, "--format="):
 			format = report.Format(strings.TrimPrefix(arg, "--format="))
-		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--plan" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version" || arg == "--binary" || arg == "--diff" || arg == "--metadata" || arg == "--record" || arg == "--findings" || arg == "--min" || arg == "--shape" || arg == "--title":
+		case arg == "--format" || arg == "--pylons" || arg == "--package" || arg == "--validate" || arg == "--validate-resolutions" || arg == "--template" || arg == "--type" || arg == "--tag" || arg == "--status" || arg == "--folder" || arg == "--query" || arg == "--limit" || arg == "--window" || arg == "--slice" || arg == "--plan" || arg == "--body" || arg == "--base" || arg == "--fetch-child" || arg == "--pinned-releases" || arg == "--diff-since" || arg == "--graph" || arg == "--from" || arg == "--depth" || arg == "--path-prefix" || arg == "--release-version" || arg == "--binary" || arg == "--diff" || arg == "--metadata" || arg == "--record" || arg == "--findings" || arg == "--min" || arg == "--shape" || arg == "--title" || arg == "--budget" || arg == "--name":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "pylon: flag %s requires a value\n", arg)
 				return 2
@@ -286,6 +292,15 @@ func run(args []string) int {
 				retroMin = n
 			case "--title":
 				newTitle = val
+			case "--budget":
+				n, err := strconv.Atoi(val)
+				if err != nil || n < 0 {
+					fmt.Fprintln(os.Stderr, "pylon: --budget must be a non-negative integer")
+					return 2
+				}
+				briefBudget = n
+			case "--name":
+				importName = val
 			case "--shape":
 				retroShape = val
 			case "--release-version":
@@ -696,12 +711,30 @@ func run(args []string) int {
 		cfg := loadConfigOrWarn(kbRoot)
 		docs := scanDocs(kbRoot, false)
 		fetchFailedAt, fetchOK, _ := sync.Status(kbRoot)
+		zones := map[string]int{}
+		var inProgress, paused, inReview int
+		for i := range docs {
+			rel := filepath.ToSlash(docs[i].Path)
+			if dir, _, ok := strings.Cut(rel, "/"); ok {
+				zones[dir]++
+			}
+			switch {
+			case strings.HasPrefix(rel, "plans/") && docs[i].Status == "in-progress":
+				inProgress++
+			case strings.HasPrefix(rel, "plans/") && docs[i].Status == "paused":
+				paused++
+			case docs[i].Status == "proposed":
+				inReview++
+			}
+		}
 		if format == report.FormatJSON {
 			doc := map[string]any{
 				"root":       kbRoot,
 				"projects":   len(cfg.Projects),
 				"extensions": cfg.Extensions,
 				"documents":  len(docs),
+				"zones":      zones,
+				"in_flight":  map[string]int{"in_progress": inProgress, "paused": paused, "in_review": inReview},
 			}
 			if !fetchOK {
 				doc["fetch_failed"] = fetchFailedAt.UTC().Format(time.RFC3339)
@@ -713,9 +746,66 @@ func run(args []string) int {
 		for _, d := range docs {
 			machines += d.Machines
 		}
-		fmt.Printf("Pylons: %s | projects: %d | extensions: %d | docs: %d | machines: %d\n", kbRoot, len(cfg.Projects), len(cfg.Extensions), len(docs), machines)
+		// Section priority is fixed: header, operational fetch state,
+		// in-flight work, then the zone census. The budget caps the
+		// printed lines deterministically — no sampling.
+		type section struct {
+			prio int
+			text string
+		}
+		sections := []section{{0, fmt.Sprintf("Pylons: %s | projects: %d | extensions: %d | docs: %d | machines: %d", kbRoot, len(cfg.Projects), len(cfg.Extensions), len(docs), machines)}}
 		if !fetchOK {
-			fmt.Printf("FETCH-FAILED %s\n", fetchFailedAt.UTC().Format(time.RFC3339))
+			sections = append(sections, section{1, fmt.Sprintf("FETCH-FAILED %s", fetchFailedAt.UTC().Format(time.RFC3339))})
+		}
+		var flight []string
+		if inProgress > 0 {
+			flight = append(flight, fmt.Sprintf("%d in progress", inProgress))
+		}
+		if paused > 0 {
+			flight = append(flight, fmt.Sprintf("%d paused (resume via ## State)", paused))
+		}
+		if inReview > 0 {
+			flight = append(flight, fmt.Sprintf("%d in review", inReview))
+		}
+		if len(flight) > 0 {
+			sections = append(sections, section{2, "in-flight: " + strings.Join(flight, ", ")})
+		}
+		if len(zones) > 0 {
+			names := make([]string, 0, len(zones))
+			for z := range zones {
+				names = append(names, z)
+			}
+			slices.SortFunc(names, func(a, b string) int {
+				if zones[a] != zones[b] {
+					return zones[b] - zones[a]
+				}
+				return strings.Compare(a, b)
+			})
+			shown := names
+			if len(shown) > 8 {
+				shown = shown[:8]
+			}
+			parts := make([]string, 0, len(shown))
+			for _, z := range shown {
+				parts = append(parts, fmt.Sprintf("%s %d", z, zones[z]))
+			}
+			if rest := len(names) - len(shown); rest > 0 {
+				parts = append(parts, fmt.Sprintf("+ %d more zones", rest))
+			}
+			sections = append(sections, section{3, "zones: " + strings.Join(parts, ", ")})
+		}
+		slices.SortStableFunc(sections, func(a, b section) int { return a.prio - b.prio })
+		printed := 0
+		for _, s := range sections {
+			if printed >= briefBudget {
+				hidden := len(sections) - printed
+				// The marker is exempt from the budget: a cap that hides
+				// its own announcement would silently lose information.
+				fmt.Printf("... %d lines hidden (--budget raises the cap)\n", hidden)
+				break
+			}
+			fmt.Println(s.text)
+			printed++
 		}
 		return 0
 
@@ -761,6 +851,9 @@ func run(args []string) int {
 			return 2
 		}
 		return cmdNew(kbRoot, rest[0], rest[1], newTitle, newNumbered)
+
+	case "import":
+		return cmdImport(kbRoot, importWrite, mapType, importName, rest)
 
 	case "gate":
 		if len(rest) == 0 {

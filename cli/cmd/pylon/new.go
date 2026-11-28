@@ -142,7 +142,7 @@ func cmdNew(kbRoot, docType, name, title string, numbered bool) int {
 	rel := spec.dir + "/" + base + ".md"
 	target := filepath.Join(kbRoot, filepath.FromSlash(rel))
 	if title == "" {
-		title = strings.ToUpper(name[:1]) + strings.ReplaceAll(name[1:], "-", " ")
+		title = humanizeName(name)
 	}
 	if !isPlainTitle(title) {
 		fmt.Fprintf(os.Stderr, "pylon: the title must be printable text without control characters\n")
@@ -184,6 +184,12 @@ func cmdNew(kbRoot, docType, name, title string, numbered bool) int {
 		fmt.Printf("link it from another document or the FORCED orphan check (PYLON004) fails the lint\n")
 	}
 	return 0
+}
+
+// humanizeName turns a kebab-case name into a printable default
+// title; import reuses it when the body carries no heading.
+func humanizeName(name string) string {
+	return strings.ToUpper(name[:1]) + strings.ReplaceAll(name[1:], "-", " ")
 }
 
 // fillNewFrontMatter rewrites the mechanical frontmatter keys of the
