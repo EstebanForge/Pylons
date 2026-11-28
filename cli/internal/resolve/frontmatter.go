@@ -47,24 +47,25 @@ func (s StringOrList) NonEmpty() bool {
 
 // DocMeta holds common frontmatter fields shared across Pylons document types.
 type DocMeta struct {
-	Title      string       `yaml:"title"`
-	Type       string       `yaml:"type"`
-	Slug       string       `yaml:"slug"`
-	Status     string       `yaml:"status"`
-	Created    string       `yaml:"created"`
-	Updated    string       `yaml:"updated"`
-	Owners     []string     `yaml:"owners"`
-	Components []string     `yaml:"components"`
-	Package    string       `yaml:"package"`
-	Links      []string     `yaml:"links"`
-	Tags       []string     `yaml:"tags"`
-	Supersedes []string     `yaml:"supersedes"`
-	Artifact   StringOrList `yaml:"artifact"`
-	Reaudit    string       `yaml:"reaudit"`
-	Guard      string       `yaml:"guard"`
-	Sources    []string     `yaml:"sources"`
-	Ticket     []any        `yaml:"ticket"`
-	Avoid      StringOrList `yaml:"avoid"`
+	Title        string       `yaml:"title"`
+	Type         string       `yaml:"type"`
+	Slug         string       `yaml:"slug"`
+	Status       string       `yaml:"status"`
+	Created      string       `yaml:"created"`
+	Updated      string       `yaml:"updated"`
+	Owners       []string     `yaml:"owners"`
+	Components   []string     `yaml:"components"`
+	Package      string       `yaml:"package"`
+	Links        []string     `yaml:"links"`
+	Tags         []string     `yaml:"tags"`
+	Supersedes   []string     `yaml:"supersedes"`
+	SupersededBy []string     `yaml:"superseded_by"`
+	Artifact     StringOrList `yaml:"artifact"`
+	Reaudit      string       `yaml:"reaudit"`
+	Guard        string       `yaml:"guard"`
+	Sources      []string     `yaml:"sources"`
+	Ticket       []any        `yaml:"ticket"`
+	Avoid        StringOrList `yaml:"avoid"`
 	// Parse artifacts, never user data: Unknown holds top-level keys
 	// this doc type's parser does not know (the unknown-key advisory),
 	// ParseErrors holds strict-decode failures with line numbers.

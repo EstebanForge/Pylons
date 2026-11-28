@@ -40,6 +40,11 @@ func scanLifecycleRules(kbRoot string, docs []corpusDoc, cfg config.Config, hasC
 		if base == "README.md" || base == "AGENTS.md" {
 			continue
 		}
+		// Recall hygiene: search and map serve non-archived docs, so a
+		// superseded doc outside an archive keeps answering queries.
+		if len(d.meta.SupersededBy) > 0 && !strings.Contains(d.rel, "/archive/") {
+			out = append(out, advFinding("PYLON066", d.rel, "doc declares superseded_by but sits outside an archive folder; recall still serves it"))
+		}
 
 		switch rootZone {
 		case "plans":

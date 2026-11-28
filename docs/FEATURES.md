@@ -66,7 +66,7 @@ Every card answers in the same order: **What** names the feature, **The pain** n
 - **The pain**: In a multi-repo platform, nothing marks the line between public API and internal detail. Code reaches into another package's private class, a refactor breaks it, and the fix crosses 3 repositories.
 - **How it works**: The map is YAML front matter in `packages/<slug>.md`. The lists are explicit, so both humans and agents know exactly what is in bounds.
 - **For agents**: Agents read the map before planning and consume only declared surfaces. When an agent targets a protected path, `pylon check` names the violation.
-- **Guard**: `pylon lint` resolves package references against registered projects (`PYLON003`) and flags unresolved `exposes:` entries. `pylon contract <plan>` proves a plan's stable contracts against live code.
+- **Guard**: `pylon lint` resolves package references against registered projects (`PYLON003`) and flags unresolved `exposes:` entries. One contract id has one claimant: a second package doc claiming the same `kind` and `id` fails lint (`PYLON067`), and archived claimants are history, not owners. `pylon contract <plan>` proves a plan's stable contracts against live code.
 
 #### Typed contracts and falsifiers (`plans/`)
 
@@ -146,7 +146,7 @@ Every incident has 2 costs: the outage and the relearning. The features in this 
 - **The pain**: Architectural churn. Teams and agents re-propose patterns that were already evaluated and rejected, and senior people re-litigate settled questions.
 - **How it works**: The decision history is an append-only ledger. Proposals start in `decisions/proposals/`; accepted records are numbered `DNNNN-<slug>.md` (`PYLON010`). Superseded records move to `decisions/archive/`, dated and readable, so the "why" behind the platform stays answerable.
 - **For agents**: The ledger stops agents from re-arguing settled choices with fresh confidence on every run.
-- **Guard**: Lint enforces the numbering, statuses, and archive placement.
+- **Guard**: Lint enforces the numbering, statuses, and archive placement. A record that declares `superseded_by` while still outside `archive/` fires `PYLON066`: search and map serve non-archived docs, so the dead conclusion would keep answering queries.
 
 #### Tickets (`tickets/`)
 

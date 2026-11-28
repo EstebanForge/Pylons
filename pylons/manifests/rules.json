@@ -432,5 +432,19 @@
     "severity": "error",
     "description": "Paused plan carries no ## State section.",
     "fix_hint": "Add ## State naming the resume point: what is done, the next step, and any blocker."
+  },
+  {
+    "id": "PYLON066",
+    "name": "superseded_not_archived",
+    "severity": "advisory",
+    "description": "The doc declares superseded_by but still lives outside an archive folder, so search and map keep serving the dead conclusion.",
+    "fix_hint": "Move the doc to its zone's archive folder (pylon status does the rename), or clear superseded_by when the pointer is wrong."
+  },
+  {
+    "id": "PYLON067",
+    "name": "contract_claim_collision",
+    "severity": "error",
+    "description": "The same contract kind and id is claimed by more than one package doc, or twice in one doc, so the map is ambiguous about who owns the surface.",
+    "fix_hint": "Keep one claiming doc; move the stale claimant to its archive folder or drop the duplicate exposes entry. Pending entries are exempt."
   }
 ]

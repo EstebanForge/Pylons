@@ -81,6 +81,8 @@ var Catalog = map[string]RuleSpec{
 	"PYLON063": {ID: "PYLON063", Name: "gate_surface_not_evaluated", Severity: "advisory", Description: "The gate surface check could not run against the requested base.", FixHint: "Pin --base to a reachable ref so the check can run."},
 	"PYLON064": {ID: "PYLON064", Name: "frontmatter_unknown_key", Severity: "advisory", Description: "The frontmatter carries keys no check reads for this doc type.", FixHint: "Remove the key or declare it in the type's template; no check reads it."},
 	"PYLON065": {ID: "PYLON065", Name: "paused_plan_no_state", Severity: "error", Description: "Paused plan carries no ## State section.", FixHint: "Add ## State naming the resume point: what is done, the next step, and any blocker."},
+	"PYLON066": {ID: "PYLON066", Name: "superseded_not_archived", Severity: "advisory", Description: "The doc declares superseded_by but still lives outside an archive folder, so search and map keep serving the dead conclusion.", FixHint: "Move the doc to its zone's archive folder (pylon status does the rename), or clear superseded_by when the pointer is wrong."},
+	"PYLON067": {ID: "PYLON067", Name: "contract_claim_collision", Severity: "error", Description: "The same contract kind and id is claimed by more than one package doc, or twice in one doc, so the map is ambiguous about who owns the surface.", FixHint: "Keep one claiming doc; move the stale claimant to its archive folder or drop the duplicate exposes entry. Pending entries are exempt."},
 }
 
 // AllRules returns the sorted rule catalog.

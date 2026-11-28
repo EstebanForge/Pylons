@@ -174,6 +174,7 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 	}
 	findings = append(findings, scanPlanAndQuirkRules(kbRoot, docs, cfg, opts)...)
 	findings = append(findings, scanLifecycleRules(kbRoot, docs, cfg, opts.HasCode)...)
+	findings = append(findings, scanContractClaims(docs)...)
 	findings = append(findings, scanMachineDeclarations(docs)...)
 	findings = append(findings, scanSecrets(rawDocs)...)
 	if opts.HasCode {
@@ -187,6 +188,45 @@ func Lint(kbRoot string, opts LintOptions) []report.Finding {
 
 // maxDocBytes caps one corpus read; a runaway doc cannot exhaust memory.
 const maxDocBytes = 4 * 1024 * 1024
+
+// scanContractClaims keeps one owner per contract id. Package exposes
+// entries are the map's ownership surface: a second non-pending claim
+// on the same kind+id makes resolution ambiguous, the same class of
+// defect as duplicate machine transitions.
+func scanContractClaims(docs []corpusDoc) []report.Finding {
+	type claim struct {
+		file string
+	}
+	seen := map[string]claim{}
+	var out []report.Finding
+	for _, d := range docs {
+		if strings.Contains(d.rel, "/archive/") {
+			continue
+		}
+		var pkg resolve.PackageFrontMatter
+		if !resolve.ParsePackageFrontMatter(d.content, &pkg) || pkg.Type != "package" {
+			continue
+		}
+		for _, entry := range pkg.Exposes {
+			if isBoolTrue(entry["pending"]) {
+				continue
+			}
+			kindStr, _ := entry["kind"].(string)
+			idStr, _ := entry["id"].(string)
+			if kindStr == "" || idStr == "" {
+				continue
+			}
+			key := kindStr + " " + idStr
+			first, dup := seen[key]
+			if !dup {
+				seen[key] = claim{file: d.rel}
+				continue
+			}
+			out = append(out, errFinding("PYLON067", d.rel, 1, "contract claim "+key+" duplicated; first claim: "+first.file))
+		}
+	}
+	return out
+}
 
 func readBounded(p string) (string, error) {
 	f, err := os.Open(p)
